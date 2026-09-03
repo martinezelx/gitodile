@@ -1,4 +1,4 @@
-name: Feature request
+name: Feature request (English)
 description: Propose an improvement to GitOdile
 title: "[Feature]: "
 labels: ["enhancement"]
@@ -6,6 +6,10 @@ body:
   - type: markdown
     attributes:
       value: |
+        A GitHub account is required, and this request will be public. Do not
+        include credentials or private project information. Report security
+        vulnerabilities [privately](https://github.com/martinezelx/gitodile-feedback/security/advisories/new).
+
         GitOdile tries to translate what a person is trying to *do* into safe
         Git operations. Describing the problem you hit is more useful than
         describing the button you want, because it leaves room for a better

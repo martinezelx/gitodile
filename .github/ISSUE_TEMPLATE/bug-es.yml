@@ -1,0 +1,59 @@
+name: Reportar un problema (Español)
+description: Informa de un comportamiento inesperado de GitOdile
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Este informe será **público** y podrá aparecer en buscadores. Requiere
+        una cuenta de GitHub. Revisa el contenido antes de enviarlo: no incluyas
+        contraseñas, tokens, direcciones con credenciales ni código privado.
+        Si has encontrado una vulnerabilidad de seguridad, comunícala
+        [por el canal privado](https://github.com/martinezelx/gitodile-feedback/security/advisories/new).
+  - type: textarea
+    id: what
+    attributes:
+      label: ¿Qué ocurrió?
+      description: Cuéntanos qué estabas haciendo y qué hizo GitOdile.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: ¿Qué esperabas que ocurriera?
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasos para reproducirlo
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: false
+  - type: textarea
+    id: repository
+    attributes:
+      label: Estado del proyecto
+      description: >-
+        Si lo sabes, indica su tamaño aproximado, si tiene cambios sin guardar,
+        una conexión remota, cambios que se solapan o si está en una unidad de red.
+        No necesitas conocer los términos técnicos. No incluyas rutas privadas.
+    validations:
+      required: false
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Información del sistema
+      description: >-
+        GitOdile rellena las versiones disponibles al abrir este formulario desde
+        Más acciones ⋯ → Reportar un problema. Si lo abres desde la web, pega el
+        bloque de Acerca de → Copiar información del sistema. Algunos datos pueden
+        no estar disponibles. Si la aplicación no abre, describe aquí tu sistema
+        y la versión que instalaste, si la conoces.
+      render: text
+    validations:
+      required: true

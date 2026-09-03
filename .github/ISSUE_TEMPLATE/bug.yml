@@ -1,4 +1,4 @@
-name: Bug report
+name: Bug report (English)
 description: Report unexpected GitOdile behavior
 title: "[Bug]: "
 labels: ["bug"]
@@ -6,6 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
+        A GitHub account is required. Review your report before submitting it.
         Thanks for reporting. One thing before you start: this issue will be
         **public and permanently indexed**, so please do not paste access
         tokens, authenticated remote URLs, or source code you are not free to
@@ -50,9 +51,11 @@ body:
     attributes:
       label: System information
       description: >-
-        Filled in for you when you report from inside the app
+        Available versions are filled in when you report from inside the app
         (More actions ⋯ → Report an issue). Otherwise use
-        About → Copy system info and paste the block here.
+        About → Copy system info and paste the block here. Some values may be
+        unavailable. If the app cannot open, describe your system and the app
+        version you installed, if known.
       render: text
     validations:
       required: true

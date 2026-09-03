@@ -1,0 +1,48 @@
+name: Proponer una mejora (Español)
+description: Describe cómo podría ayudarte mejor GitOdile
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Cuéntanos qué intentabas hacer. No necesitas conocer Git ni diseñar la
+        solución: el problema que encontraste nos ayuda a entender la mejora.
+        Requiere una cuenta de GitHub y la propuesta será **pública**. No incluyas
+        credenciales ni información privada de tus proyectos. Las vulnerabilidades
+        se comunican [por el canal privado](https://github.com/martinezelx/gitodile-feedback/security/advisories/new).
+  - type: textarea
+    id: problem
+    attributes:
+      label: ¿Qué intentabas hacer?
+      description: Describe la situación en la que echaste en falta esta mejora.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: ¿Qué resultado te gustaría conseguir?
+    validations:
+      required: false
+  - type: textarea
+    id: wording
+    attributes:
+      label: ¿Cómo se lo explicarías a alguien que empieza con Git?
+      description: Opcional. Tus palabras nos ayudan a que la aplicación sea más clara.
+    validations:
+      required: false
+  - type: textarea
+    id: git-details
+    attributes:
+      label: Detalles de Git, si los conoces
+      description: Opcional. Puedes dejar este campo vacío.
+    validations:
+      required: false
+  - type: input
+    id: version
+    attributes:
+      label: Versión de GitOdile
+      description: Aparece en Acerca de. Puedes dejarlo vacío si no puedes abrir la aplicación.
+      placeholder: "0.1.0"
+    validations:
+      required: false
