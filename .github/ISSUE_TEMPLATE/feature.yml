@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose an improvement to GitOdile
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        GitOdile tries to translate what a person is trying to *do* into safe
+        Git operations. Describing the problem you hit is more useful than
+        describing the button you want, because it leaves room for a better
+        answer than either of us has thought of yet.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What were you trying to do?
+      description: The situation you were in when you wanted this.
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: What would a good outcome look like?
+    validations:
+      required: false
+  - type: textarea
+    id: wording
+    attributes:
+      label: How would you describe this action to someone new to Git?
+      description: >-
+        Optional, and genuinely useful. GitOdile leads with plain language
+        rather than Git vocabulary, so the words a beginner reaches for often
+        end up being the words in the interface.
+    validations:
+      required: false
+  - type: textarea
+    id: git-details
+    attributes:
+      label: Git details, if you know them
+      description: >-
+        The exact Git commands or concepts involved, if you happen to think in
+        those terms. Leave it empty if you do not — it is not required.
+    validations:
+      required: false
+  - type: textarea
+    id: version
+    attributes:
+      label: GitOdile version
+      description: Prefilled when you open this from inside the app.
+      render: text
+    validations:
+      required: false
