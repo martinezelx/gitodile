@@ -42,11 +42,11 @@ body:
         those terms. Leave it empty if you do not — it is not required.
     validations:
       required: false
-  - type: textarea
+  - type: input
     id: version
     attributes:
       label: GitOdile version
-      description: Prefilled when you open this from inside the app.
-      render: text
+      description: "Shown in About, at the bottom of the dialog."
+      placeholder: "0.1.0"
     validations:
       required: false
