@@ -10,7 +10,7 @@ body:
         solución: el problema que encontraste nos ayuda a entender la mejora.
         Requiere una cuenta de GitHub y la propuesta será **pública**. No incluyas
         credenciales ni información privada de tus proyectos. Las vulnerabilidades
-        se comunican [por el canal privado](https://github.com/martinezelx/gitodile-feedback/security/advisories/new).
+        se comunican [por el canal privado](https://github.com/martinezelx/gitodile/security/advisories/new).
   - type: textarea
     id: problem
     attributes:
