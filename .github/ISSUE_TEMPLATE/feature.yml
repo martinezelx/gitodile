@@ -8,7 +8,7 @@ body:
       value: |
         A GitHub account is required, and this request will be public. Do not
         include credentials or private project information. Report security
-        vulnerabilities [privately](https://github.com/martinezelx/gitodile-feedback/security/advisories/new).
+        vulnerabilities [privately](https://github.com/martinezelx/gitodile/security/advisories/new).
 
         GitOdile tries to translate what a person is trying to *do* into safe
         Git operations. Describing the problem you hit is more useful than
