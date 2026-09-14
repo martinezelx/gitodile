@@ -11,7 +11,7 @@ body:
         **public and permanently indexed**, so please do not paste access
         tokens, authenticated remote URLs, or source code you are not free to
         share. Found a security vulnerability? Report it
-        [privately](https://github.com/martinezelx/gitodile-feedback/security/advisories/new)
+        [privately](https://github.com/martinezelx/gitodile/security/advisories/new)
         instead.
   - type: textarea
     id: what
