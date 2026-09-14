@@ -10,7 +10,7 @@ body:
         una cuenta de GitHub. Revisa el contenido antes de enviarlo: no incluyas
         contraseñas, tokens, direcciones con credenciales ni código privado.
         Si has encontrado una vulnerabilidad de seguridad, comunícala
-        [por el canal privado](https://github.com/martinezelx/gitodile-feedback/security/advisories/new).
+        [por el canal privado](https://github.com/martinezelx/gitodile/security/advisories/new).
   - type: textarea
     id: what
     attributes:
