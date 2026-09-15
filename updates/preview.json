@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0-preview.10",
+  "notes": "Testing preview: Windows and Linux installed-update qualification is not complete. This prerelease does not claim platform qualification. Windows Authenticode is deferred. Preview de prueba: la cualificación de actualización instalada en Windows y Linux no está completa. Esta versión preliminar no declara cualificación de plataforma. Authenticode de Windows está aplazado. GitOdile 0.2.0-preview.10 This testing preview is the first GitOdile release produced by the single release pipeline: one run validates the tagged source, builds, records the operating-system trust boundary, applies the Tauri updater signature, stages and publishes the Windows x86-64 and Linux x86-64 packages. It is intended as the installed starting point of a real preview-to-preview update test. Windows is provided as an NSIS installer. Authenticode remains deliberately deferred, so Windows may show an unknown-publisher or SmartScreen warning. Linux is provided as an AppImage. Both packages verify updates with the production Tauri updater key and the public preview.json feed in martinezelx/gitodile. macOS remains disabled and no macOS package is included. Publishing this preview does not declare either target qualified and does not authorize stable publication.",
+  "pub_date": "2026-09-14T22:32:15Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTYWk4d1VpQ2Uxa2RSdG4xL0RiYzQzbzQ0TWxHMTQ1Wkpqd2JBcmYzMDhxbUdlQTNNUVVTWVZBVVhyQTVyZDFCRko5MkZ3clRhNzBJZkRTTnI3SFJ5R2ZrdnlLWEM3bHc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NDU1NDE4CWZpbGU6R2l0T2RpbGVfMC4yLjAtcHJldmlldy4xMF94NjQtc2V0dXAuZXhlCkxUajV1UUsvWmFWSXBwWUFFVzBoZnk0eXRHcnFraHBleExtVXpmR3lkaGIvTDlsNnJPQjFrUU95U0xuWWRUZkRjWUFiSUplc0xUYUV6aUw1QUVhakRBPT0K",
+      "url": "https://github.com/martinezelx/gitodile/releases/download/v0.2.0-preview.10/GitOdile_0.2.0-preview.10_x64-setup.exe",
+      "size": 2670008
+    },
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTYWk4d1VpQ2Uxa1VuY0Z3Sk02ZklsWFBSbDF6MVdzd1ljYzVwaTVrTEJWb1MvZnZDVWwza3NnK2VFa3puS24zcFUyRXIwbjVjcGM2c1ZoYllJRWs4cS8wUE0wMWJISUFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzg5NDU1NDE5CWZpbGU6R2l0T2RpbGVfMC4yLjAtcHJldmlldy4xMF9hbWQ2NC5BcHBJbWFnZQpDZndkYXFaRzg1NnhFUHY3a0ZLZ2RDLzRQRW9OcmhwdHlwTlZBSGNUdFQxYVJvRTdtaWxmK29iRkV5TFIrZVBMRjlVZU5ieFEyVXpWMm1kNkVmb2pBZz09Cg==",
+      "url": "https://github.com/martinezelx/gitodile/releases/download/v0.2.0-preview.10/GitOdile_0.2.0-preview.10_amd64.AppImage",
+      "size": 78916088
+    }
+  }
+}
