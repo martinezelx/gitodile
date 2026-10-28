@@ -218,6 +218,10 @@ Not covered by a temporary repository, with the reason:
   bar…"). Both files pass alone, three times in a row; this change touches no
   frontend runtime code. In the run that passed every frontend test
   (1,770), the gate then stopped only on `cargo fmt`, fixed since.
+- The App timeouts came from each App test file's first test paying the cold
+  load of every screen chunk; the shared App test hooks now load them once per
+  file before the first test. `pnpm run check` then passed in one pass, and
+  the frontend suite passed again on a second run.
 - Platforms: Windows only. Symbolic links are stored as plain files there
   (`core.symlinks=false`), so the link fixture proves the index stages and the
   stage read, not a real link on disk; macOS and Linux remain to be run.

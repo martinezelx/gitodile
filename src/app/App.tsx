@@ -1688,7 +1688,7 @@ export function App(): React.JSX.Element {
   useEffect(
     () =>
       scheduleIdleTask(() => {
-        prefetchScreenChunks();
+        void prefetchScreenChunks();
         void loadPublishDialog();
         void loadDiscardChangesDialog();
       }),

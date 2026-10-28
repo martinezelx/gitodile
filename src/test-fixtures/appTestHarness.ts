@@ -2,7 +2,7 @@
 // concern so the files run in parallel. Each test file keeps its own
 // `vi.mock` calls, because Vitest hoists them per file.
 import { cleanup, within } from "@testing-library/react";
-import { afterEach, beforeEach, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, vi } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
 import { open as openFolderDialog } from "@tauri-apps/plugin-dialog";
 import type { RepositoryInfo } from "../features/repository";
@@ -223,6 +223,15 @@ export const secondProject: RepositoryInfo = {
 };
 
 export function installAppTestHooks(): void {
+  // App's idle prefetch loads every screen chunk during a file's first test,
+  // and in a full parallel run that cold load alone pushed the first test
+  // past its timeout. Loading them once per file here moves that cost out
+  // of any one test; later tests already hit the warm module cache.
+  beforeAll(async () => {
+    const { prefetchScreenChunks } = await import("../app/screens");
+    await prefetchScreenChunks();
+  });
+
   beforeEach(() => {
     localStorage.clear();
     Object.defineProperty(window, "matchMedia", {

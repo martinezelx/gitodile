@@ -178,15 +178,17 @@ export function screenRequiresProject(screen: ScreenId): boolean {
 /** Warms every registered destination's chunks. Called from an idle callback
  * after first paint — never before it, which would defeat the code splitting
  * this exists to compensate for. */
-export function prefetchScreenChunks(): void {
+export function prefetchScreenChunks(): Promise<unknown> {
+  const loads: Promise<unknown>[] = [];
   for (const module of FUNCTIONAL_SCREEN_MODULES) {
     if (!("kind" in module.container)) {
-      void module.container.preload();
+      loads.push(module.container.preload());
     }
     for (const load of module.additionalPreloads) {
-      void load();
+      loads.push(load());
     }
   }
+  return Promise.all(loads);
 }
 
 /** Development builds only, and never under the test runner. Excluded from
