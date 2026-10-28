@@ -970,11 +970,12 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
   margin: calc(var(--sheet-frame) + 1px) calc(var(--sheet-frame) + 1px) 0;
   border-radius: var(--radius-surface) var(--radius-surface) 0 0;
 }
-/* Work and Branches lay their panes edge to edge on the sheet, so they take no
-   inset at all: the sheet's border is their outer edge and a hairline the
-   one between them. */
+/* Work, Branches and Overlapping changes lay their panes edge to edge on the
+   sheet, so they take no inset at all: the sheet's border is their outer edge
+   and a hairline the one between them. */
 .app-shell--sheet .workspace--workbench,
-.app-shell--sheet .workspace--branches { padding: 0; }
+.app-shell--sheet .workspace--branches,
+.app-shell--sheet .workspace--conflicts { padding: 0; }
 /* Overview's bands run edge to edge too and carry their own insets. Below
    its fit size it scrolls as a page and keeps the bottom inset, which is what
    makes the fade over the strip free at the end of the scroll. Once it fits
@@ -1933,6 +1934,7 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
      edge to edge it takes the inset they gave up. */
   .app-shell--sheet .workspace--workbench .compact-nav-row,
   .app-shell--sheet .workspace--branches .compact-nav-row,
+  .app-shell--sheet .workspace--conflicts .compact-nav-row,
   .app-shell--overview .compact-nav-row { margin: var(--space-3); }
   .workspace { padding-top: 20px; }
   .compact-nav-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-4); }

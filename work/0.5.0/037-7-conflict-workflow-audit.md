@@ -13,7 +13,7 @@ areas:
 created: 2026-08-18
 completed:
 parent: "037"
-queue: "04"
+queue: "03"
 ---
 
 # Goal
@@ -65,7 +65,7 @@ initiate conflicting integrations in normal product use.
 
 - [Epic 037](037-guided-conflict-resolution.md)
 - [037-1](../done/037-1-conflict-domain-and-recovery.md)
-- [037-3](037-3-read-only-conflict-workspace.md)
+- [037-3](../done/037-3-read-only-conflict-workspace.md)
 - [037-6](037-6-resolve-files.md)
 - [037-5](037-5-complete-or-abort-merge.md)
 - [Performance baseline](../../docs/architecture/023-performance-baseline.md)

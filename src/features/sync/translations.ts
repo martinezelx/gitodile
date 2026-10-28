@@ -89,6 +89,7 @@ export interface SyncTranslations {
   getTeamOperationTitle: string;
   getTeamOperationBody: string;
   getTeamShowInFolder: string;
+  getTeamReviewConflicts: string;
   getTeamSaveVersion: string;
   getTeamBlockedTitle: string;
   getTeamSuccessToast: (count: number) => string;

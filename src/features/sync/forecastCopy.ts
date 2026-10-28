@@ -7,7 +7,7 @@ export function forecastBlockerCopy(
   blocker: ForecastBlocker,
   remote: string,
   t: SyncTranslations,
-): { title: string; body: string; action: "save" | "reveal" | null } {
+): { title: string; body: string; action: "save" | "reveal" | "conflicts" | null } {
   const path = blocker.path ?? "";
   switch (blocker.kind) {
     case "untrackedCollision":
@@ -20,6 +20,6 @@ export function forecastBlockerCopy(
       return { title: t.getTeamGitTooOldTitle, body: t.getTeamGitTooOldBody, action: null };
     case "operationInProgress":
     case "unresolvedConflicts":
-      return { title: t.getTeamOperationTitle, body: t.getTeamOperationBody, action: null };
+      return { title: t.getTeamOperationTitle, body: t.getTeamOperationBody, action: "conflicts" };
   }
 }

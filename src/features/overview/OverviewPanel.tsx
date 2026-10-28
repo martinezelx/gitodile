@@ -132,6 +132,7 @@ export function OverviewPanel({
   isCheckingChanges,
   onCheckLocalChanges,
   onReviewChanges,
+  onOpenConflicts,
   onOpenProject,
   onCreateProject,
   onCloneProject,
@@ -185,6 +186,9 @@ export function OverviewPanel({
   /** Opens the Changes screen. With a path, that file is selected first, so
    * the Overview preview is a shortcut *to a file*, not just to the screen. */
   onReviewChanges: (path?: string) => void;
+  /** Opens the overlapping-changes screen: the way forward from the
+   * `conflicts` state, which only that screen can explain. */
+  onOpenConflicts: () => void;
   onOpenProject: () => void;
   onCreateProject: () => void;
   onCloneProject: () => void;
@@ -282,7 +286,7 @@ export function OverviewPanel({
     const nextStepHandlers: NextStepHandlers = {
       save: onOpenSaveVersion,
       reviewChanges: () => onReviewChanges(),
-      resolve: () => onReviewChanges(),
+      resolve: onOpenConflicts,
       publish: onPublish,
       openHistory: onOpenHistory,
       getChanges: onReviewAndGetTeamChanges,
@@ -372,7 +376,7 @@ export function OverviewPanel({
             projectPath={project.path}
             sessionEpoch={project.sessionEpoch}
             onReviewChanges={onReviewChanges}
-            onResolve={() => onReviewChanges()}
+            onResolve={onOpenConflicts}
             onGetChanges={onReviewAndGetTeamChanges}
             onOpenHistory={onOpenHistory}
             onRestoreDiscarded={onRestoreDiscarded}

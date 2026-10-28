@@ -20,6 +20,7 @@ import {
   RotateCw,
   Settings,
   Sparkles,
+  Split,
   SquareTerminal,
   Sun,
 } from "lucide-react";
@@ -54,6 +55,7 @@ const DESTINATION_ICONS: Record<string, React.ReactNode> = {
   history: <History aria-hidden="true" />,
   "branches": <GitBranch aria-hidden="true" />,
   console: <SquareTerminal aria-hidden="true" />,
+  conflicts: <Split aria-hidden="true" />,
   recovery: <LifeBuoy aria-hidden="true" />,
 };
 

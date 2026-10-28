@@ -183,6 +183,7 @@ pub fn run() {
             ipc::delete_discard_recovery,
             ipc::read_conflict_session,
             ipc::read_conflict_stage,
+            ipc::read_conflict_side_diff,
             ipc::glab_diagnostics,
             ipc::install_glab,
             ipc::update_glab,

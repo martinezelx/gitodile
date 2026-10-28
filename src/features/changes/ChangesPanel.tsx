@@ -16,6 +16,7 @@ import {
   RotateCw,
   Settings,
   Trash2,
+  TriangleAlert,
   X,
 } from "lucide-react";
 import { useLanguage, type Translations } from "../../i18n";
@@ -1231,6 +1232,7 @@ export function ChangesPanel({
   onCheckRemote,
   isCheckingRemote = false,
   onOpenHistory,
+  onOpenConflicts,
   headState = "branch",
   selectedPath,
   onSelectedPathChange,
@@ -1285,6 +1287,9 @@ export function ChangesPanel({
   /** Switches the Work screen to History — the natural next look when there is
    * nothing to review, and a tab away rather than a screen away. */
   onOpenHistory: () => void;
+  /** Opens the overlapping-changes screen, offered above the list while any
+   * file overlaps rather than a passive note on each such file. */
+  onOpenConflicts: () => void;
   /** The repository's head state, so a clean tree can still tell "nothing to
    * send" apart from "nothing saved yet" and from an old version being read. */
   headState?: ChangesEmptyHeadState;
@@ -1668,6 +1673,15 @@ export function ChangesPanel({
   return (
     <div className="changes-view" aria-busy={isCheckingChanges}>
       <ChangesStatusNotice watcherState={watcherState} error={workingTreeError} busy={isCheckingChanges} onRefresh={onRefresh} onOpenSettings={onOpenSettings} t={t} />
+      {(workingTree?.counts.conflicted ?? 0) > 0 && (
+        <section className="changes-status-notice changes-status-notice--attention">
+          <TriangleAlert aria-hidden="true" />
+          <div className="changes-status-notice__body">
+            <strong>{t.changesConflictsNotice(workingTree?.counts.conflicted ?? 0)}</strong>
+          </div>
+          <button className="secondary-button" type="button" onClick={onOpenConflicts}>{t.changesConflictsReview}</button>
+        </section>
+      )}
       <DiscardOutcomeNotice
         outcome={directDiscard.outcome}
         onUndo={directDiscard.undo}

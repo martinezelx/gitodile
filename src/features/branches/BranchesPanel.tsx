@@ -1063,7 +1063,7 @@ export function BranchesPanel({
   onPublish,
   onChanged,
   onSaveVersion,
-  onOpenChanges,
+  onOpenConflicts,
   onOpenHistory,
   onOperationStart,
   onOperationFinish,
@@ -1112,7 +1112,7 @@ export function BranchesPanel({
   onSaveVersion: () => void;
   /** Navigates to the Changes screen — the only place conflicted files are
    * listed, which is where a blocked "unfinished Git operation" points. */
-  onOpenChanges?: () => void;
+  onOpenConflicts?: () => void;
   /** Opens the History screen reading the named branch, whether or not it is the
    * active one. Nothing is checked out to get there. */
   /** Open History reading this branch, and — when a version is named — with that
@@ -1618,13 +1618,13 @@ export function BranchesPanel({
         onSwitchInstead={() =>
           setDialog(dialog?.kind === "delete" ? { kind: "switch", target: dialog.target } : null)
         }
-        onOpenChanges={
-          onOpenChanges &&
+        onOpenConflicts={
+          onOpenConflicts &&
           (() => {
             // Leaving the screen means the mutation slot has to go back, same
             // as any other way of closing the dialog.
             closeDialog();
-            onOpenChanges();
+            onOpenConflicts();
           })
         }
         onPhaseChange={onOperationPhaseChange}

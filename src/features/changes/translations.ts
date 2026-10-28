@@ -83,6 +83,8 @@ export interface ChangesTranslations {
   changesDiffConflictUnavailable: string;
   changesDiffConflictBinary: string;
   changesDiffConflictTooLarge: string;
+  changesConflictsNotice: (count: number) => string;
+  changesConflictsReview: string;
   changesDiffAriaLabel: (path: string) => string;
   changesDiffHiddenLines: (count: number) => string;
   changesDiffShowHiddenLines: (count: number) => string;

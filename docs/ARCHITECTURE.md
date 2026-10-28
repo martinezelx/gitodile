@@ -738,9 +738,21 @@ shape, facets, state and allowed whole-file actions, and a state token. Only a
 merge with one merge head is supported; every other operation is explained
 with its files and the exact Git commands, and has no action.
 `read_conflict_stage` reads one stage lazily, capped at the diff limit, after
-checking that the requested object is still that path's stage. Both are
-read-only and run under a shared read permit; `git_operation_in_progress`
-asks the same marker detection, so a refusal and the resolver never disagree.
+checking that the requested object is still that path's stage.
+`read_conflict_side_diff` answers "what did this side change" for one regular
+file: it checks both object IDs against the path's stages, runs a blob-to-blob
+`git diff` (or builds an all-added hunk when there is no base) and returns the
+Changes tab's typed `FileDiff`. All three are read-only and run under a shared
+read permit; `git_operation_in_progress` asks the same marker detection, so a
+refusal and the resolver never disagree.
+
+The frontend owner is `src/features/conflicts/`: a lazy screen registered
+with no rail or fixed palette entry, reached from Overview, Changes, the
+palette and the refusing dialogs. Its controller caches one session read per
+project incarnation and the side diffs by the objects they compare. The
+session is read after a status snapshot that lists overlapping files (and once
+more after one that no longer does), and on every entry press; a project with
+no overlap costs no Git process, and visibility never reads.
 
 Before a session's first change, `recovery::create_conflict_snapshot` writes
 `<git-dir>/gitodile/conflicts/v1/<session-id>/` under the write lock, after

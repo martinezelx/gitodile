@@ -2,12 +2,14 @@
 //! (ADR 0041). Each fixture builds one conflicted repository and asks every
 //! question it can of it, because a Git process costs about 50 ms on Windows.
 
+use crate::changes::{DiffLineKind, FileDiff};
 use crate::conflicts::*;
 use crate::error::{AppError, AppErrorCode};
 use crate::git_command::{git_command, in_test_frame};
 use crate::recovery::*;
 use crate::repository::git_operation_in_progress;
 use crate::repository_access::{self, AccessMode, RepositoryContext};
+use crate::status::ChangeCategory;
 use crate::test_support::*;
 use std::fs;
 use std::path::Path;
@@ -303,6 +305,62 @@ fn a_paused_merge_is_read_by_class_without_writing_anything() {
     assert_eq!(wrong.unwrap_err().code, AppErrorCode::StaleConflictSession);
     assert!(read_conflict_stage(path.clone(), "content.txt".into(), 4, SUB_BASE.into()).is_err());
     assert!(read_conflict_stage(path.clone(), "../escape".into(), 1, SUB_BASE.into()).is_err());
+
+    // What each side changed against the base, as the Changes tab's diff.
+    let side_diff = |name: &str, side: ConflictSide| {
+        let found = file(&session, name);
+        let changed = match side {
+            ConflictSide::Current => &found.current,
+            ConflictSide::Incoming => &found.incoming,
+        };
+        read_conflict_side_diff(
+            path.clone(),
+            name.to_string(),
+            side,
+            found.base.as_ref().map(|stage| stage.object_id.clone()),
+            changed.as_ref().unwrap().object_id.clone(),
+        )
+    };
+    let changed_lines = |diff: FileDiff| match diff {
+        FileDiff::Text { hunks, change, .. } => (
+            change,
+            hunks
+                .into_iter()
+                .flat_map(|hunk| hunk.lines)
+                .filter(|line| line.kind != DiffLineKind::Context)
+                .map(|line| line.content)
+                .collect::<Vec<_>>(),
+        ),
+        other => panic!("expected a text diff, got {other:?}"),
+    };
+    assert_eq!(
+        changed_lines(side_diff("content.txt", ConflictSide::Current).unwrap()),
+        (ChangeCategory::Changed, vec!["b".into(), "MAIN".into()])
+    );
+    assert_eq!(
+        changed_lines(side_diff("new.txt", ConflictSide::Incoming).unwrap()),
+        (ChangeCategory::New, vec!["feature new".into()])
+    );
+    assert!(matches!(
+        side_diff("bin.dat", ConflictSide::Incoming).unwrap(),
+        FileDiff::Binary { .. }
+    ));
+    assert_eq!(
+        side_diff("link", ConflictSide::Current).unwrap_err().code,
+        AppErrorCode::InvalidSelection
+    );
+    let content = file(&session, "content.txt");
+    let crossed = read_conflict_side_diff(
+        path.clone(),
+        "content.txt".into(),
+        ConflictSide::Current,
+        content.base.as_ref().map(|stage| stage.object_id.clone()),
+        content.incoming.as_ref().unwrap().object_id.clone(),
+    );
+    assert_eq!(
+        crossed.unwrap_err().code,
+        AppErrorCode::StaleConflictSession
+    );
 
     assert_eq!(git_metadata(&path), before, "reading must not write");
     assert!(!Path::new(&path).join(".git/index.lock").exists());

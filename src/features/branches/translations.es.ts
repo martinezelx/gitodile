@@ -230,7 +230,7 @@ export const es: BranchesTranslations = {
   deleteBranchBlockedDefaultLead: "Es la rama principal del proyecto, donde vive el trabajo compartido, así que GitOdile la conserva.",
   deleteBranchBlockedOperationLead:
     (name) => `Termínalo o cancélalo en tu herramienta de Git y vuelve para eliminar «${name}».`,
-  deleteBranchOpenChangesAction: "Ver los archivos en conflicto",
+  deleteBranchOpenConflictsAction: "Revisar los cambios que se solapan",
   deleteBranchSwitchAction: "Cambiar a esta rama",
   deleteBranchSafeLead: (branch) => `Su trabajo ya está en «${branch}», así que no se pierde nada.`,
   deleteBranchCopiedLead: (base, squashed) =>

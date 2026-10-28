@@ -7,13 +7,17 @@
 //! recovery owner, [`crate::recovery`], which reads the session from here.
 
 use crate::application;
-use crate::changes::{validate_repo_relative_path, MAX_DIFF_OUTPUT_BYTES};
+use crate::changes::{
+    is_binary_diff_output, parse_diff_body, validate_repo_relative_path, FileDiff,
+    MAX_DIFF_OUTPUT_BYTES,
+};
 use crate::error::{AppError, AppErrorCode};
 use crate::git_command::{run_git, run_git_capped, run_git_with_input_capped};
 use crate::recovery::{
     read_conflict_snapshot, ConflictSnapshotManifest, SnapshotPath, SnapshotWorking,
 };
 use crate::repository_access::RepositoryContext;
+use crate::status::ChangeCategory;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fs;
@@ -29,6 +33,8 @@ const MAX_UNMERGED_LISTING_BYTES: usize = 16 * 1024 * 1024;
 const BINARY_PROBE_BYTES: usize = 8000;
 
 const MODE_SYMLINK: &str = "120000";
+const MODE_REGULAR: &str = "100644";
+const MODE_EXECUTABLE: &str = "100755";
 const MODE_GITLINK: &str = "160000";
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
@@ -1145,6 +1151,42 @@ pub(crate) fn line_endings(text: &[u8]) -> LineEndings {
     }
 }
 
+/// One blob's size and bytes through `cat-file --batch`, or its size alone
+/// when it is past the diff cap.
+fn read_blob_capped(path: &str, object_id: &str) -> Result<(u64, Option<Vec<u8>>), AppError> {
+    let request = format!("{object_id}\n");
+    let output = run_git_with_input_capped(
+        path,
+        &["cat-file", "--batch"],
+        request.as_bytes(),
+        MAX_DIFF_OUTPUT_BYTES + 256,
+    )?;
+    if !output.status.success() {
+        return Err(unreadable());
+    }
+    let header_end = output
+        .stdout
+        .iter()
+        .position(|byte| *byte == b'\n')
+        .ok_or_else(unreadable)?;
+    let header = String::from_utf8_lossy(&output.stdout[..header_end]).to_string();
+    let size = header
+        .rsplit(' ')
+        .next()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|_| header.split(' ').nth(1) == Some("blob"))
+        .ok_or_else(unreadable)?;
+    if size > MAX_DIFF_OUTPUT_BYTES as u64 || output.limit_exceeded {
+        return Ok((size, None));
+    }
+    let start = header_end + 1;
+    let content = output
+        .stdout
+        .get(start..start + size as usize)
+        .ok_or_else(unreadable)?;
+    Ok((size, Some(content.to_vec())))
+}
+
 /// Reads one stage of one conflicted file, after proving the requested object
 /// is still that stage, so the boundary can never read an arbitrary object.
 pub(crate) fn read_conflict_stage(
@@ -1184,28 +1226,7 @@ pub(crate) fn read_conflict_stage(
             line_endings: None,
         });
     }
-    let request = format!("{object_id}\n");
-    let output = run_git_with_input_capped(
-        &path,
-        &["cat-file", "--batch"],
-        request.as_bytes(),
-        MAX_DIFF_OUTPUT_BYTES + 256,
-    )?;
-    if !output.status.success() {
-        return Err(unreadable());
-    }
-    let header_end = output
-        .stdout
-        .iter()
-        .position(|byte| *byte == b'\n')
-        .ok_or_else(unreadable)?;
-    let header = String::from_utf8_lossy(&output.stdout[..header_end]).to_string();
-    let size = header
-        .rsplit(' ')
-        .next()
-        .and_then(|value| value.parse::<u64>().ok())
-        .filter(|_| header.split(' ').nth(1) == Some("blob"))
-        .ok_or_else(unreadable)?;
+    let (size, content) = read_blob_capped(&path, &object_id)?;
     let mut base = ConflictStageContent {
         stage,
         object_id: entry.object_id,
@@ -1215,12 +1236,10 @@ pub(crate) fn read_conflict_stage(
         text: None,
         line_endings: None,
     };
-    if size > MAX_DIFF_OUTPUT_BYTES as u64 || output.limit_exceeded {
+    let Some(content) = content else {
         return Ok(base);
-    }
-    let start = header_end + 1;
-    let end = start + size as usize;
-    let content = output.stdout.get(start..end).ok_or_else(unreadable)?;
+    };
+    let content = content.as_slice();
     if entry.mode == MODE_SYMLINK {
         base.kind = StageContentKind::SymbolicLink;
         base.text = Some(String::from_utf8_lossy(content).into_owned());
@@ -1243,6 +1262,173 @@ pub(crate) fn read_conflict_stage(
         }
     }
     Ok(base)
+}
+
+#[derive(serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum ConflictSide {
+    Current,
+    Incoming,
+}
+
+fn is_regular_file_mode(mode: &str) -> bool {
+    mode == MODE_REGULAR || mode == MODE_EXECUTABLE
+}
+
+/// A side that added a file with no common version: every line is new.
+/// Git has no object to diff it against, so the hunk is built here from the
+/// side's own bytes, with the same binary probe and caps as any diff.
+fn added_file_diff(path: &str, file_path: String, object_id: &str) -> Result<FileDiff, AppError> {
+    let (_, content) = read_blob_capped(path, object_id)?;
+    let Some(content) = content else {
+        return Ok(FileDiff::TooLarge {
+            path: file_path,
+            original_path: None,
+            change: ChangeCategory::New,
+            limit_bytes: MAX_DIFF_OUTPUT_BYTES as u64,
+        });
+    };
+    if content[..content.len().min(BINARY_PROBE_BYTES)].contains(&0) {
+        return Ok(FileDiff::Binary {
+            path: file_path,
+            original_path: None,
+            change: ChangeCategory::New,
+        });
+    }
+    if content.is_empty() {
+        return Ok(FileDiff::Unchanged {
+            path: file_path,
+            original_path: None,
+            change: ChangeCategory::New,
+        });
+    }
+    let text = String::from_utf8_lossy(&content);
+    let body = text.strip_suffix('\n').unwrap_or(&text);
+    let count = body.split('\n').count();
+    let mut patch = format!("@@ -0,0 +1,{count} @@\n");
+    for line in body.split('\n') {
+        patch.push('+');
+        patch.push_str(line);
+        patch.push('\n');
+    }
+    let parsed = parse_diff_body(&patch);
+    Ok(FileDiff::Text {
+        path: file_path,
+        original_path: None,
+        change: ChangeCategory::New,
+        hunks: parsed.hunks,
+        truncated: parsed.truncated,
+    })
+}
+
+/// What one side changed in a conflicted file against the common base, as
+/// the same typed diff the Changes tab draws. Both object IDs are checked
+/// against the path's current stages first, so the boundary can never diff
+/// arbitrary objects.
+pub(crate) fn read_conflict_side_diff(
+    path: String,
+    file_path: String,
+    side: ConflictSide,
+    base_object_id: Option<String>,
+    side_object_id: String,
+) -> Result<FileDiff, AppError> {
+    let subject = format!("{file_path}:{side:?}");
+    let (_repository, _access) =
+        application::authorize_repository_read_of(&path, "read_conflict_side_diff", &subject)?;
+    validate_repo_relative_path(&file_path)?;
+    let invalid = || {
+        AppError::new(
+            AppErrorCode::InvalidSelection,
+            "That side of the overlapping file can't be compared as text.",
+        )
+    };
+    if !is_object_id(&side_object_id)
+        || base_object_id
+            .as_deref()
+            .is_some_and(|object_id| !is_object_id(object_id))
+    {
+        return Err(invalid());
+    }
+    let pathspec = format!(":(literal){file_path}");
+    let output = run_git(&path, &["ls-files", "-u", "-z", "--", &pathspec])?;
+    if !output.status.success() {
+        return Err(unreadable());
+    }
+    let entries = parse_unmerged_entries(&output.stdout)?
+        .into_iter()
+        .filter(|entry| entry.path == file_path.as_bytes())
+        .collect::<Vec<_>>();
+    let side_stage = match side {
+        ConflictSide::Current => 2,
+        ConflictSide::Incoming => 3,
+    };
+    let base = entries.iter().find(|entry| entry.stage == 1);
+    let changed = entries
+        .iter()
+        .find(|entry| entry.stage == side_stage)
+        .ok_or_else(stale)?;
+    if changed.object_id != side_object_id
+        || base.map(|entry| entry.object_id.as_str()) != base_object_id.as_deref()
+    {
+        return Err(stale());
+    }
+    if !is_regular_file_mode(&changed.mode)
+        || base.is_some_and(|entry| !is_regular_file_mode(&entry.mode))
+    {
+        return Err(invalid());
+    }
+    let Some(base) = base else {
+        return added_file_diff(&path, file_path, &side_object_id);
+    };
+    let output = run_git_capped(
+        &path,
+        &[
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-color",
+            "--no-renames",
+            &base.object_id,
+            &side_object_id,
+        ],
+        MAX_DIFF_OUTPUT_BYTES,
+    )?;
+    // `git diff` between two blobs exits 1 when they differ.
+    if !matches!(output.status.code(), Some(0 | 1)) {
+        return Err(unreadable());
+    }
+    let change = ChangeCategory::Changed;
+    if output.limit_exceeded {
+        return Ok(FileDiff::TooLarge {
+            path: file_path,
+            original_path: None,
+            change,
+            limit_bytes: MAX_DIFF_OUTPUT_BYTES as u64,
+        });
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    if is_binary_diff_output(&text) {
+        return Ok(FileDiff::Binary {
+            path: file_path,
+            original_path: None,
+            change,
+        });
+    }
+    let parsed = parse_diff_body(&text);
+    if parsed.hunks.is_empty() {
+        return Ok(FileDiff::Unchanged {
+            path: file_path,
+            original_path: None,
+            change,
+        });
+    }
+    Ok(FileDiff::Text {
+        path: file_path,
+        original_path: None,
+        change,
+        hunks: parsed.hunks,
+        truncated: parsed.truncated,
+    })
 }
 
 #[cfg(test)]

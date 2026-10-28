@@ -43,6 +43,7 @@
     { "name": "delete_discard_recovery", "arguments": ["path", "recoveryId", "sessionEpoch"], "response": "void" },
     { "name": "read_conflict_session", "arguments": ["path", "sessionEpoch"], "response": "ConflictSession | null" },
     { "name": "read_conflict_stage", "arguments": ["path", "filePath", "stage", "objectId", "sessionEpoch"], "response": "ConflictStageContent" },
+    { "name": "read_conflict_side_diff", "arguments": ["path", "filePath", "side", "baseObjectId?", "sideObjectId", "sessionEpoch"], "response": "FileDiff" },
     {"name": "glab_diagnostics", "arguments": [], "response": "GitDiagnostics"},
     {"name": "install_glab", "arguments": [], "response": "GitInstallationResult"},
     {"name": "update_glab", "arguments": [], "response": "GitUpdateLaunchResult"},

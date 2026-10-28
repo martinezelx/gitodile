@@ -5,7 +5,7 @@ import { EMPTY_TEAM_SYNC_STATE, type TeamSyncStatus, type TeamSyncViewState } fr
 
 /** Per-project view: `settings` lives outside any session (see `app/App.tsx`), so
  * a session only ever remembers which project screen it was last showing. */
-export type ProjectView = "overview" | "workbench" | "branches" | "console";
+export type ProjectView = "overview" | "workbench" | "branches" | "console" | "conflicts";
 
 /** The two views of the Work screen (task 126). Which one is showing is the
  * session's to remember: Back and Forward move

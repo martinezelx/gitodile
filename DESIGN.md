@@ -3675,6 +3675,39 @@ arrival never waits on a position that has nothing to do with it, and a
 virtualized row is still never animated by a scroll that mounted it. Overview
 and Home show their existing lists without an entrance stagger.
 
+**Overlapping changes is a screen you are sent to, never one you visit.**
+A paused merge, rebase, cherry-pick, revert or patch series is temporary, so
+the screen has no rail entry: Overview's `conflicts` state, a notice above the
+Changes list, the palette (only while something is paused) and the dialogs
+that refuse to act because something is paused lead to it, and Back returns
+to where the reader came from. It is the Changes pairing — a file list panel
+and a reading panel edge to edge at `--panel-column`, the same one-column
+list/detail switch below 1024px — under one header band that names what is
+paused with real branch names, its step and how many files still overlap.
+A merge GitOdile will resolve needs no card: the header already says what is
+paused, and a "you can look around safely" card said the same thing on every
+visit. An operation it cannot finish gets one `warning` card — nothing is
+lost, continue or cancel it with the tool that started it — whose
+`Technical details` disclosure holds the operation, both sides' refs and
+commits, the snapshot, and the exact continue and cancel commands as text
+with a Copy action each, never a button that runs them. Files carry no
+technical details of their own: stage modes and object IDs answered no
+question a reader of this screen asks.
+Each row says the overlap in words ("Deleted on “main”"), never by colour
+alone. The reading panel's strip carries the file's name and the overlap in words.
+Under it both sides show at once as two equal columns, the way IntelliJ IDEA puts the two
+versions either side of a merge — "What “main” changed" on the left, "What
+“feature” changed" on the right, each a heading with a branch glyph over a
+diff in a scroller of its own. The overlap is the two of them together; a
+picker between them hid half of it. The columns are the layout, so there is
+no reading-mode picker: each side is one unified column, and below 720px the
+columns stack. The panes start right under the
+screen's header hairline, with no band of their own above them. Each side is
+drawn against
+the common base with the Changes diff renderer; a side with nothing to
+compare as text (deleted, a link, a submodule, a changed kind) says so in a
+sentence instead of drawing an empty diff.
+
 **Dropping a folder on the window** opens it. While a drag is over the window
 — and only then — a window-sized overlay names what a drop will do. It is
 feedback about a gesture, not chrome: it never takes the pointer (an overlay

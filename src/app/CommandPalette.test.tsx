@@ -235,7 +235,7 @@ describe("CommandPalette commands", () => {
 
   it("gives every destination a glyph of its own", () => {
     const t = { paletteGroupGo: "Go" } as Parameters<typeof paletteMeta>[1];
-    const destinations = ["home", "overview", "workbench", "changes", "history", "branches", "console", "recovery"];
+    const destinations = ["home", "overview", "workbench", "changes", "history", "branches", "console", "conflicts", "recovery"];
     const glyphs = destinations.map((destination) => (paletteMeta(`go-${destination}`, t).icon as React.ReactElement).type);
 
     expect(new Set(glyphs).size).toBe(destinations.length);

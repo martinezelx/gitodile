@@ -109,6 +109,7 @@ export const es: SyncTranslations = {
   getTeamOperationTitle: "Termina la operación de Git en curso",
   getTeamOperationBody: "Hay otra operación de Git en curso en este proyecto. Termínala o cancélala y luego trae los cambios.",
   getTeamShowInFolder: "Mostrar en carpeta",
+  getTeamReviewConflicts: "Revisar los cambios que se solapan",
   getTeamSaveVersion: "Guardar versión",
   getTeamBlockedTitle: "La actualización se detuvo de forma segura",
   getTeamUpToDateToast: "Todo al día. No hay versiones nuevas que traer.",

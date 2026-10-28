@@ -74,6 +74,9 @@ export const es: ChangesTranslations = {
   changesDiffConflictUnavailable: "No se pudieron leer las marcas de conflicto de este archivo.",
   changesDiffConflictBinary: "Este archivo no es texto, así que no se puede mostrar su conflicto.",
   changesDiffConflictTooLarge: "Este conflicto es demasiado grande para mostrarlo aquí.",
+  changesConflictsNotice: (count) =>
+    count === 1 ? "1 archivo tiene cambios que se solapan" : `${count.toLocaleString("es")} archivos tienen cambios que se solapan`,
+  changesConflictsReview: "Revisar los cambios que se solapan",
   changesDiffAriaLabel: (path) => `Cambios de ${path}`,
   changesDiffHiddenLines: (count) => (count === 1 ? "1 línea sin cambios" : `${count} líneas sin cambios`),
   changesDiffShowHiddenLines: (count) =>

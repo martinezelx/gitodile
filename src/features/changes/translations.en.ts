@@ -74,6 +74,9 @@ export const en: ChangesTranslations = {
   changesDiffConflictUnavailable: "Couldn't read this file's conflict markers.",
   changesDiffConflictBinary: "This file isn't text, so its conflict can't be shown.",
   changesDiffConflictTooLarge: "This conflict is too large to show here.",
+  changesConflictsNotice: (count) =>
+    count === 1 ? "1 file has overlapping changes" : `${count.toLocaleString()} files have overlapping changes`,
+  changesConflictsReview: "Review overlapping changes",
   changesDiffAriaLabel: (path) => `Changes in ${path}`,
   changesDiffHiddenLines: (count) => (count === 1 ? "1 unchanged line" : `${count} unchanged lines`),
   changesDiffShowHiddenLines: (count) =>

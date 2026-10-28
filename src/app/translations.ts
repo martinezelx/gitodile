@@ -62,6 +62,7 @@ export interface AppTranslations {
   navBranchesDescription: string;
   navBranchesTitle: string;
   navConsole: string;
+  navConflicts: string;
   navConsoleDescription: string;
   navConsoleTitle: string;
   navRecovery: string;
@@ -92,6 +93,8 @@ export interface AppTranslations {
   commandGoHome: string;
   commandGoBranches: string;
   commandGoConsole: string;
+  commandContinueConflicts: string;
+  commandReviewPausedOperation: string;
   commandGoWork: string;
   commandGoChanges: string;
   commandGoHistory: string;

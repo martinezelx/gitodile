@@ -24,7 +24,7 @@ use crate::{
     clone::{
         self, CloneOperationRegistry, ClonePlan, CloneProgressPhase, CloneResult, CloneSourceAccess,
     },
-    conflicts::{self, ConflictSession, ConflictStageContent},
+    conflicts::{self, ConflictSession, ConflictSide, ConflictStageContent},
     console::{
         self, ConsoleHost, ConsoleHostingResult, ConsoleModes, ConsolePlan, ConsoleQueryResult,
         ConsoleRunResult, ConsoleSettings,
@@ -829,6 +829,30 @@ pub(crate) fn read_conflict_stage(
         (|| {
             validate_session(&path, &session_epoch)?;
             conflicts::read_conflict_stage(path, file_path, stage, object_id)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn read_conflict_side_diff(
+    path: String,
+    file_path: String,
+    side: ConflictSide,
+    base_object_id: Option<String>,
+    side_object_id: String,
+    session_epoch: String,
+) -> Result<FileDiff, AppError> {
+    report_result(
+        "read_conflict_side_diff",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::read_conflict_side_diff(
+                path,
+                file_path,
+                side,
+                base_object_id,
+                side_object_id,
+            )
         })(),
     )
 }

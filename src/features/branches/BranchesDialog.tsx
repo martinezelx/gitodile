@@ -579,7 +579,7 @@ export function DeleteBranchDialog({
   onClose,
   onDeleted,
   onSwitchInstead,
-  onOpenChanges,
+  onOpenConflicts,
   onPhaseChange,
 }: {
   isOpen: boolean;
@@ -595,7 +595,7 @@ export function DeleteBranchDialog({
   /** Offered when an unfinished Git operation blocks every branch
    * change: the Changes screen is the one place that shows which files are
    * in conflict, which is as far as GitOdile goes on conflicts today. */
-  onOpenChanges?: () => void;
+  onOpenConflicts?: () => void;
   onPhaseChange?: (phase: BranchOperationPhase) => void;
 }): React.JSX.Element | null {
   const { t } = useLanguage();
@@ -768,9 +768,9 @@ export function DeleteBranchDialog({
             <button className="secondary-button" type="button" onClick={requestClose}>
               {t.commonClose}
             </button>
-            {isConflictBlock && onOpenChanges && (
-              <button className="primary-button" type="button" onClick={() => onOpenChanges()}>
-                {t.deleteBranchOpenChangesAction}
+            {isConflictBlock && onOpenConflicts && (
+              <button className="primary-button" type="button" onClick={() => onOpenConflicts()}>
+                {t.deleteBranchOpenConflictsAction}
               </button>
             )}
             {blockedReason === "branch_unique_work" && onSwitchInstead && (

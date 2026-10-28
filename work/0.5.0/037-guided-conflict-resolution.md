@@ -275,7 +275,7 @@ Every class gets a safe whole-file path or an explicit, honest limitation.
 1. [037-1](../done/037-1-conflict-domain-and-recovery.md): session ADR, classification,
    stage reader, snapshot, paused-operation detection, and how
    GitOdile-detected overlaps become sessions.
-2. [037-3](037-3-read-only-conflict-workspace.md): contextual entry, file list,
+2. [037-3](../done/037-3-read-only-conflict-workspace.md): contextual entry, file list,
    per-side read-only view, and the read-only view of other paused operations.
 3. [037-6](037-6-resolve-files.md): whole-side choices, open in editor, mark
    resolved, reset.
@@ -425,6 +425,12 @@ process counts, and platform deviations.
   `recovery/conflict.rs`; IPC `read_conflict_session` and
   `read_conflict_stage`. Details, caps and process counts are in
   [037-1](../done/037-1-conflict-domain-and-recovery.md).
+- 037-3 (2026-10-28): the read-only overlapping-changes screen,
+  `src/features/conflicts/`, registered without a rail entry and reached from
+  Overview, Changes, the palette and the dialogs that refuse for a paused
+  operation; a third read, `read_conflict_side_diff`, draws each side against
+  the base with the Changes diff renderer, both sides at once as two columns.
+  Details in [037-3](../done/037-3-read-only-conflict-workspace.md).
 
 # Validation
 

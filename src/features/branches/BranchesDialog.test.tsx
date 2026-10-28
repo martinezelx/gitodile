@@ -343,7 +343,7 @@ describe("DeleteBranchDialog", () => {
       message: "merge in progress",
       remediation: null,
     });
-    const onOpenChanges = vi.fn();
+    const onOpenConflicts = vi.fn();
     const user = userEvent.setup();
     render(
       <LanguageProvider><ToastProvider>
@@ -354,7 +354,7 @@ describe("DeleteBranchDialog", () => {
           target="conflict-a"
           onClose={vi.fn()}
           onDeleted={vi.fn()}
-          onOpenChanges={onOpenChanges}
+          onOpenConflicts={onOpenConflicts}
         />
       </ToastProvider></LanguageProvider>,
     );
@@ -364,8 +364,8 @@ describe("DeleteBranchDialog", () => {
     // their Git tool rather than implying the Changes screen can fix it.
     expect(screen.getByText(/Finish or cancel it in your Git tool/)).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "See the files in conflict" }));
-    expect(onOpenChanges).toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Review overlapping changes" }));
+    expect(onOpenConflicts).toHaveBeenCalled();
   });
 
   it("keeps the retryable error banner for failures that aren't a refusal", async () => {

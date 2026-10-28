@@ -27,6 +27,7 @@ import { en as projectSettingsEn } from "../features/project-settings/translatio
 import { en as publishEn } from "../features/publish/translations.en";
 import { en as branchesEn } from "../features/branches/translations.en";
 import { en as workbenchEn } from "../features/workbench/translations.en";
+import { en as conflictsEn } from "../features/conflicts/translations.en";
 
 /** Each namespace on its own, for the key-parity checks. */
 export const enNamespaces = {
@@ -59,6 +60,7 @@ export const enNamespaces = {
   publish: publishEn,
   branches: branchesEn,
   workbench: workbenchEn,
+  conflicts: conflictsEn,
 };
 
 /* The English dictionary, composed from every namespace. Each language is
@@ -94,4 +96,5 @@ export const en = {
   ...publishEn,
   ...branchesEn,
   ...workbenchEn,
+  ...conflictsEn,
 };

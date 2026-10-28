@@ -102,6 +102,8 @@
 .changes-status-notice > .secondary-button svg { width: var(--icon-row); height: var(--icon-row); }
 .changes-status-notice--danger { outline: 1px solid var(--status-danger); outline-offset: -1px; }
 .changes-status-notice--danger > svg { color: var(--status-danger); }
+/* Files overlap: the way to the screen that explains them (task 037-3). */
+.changes-status-notice--attention > svg { color: var(--status-warning); }
 /* The result of a discard that was never confirmed. Sits under the header,
    full width, so the Undo is where the eye already is after the list changed
    under it. */

@@ -110,6 +110,7 @@ export function GetTeamChangesDialog({
   onPhaseChange,
   onSaveVersion,
   onRevealFile,
+  onOpenConflicts,
   onPublishAfter,
 }: {
   isOpen: boolean;
@@ -137,6 +138,9 @@ export function GetTeamChangesDialog({
   onSaveVersion?: () => void;
   /** Offered when an untracked file of the person's is in the way. */
   onRevealFile?: (path: string) => void;
+  /** Offered when another operation is paused in the project: the way to the
+   * screen that explains it. Leaving this dialog for it changes nothing. */
+  onOpenConflicts?: () => void;
   /** Publishes after a successful get (Get and publish). */
   onPublishAfter?: () => Promise<PublishAfterGet>;
 }): React.JSX.Element | null {
@@ -378,7 +382,12 @@ export function GetTeamChangesDialog({
         body={localizeAppError(state.error, t, t.errorGitCommandFailed)}
         onClose={requestClose}
         dialogRef={dialogRef}
-        actions={deterministicBlock(state.error) ? (
+        actions={isAppError(state.error) && state.error.code === "git_operation_in_progress" && onOpenConflicts ? (
+          <>
+            <button className="secondary-button" type="button" onClick={requestClose}>{t.commonClose}</button>
+            <button className="primary-button" type="button" onClick={onOpenConflicts}>{t.getTeamReviewConflicts}</button>
+          </>
+        ) : deterministicBlock(state.error) ? (
           <button className="primary-button" type="button" onClick={requestClose}>{t.commonClose}</button>
         ) : (
           <>
@@ -486,6 +495,8 @@ export function GetTeamChangesDialog({
               <button className="primary-button" type="button" onClick={() => onRevealFile(path)}>
                 <FolderOpen aria-hidden="true" />{t.getTeamShowInFolder}
               </button>
+            ) : copy.action === "conflicts" && onOpenConflicts ? (
+              <button className="primary-button" type="button" onClick={onOpenConflicts}>{t.getTeamReviewConflicts}</button>
             ) : null}
           </>
         }

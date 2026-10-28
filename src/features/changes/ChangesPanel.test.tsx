@@ -48,6 +48,7 @@ function ControlledChangesPanel(
     | "onGetChanges"
     | "onCheckRemote"
     | "onOpenHistory"
+    | "onOpenConflicts"
     | "tabs"
   > & {
     controller?: ChangesController;
@@ -63,6 +64,7 @@ function ControlledChangesPanel(
     onGetChanges?: () => void;
     onCheckRemote?: () => void;
     onOpenHistory?: () => void;
+    onOpenConflicts?: () => void;
   },
 ): React.JSX.Element {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -90,6 +92,7 @@ function ControlledChangesPanel(
       onGetChanges={props.onGetChanges ?? (() => {})}
       onCheckRemote={props.onCheckRemote ?? (() => {})}
       onOpenHistory={props.onOpenHistory ?? (() => {})}
+      onOpenConflicts={props.onOpenConflicts ?? (() => {})}
     />
     </ScreenLifecycleProvider>
   );
