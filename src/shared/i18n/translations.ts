@@ -70,6 +70,10 @@ export interface SharedTranslations {
   errorDivergedHistories: string;
   errorStalePublishPlan: string;
   errorStaleGetTeamChangesPlan: string;
+  errorStaleBringInPlan: string;
+  errorShallowHistory: string;
+  errorNoSharedHistory: string;
+  errorUnsupportedMergeSetup: string;
   errorInvalidRefName: string;
   errorAuthenticationFailed: string;
   errorSecureStorageUnavailable: string;

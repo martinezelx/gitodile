@@ -3,7 +3,7 @@ id: 065-4
 title: Integrate branches and diverged project changes safely
 status: active
 priority: high
-type: feature
+type: epic
 areas:
   - sync
   - branches
@@ -14,7 +14,7 @@ areas:
 created: 2026-08-18
 completed:
 parent: "065"
-queue: "01"
+queue:
 ---
 
 # Goal
@@ -59,6 +59,18 @@ using the overlap-to-session path that task 037-1's ADR decides.
   upstream once that path exists.
 - Report interrupted or partially observed mutation as uncertain and preserve
   all recovery/conflict evidence.
+
+# Slices
+
+Split on 2026-10-29 into five children, executed in order:
+
+| Child | Outcome |
+| --- | --- |
+| [065-4-1](../done/065-4-1-bring-in-changes-core.md) | Rust plan and execution for bringing another branch in when nothing overlaps |
+| [065-4-2](065-4-2-pause-on-overlaps.md) | Overlaps become a real paused `git merge` with a start record, handed to task 037 |
+| [065-4-3](065-4-3-bring-in-changes-dialog.md) | The Bring in changes dialog and its entries |
+| [065-4-4](065-4-4-get-diverged-overlaps.md) | Get project changes hands a diverged upstream's overlaps to task 037 |
+| [065-4-5](065-4-5-integration-audit.md) | Desktop audit of the whole integration workflow |
 
 # Out of scope
 
@@ -117,6 +129,16 @@ using the overlap-to-session path that task 037-1's ADR decides.
   ([ADR 0030](../../docs/adr/0030-forecast-and-combine-project-changes.md)).
   This task keeps bringing in another branch and handing a real
   overlap to task 037, reusing that forecast and merge-version path.
+
+- 2026-10-29 (user approved): a branch that is only behind fast-forwards, as
+  Get does; an empty merge is offered and says no file changes; rerere is
+  turned off for GitOdile's own `git merge` invocation only
+  (`-c rerere.enabled=false`), never in the user's configuration;
+  `branch.<name>.mergeOptions` blocks as unsupported; unsaved changes the
+  merge does not touch may stay while a merge pauses (ADR 0041 §7); a remote
+  branch is checked in the background when the dialog opens and the last
+  check is older than a minute; ADR 0030 and ADR 0041 are amended rather than
+  superseded.
 
 # Implementation notes
 

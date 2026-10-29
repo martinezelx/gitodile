@@ -6,6 +6,8 @@
   with a snapshot of combined unsaved content
 - Amended by: [ADR 0041](0041-conflict-sessions-and-their-recovery.md), §7 —
   a real overlap the user chooses to resolve becomes a paused `git merge`
+- Amended 2026-10-29: any local or remote-tracking branch as the source
+  (task 065-4-1), below
 
 ## Context
 
@@ -74,6 +76,45 @@ does not exist yet, so a real overlap must still be refused, but named.
    and then plans and pushes as Publish always does.
 7. **Refuse real overlaps by name.** A saved or unsaved overlap is reported
    with the files and refused until task 037 can resolve it.
+
+## Amendment (2026-10-29): bringing in another branch
+
+Task 065-4-1 lets the person bring another branch into the current one with
+the same analysis and execution, so there is one way to combine saved
+versions rather than two.
+
+1. **A source is a commit with a name.** Besides the configured upstream, the
+   source may be a local branch (`refs/heads/<name>`) or a remote-tracking
+   branch, found through that remote's own fetch mapping exactly as a check of
+   it would update it. The plan reads it as this computer has it and never
+   fetches; a remote branch is as fresh as its last check.
+2. **Four answers.** Already contained (nothing to do, no button), fast-forward
+   (as Get, no hooks), merge (a merge version built as in point 3), and an
+   **empty merge**: a merge version whose tree is the current one, because
+   the source's changes are already here in another form. It is offered and
+   says that no file changes, as Git would record it.
+3. **The token names the source.** It binds the workflow (`get` or
+   `bring-in`), the source's remote, branch and ref and its exact commit,
+   beside everything point 2 already bound; a moved source, branch or file is
+   `stale_bring_in_plan`, never a retargeted merge.
+4. **Its own recovery operation.** Records live under
+   `refs/gitodile/recovery/v1/bring-in-changes/`, with the newest 20 kept, so
+   bringing in branches never evicts a team update's record. The record's
+   `remote`, `destinationBranch` and `trackingRef` name the source.
+5. **States a merge cannot start from block by name**, before any analysis:
+   no shared saved version (`no_shared_history`), a shallow copy that lacks
+   the version both sides started from (`shallow_history`), and a sparse
+   checkout (`unsupported_merge_setup`), besides the detached, unborn,
+   in-progress, active-branch and missing-branch states. The merge message is
+   the one `git merge` would write: `Merge branch '<name>'` or `Merge
+   remote-tracking branch '<remote>/<name>'`, followed by ` into <branch>`
+   unless the project's `merge.suppressDest` globs name the branch (only
+   `master` when it is unset). The plan shows that message and its token
+   binds it.
+
+Because the merge version is still built with `commit-tree`,
+`branch.<name>.mergeOptions` and `merge.ff` play no part here; they matter
+only once a real `git merge` runs for overlaps (ADR 0041 §7, task 065-4-2).
 
 ## Consequences
 

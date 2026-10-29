@@ -56,8 +56,9 @@ use crate::{
     session,
     status::{self, PendingVersionsResult, WorkingTreeStatus},
     sync::{
-        self, ConnectRemotePlan, ConnectRemoteResult, GetTeamChangesPhase, GetTeamChangesPlan,
-        GetTeamChangesResult, ProjectRemotes, RemoteDiscovery, RemoteHome, TeamSyncStatus,
+        self, BringInChangesPlan, BringInChangesResult, ConnectRemotePlan, ConnectRemoteResult,
+        GetTeamChangesPhase, GetTeamChangesPlan, GetTeamChangesResult, IntegrationSource,
+        ProjectRemotes, RemoteDiscovery, RemoteHome, TeamSyncStatus,
     },
     technology::{self, ProjectTechnology},
     tooling::{
@@ -1459,6 +1460,53 @@ pub(crate) fn get_team_changes(
     )
 }
 
+/// Local only, like Get's plan: the source is read as this computer has it,
+/// a remote branch as of its last check.
+#[tauri::command(async)]
+pub(crate) fn plan_bring_in_changes(
+    path: String,
+    session_epoch: String,
+    source: IntegrationSource,
+) -> Result<BringInChangesPlan, AppError> {
+    report_result(
+        "plan_bring_in_changes",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::plan_bring_in_changes(path, session_epoch, source)
+        })(),
+    )
+}
+
+/// `run_hooks` follows the Settings switch, as Get's does.
+#[tauri::command(async)]
+pub(crate) fn bring_in_changes(
+    path: String,
+    session_epoch: String,
+    source: IntegrationSource,
+    state_token: String,
+    recovery_reference: String,
+    run_hooks: bool,
+    on_progress: tauri::ipc::Channel<GetTeamChangesPhase>,
+) -> Result<BringInChangesResult, AppError> {
+    report_result(
+        "bring_in_changes",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::bring_in_changes(
+                path,
+                session_epoch,
+                source,
+                state_token,
+                recovery_reference,
+                run_hooks,
+                |phase| {
+                    let _ = on_progress.send(phase);
+                },
+            )
+        })(),
+    )
+}
+
 #[tauri::command(async)]
 pub(crate) fn list_unpublished_versions(
     path: String,
@@ -2153,6 +2201,10 @@ mod contract_tests {
             AppErrorCode::DivergedHistories,
             AppErrorCode::StalePublishPlan,
             AppErrorCode::StaleGetTeamChangesPlan,
+            AppErrorCode::StaleBringInPlan,
+            AppErrorCode::ShallowHistory,
+            AppErrorCode::NoSharedHistory,
+            AppErrorCode::UnsupportedMergeSetup,
             AppErrorCode::InvalidRefName,
             AppErrorCode::AuthenticationFailed,
             AppErrorCode::SecureStorageUnavailable,

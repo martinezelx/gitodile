@@ -326,7 +326,8 @@ src-tauri/src/
   publish.rs
   sync/                   # remotes, upstreams, fetch and relation knowledge
     mod.rs                # remote config and the team-sync read model
-    get_team_changes.rs   # the one destructive workflow, with its safety checks
+    integrate.rs          # Get project changes and Bring in changes: one
+                          #   analysis, one execution, their safety checks
   branches.rs        # product domains
   test_support.rs         # shared hermetic Git-repository test fixtures
   tests/<domain>_tests.rs # cross-module integration tests grouped by owner
@@ -344,7 +345,7 @@ separate owners, not when it grows long. The bar is a cohesive unit whose
 helpers stop being visible to its neighbours: `recovery` split because working-
 tree discard and history recovery shared nothing but a clock (and had begun
 prefixing helpers `history_*` to avoid colliding in one namespace); `sync` split
-because the `get team changes` workflow's eighteen safety helpers were reachable
+because the integration workflow's eighteen safety helpers were reachable
 from the read model that has no business calling them. `architecture.rs` fails
 the build if one submodule imports a sibling — whatever they share belongs in
 `mod.rs`.
@@ -681,6 +682,17 @@ invalidations never issue a fetch. When Publish meets a remote that moved on,
 the same dialog gets, combines and then plans and publishes in one
 confirmation.
 
+Bring in changes (`plan_bring_in_changes` / `bring_in_changes`, task
+065-4-1) runs the same analysis and execution with another local or
+remote-tracking branch as the source, resolved to one exact commit and read
+as this computer has it, never fetched. Its plan answers already contained,
+fast-forward, merge or an empty merge (a merge version that changes no
+file); its token also binds the source's ref and commit. A merge needs a
+shared saved version, so unrelated histories and a shallow copy that lacks
+it block by name, as does a sparse checkout. Overlaps are still refused by
+name until task 065-4-2 pauses a real merge on them. See the 2026-10-29
+amendment to ADR 0030.
+
 History-mutation recovery follows
 [ADR 0008](adr/0008-store-history-recovery-as-versioned-hidden-refs.md): the
 previous commit is protected by a create-only ref under
@@ -705,6 +717,8 @@ against the single delete's rules, and against being finished
 it goes, and one that no longer qualifies is skipped and reported while the
 rest continue
 ([ADR 0034](adr/0034-one-recovery-point-per-branch-in-a-clean-up.md)).
+Bringing in a branch keeps its records under
+`refs/gitodile/recovery/v1/bring-in-changes/`, with its own limit of 20.
 `recovery::HistoryRecoveryOperation` names the operations and their limits;
 the protocol is one. See [ADR 0035](adr/0035-use-branches-as-the-product-vocabulary.md)
 for the accepted break with older delete/clean-up namespaces.

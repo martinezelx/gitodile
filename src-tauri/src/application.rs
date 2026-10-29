@@ -275,6 +275,8 @@ pub(crate) const EXECUTION_INVENTORY: &[ExecutionPolicy] = &[
     // Local since task 161: it reads the last-checked remote and never fetches.
     read("plan_get_team_changes"),
     ExecutionPolicy::repository_write("get_team_changes", OperationClass::HistoryMutation),
+    read("plan_bring_in_changes"),
+    ExecutionPolicy::repository_write("bring_in_changes", OperationClass::HistoryMutation),
     read("list_unpublished_versions"),
     read("list_incoming_versions"),
     read("read_commit_file_changes"),
@@ -992,6 +994,8 @@ mod tests {
         "stop_tracking_remote",
         "plan_get_team_changes",
         "get_team_changes",
+        "plan_bring_in_changes",
+        "bring_in_changes",
         "list_unpublished_versions",
         "list_incoming_versions",
         "read_commit_file_changes",
@@ -1041,6 +1045,7 @@ mod tests {
             "plan_publish",
             "check_team_changes",
             "get_team_changes",
+            "bring_in_changes",
             "publish",
             "create_branch",
             "switch_branch",
@@ -1072,6 +1077,14 @@ mod tests {
         // The plan reads the last-checked remote; only the check fetches.
         assert_eq!(
             policy("plan_get_team_changes").concurrency,
+            ConcurrencyClass::RepositoryRead
+        );
+        assert_eq!(
+            policy("bring_in_changes").class,
+            OperationClass::HistoryMutation
+        );
+        assert_eq!(
+            policy("plan_bring_in_changes").concurrency,
             ConcurrencyClass::RepositoryRead
         );
         assert_eq!(

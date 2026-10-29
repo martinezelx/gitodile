@@ -1,20 +1,22 @@
-//! Getting the remote's saved versions into this branch.
+//! Bringing another line of saved versions into this branch: the remote's
+//! (Get project changes) or another local or remote-tracking branch's (Bring
+//! in changes).
 //!
-//! One analysis serves three callers: the forecast every team-sync read carries
-//! (what pressing Get would do), the plan the dialog shows, and the execution
-//! that revalidates that plan. The analysis never changes files, the index or
-//! refs. It reads status, compares every incoming path with local work, and
-//! asks `git merge-tree` for the tree a combination would produce — for saved
-//! versions on both sides, and for unsaved edits to a file that also changes
-//! on the remote (ADR 0030).
+//! One analysis serves every caller: the forecast every team-sync read carries
+//! (what pressing Get would do), the plans the dialogs show, and the
+//! executions that revalidate those plans. The analysis never changes files,
+//! the index or refs. It reads status, compares every incoming path with local
+//! work, and asks `git merge-tree` for the tree a combination would produce —
+//! for saved versions on both sides, and for unsaved edits to a file that also
+//! changes on the other side (ADR 0030).
 //!
-//! Execution then works in checked steps: build the merge version from the
-//! predicted tree (hooks and signing included) before anything moves, keep a
-//! recovery point (plus a snapshot of any unsaved content it combines), move
-//! files and index with a two-tree `read-tree`, move the branch with a
-//! compare-and-swap `update-ref`, write combined unsaved content back, and
-//! verify. It never fetches: it applies exactly the remote commit the plan
-//! showed.
+//! Execution then works in checked steps, the same for every source: build the
+//! merge version from the predicted tree (hooks and signing included) before
+//! anything moves, keep a recovery point (plus a snapshot of any unsaved
+//! content it combines), move files and index with a two-tree `read-tree`, move
+//! the branch with a compare-and-swap `update-ref`, write combined unsaved
+//! content back, and verify. It never fetches: it applies exactly the commit
+//! the plan showed.
 //!
 //! Everything below the entry points is private on purpose — the collision
 //! rules, the combination of unsaved edits and the state-token evidence are only
@@ -22,9 +24,10 @@
 //! through [`forecast_incoming`].
 
 use super::{
-    classify_sync, list_configured_remotes, read_team_sync_status_inner, relation_state,
-    resolve_commit, resolve_upstream, ResolvedUpstream, SyncKnowledge, SyncRelation, SyncTarget,
-    SyncWarning, TeamSyncState, TeamSyncStatus,
+    classify_sync, list_configured_remotes, map_fetch_refspec, read_config_values,
+    read_team_sync_status_inner, relation_state, resolve_commit, resolve_upstream,
+    validate_remote_name, ResolvedUpstream, SyncKnowledge, SyncRelation, SyncTarget, SyncWarning,
+    TeamSyncState, TeamSyncStatus,
 };
 use crate::application;
 use crate::changes::validate_repo_relative_path;
@@ -34,12 +37,14 @@ use crate::index::{copy_project_index, prepare_tree_index};
 use crate::operation::truncate_detail;
 use crate::operation::OperationKind;
 use crate::recovery::{
-    create_history_recovery, plan_history_recovery, verify_history_recovery,
-    HistoryRecoveryMetadata, HistoryRecoveryPreview, HistoryRecoveryRecord,
+    create_history_recovery_for, plan_history_recovery, plan_history_recovery_for,
+    verify_history_recovery, HistoryRecoveryMetadata, HistoryRecoveryOperation,
+    HistoryRecoveryPreview, HistoryRecoveryRecord,
 };
 use crate::repository::{
     git_operation_in_progress, resolve_head_state, validate_branch_ref_name, HeadState,
 };
+use crate::repository_access::RepositoryContext;
 use crate::status::{git_log_summaries, read_working_tree_status, SavedVersionSummary};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -1073,40 +1078,42 @@ pub(crate) fn forecast_incoming(
         .map(|analysis| analysis.forecast(remote_commit, relation))
 }
 
-struct GetTeamChangesTokenEvidence<'a> {
+struct IntegrationTokenEvidence<'a> {
     repository_identity: &'a str,
     session_epoch: &'a str,
     branch: &'a str,
     local_commit: &'a str,
-    target: &'a ResolvedUpstream,
-    remote_commit: &'a str,
+    /// What is brought in, named precisely enough that a plan for one source
+    /// can never run against another: the workflow, then the source's refs.
+    source: &'a [&'a str],
+    source_commit: &'a str,
     recovery_reference: &'a str,
-    analysis: &'a Analysis,
+    /// `None` when there is nothing to bring in.
+    analysis: Option<&'a Analysis>,
 }
 
-fn compute_get_team_changes_state_token(evidence: GetTeamChangesTokenEvidence<'_>) -> String {
+fn compute_integration_state_token(evidence: IntegrationTokenEvidence<'_>) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     evidence.repository_identity.hash(&mut hasher);
     evidence.session_epoch.hash(&mut hasher);
     evidence.branch.hash(&mut hasher);
     evidence.local_commit.hash(&mut hasher);
-    evidence.target.remote.hash(&mut hasher);
-    evidence.target.destination_branch.hash(&mut hasher);
-    evidence.target.tracking_ref.hash(&mut hasher);
-    evidence.remote_commit.hash(&mut hasher);
+    evidence.source.hash(&mut hasher);
+    evidence.source_commit.hash(&mut hasher);
     evidence.recovery_reference.hash(&mut hasher);
-    evidence.analysis.kind.hash(&mut hasher);
-    evidence.analysis.target_tree.hash(&mut hasher);
-    evidence.analysis.safety.raw.hash(&mut hasher);
-    evidence
-        .analysis
-        .safety
-        .tracked_worktree_fingerprint
-        .hash(&mut hasher);
-    if let Some(combination) = &evidence.analysis.combination {
-        combination.paths.hash(&mut hasher);
-        combination.worktree_tree.hash(&mut hasher);
-        combination.combined_tree.hash(&mut hasher);
+    if let Some(analysis) = evidence.analysis {
+        analysis.kind.hash(&mut hasher);
+        analysis.target_tree.hash(&mut hasher);
+        analysis.safety.raw.hash(&mut hasher);
+        analysis
+            .safety
+            .tracked_worktree_fingerprint
+            .hash(&mut hasher);
+        if let Some(combination) = &analysis.combination {
+            combination.paths.hash(&mut hasher);
+            combination.worktree_tree.hash(&mut hasher);
+            combination.combined_tree.hash(&mut hasher);
+        }
     }
     format!("{:016x}", hasher.finish())
 }
@@ -1129,18 +1136,16 @@ fn get_relation_blocker(state: TeamSyncState) -> AppError {
     }
 }
 
-fn validate_get_team_changes(
-    path: &str,
-    session_epoch: &str,
-    repository_identity: &str,
-    recovery_reference: &str,
-) -> Result<ValidatedGetTeamChanges, AppError> {
+/// The checked-out branch and its commit, or why saved versions can't be
+/// brought into it: another operation is paused, no branch is checked out, or
+/// the branch has no saved version yet. `purpose` ends each remediation.
+fn require_branch_head(path: &str, purpose: &str) -> Result<(String, String), AppError> {
     if let Some(operation) = git_operation_in_progress(path)? {
         return Err(AppError::new(
             AppErrorCode::GitOperationInProgress,
             format!("A Git {operation} is already in progress in this project."),
         )
-        .with_remediation("Finish or abort that operation before getting project changes."));
+        .with_remediation(format!("Finish or abort that operation before {purpose}.")));
     }
     let working = read_working_tree_status(path.to_string())?;
     let branch = working.upstream.branch.clone();
@@ -1150,17 +1155,28 @@ fn validate_get_team_changes(
             AppErrorCode::DetachedHead,
             "This project isn't on a branch right now.",
         )
-        .with_remediation("Switch to a branch before getting project changes."));
+        .with_remediation(format!("Switch to a branch before {purpose}.")));
     }
     if head_state == HeadState::Unborn {
         return Err(AppError::new(
             AppErrorCode::UnbornBranchNoVersion,
             "There is no saved local version to advance.",
-        ));
+        )
+        .with_remediation(format!("Save a first version before {purpose}.")));
     }
     let branch = branch.expect("a born named head has a branch");
     let local_commit = local_commit.expect("a born head has a commit");
     validate_branch_ref_name(path, &branch)?;
+    Ok((branch, local_commit))
+}
+
+fn validate_get_team_changes(
+    path: &str,
+    session_epoch: &str,
+    repository_identity: &str,
+    recovery_reference: &str,
+) -> Result<ValidatedGetTeamChanges, AppError> {
+    let (branch, local_commit) = require_branch_head(path, "getting project changes")?;
     let remotes = list_configured_remotes(path)?;
     if remotes.is_empty() {
         return Err(AppError::new(
@@ -1188,15 +1204,20 @@ fn validate_get_team_changes(
         return Err(get_relation_blocker(relation_state(&relation)));
     }
     let analysis = analyze(path, &local_commit, &remote_commit, &relation, true)?;
-    let state_token = compute_get_team_changes_state_token(GetTeamChangesTokenEvidence {
+    let state_token = compute_integration_state_token(IntegrationTokenEvidence {
         repository_identity,
         session_epoch,
         branch: &branch,
         local_commit: &local_commit,
-        target: &target,
-        remote_commit: &remote_commit,
+        source: &[
+            "get",
+            &target.remote,
+            &target.destination_branch,
+            &target.tracking_ref,
+        ],
+        source_commit: &remote_commit,
         recovery_reference,
-        analysis: &analysis,
+        analysis: Some(&analysis),
     });
     Ok(ValidatedGetTeamChanges {
         branch,
@@ -1256,6 +1277,38 @@ fn incoming_versions(
         .collect())
 }
 
+/// What a plan lists beside its forecast: the files that change, the incoming
+/// versions and the local ones a merge version joins them with.
+fn plan_details(
+    path: &str,
+    local_commit: &str,
+    source_commit: &str,
+    relation: &SyncRelation,
+    analysis: &Analysis,
+) -> Result<
+    (
+        IncomingFileImpact,
+        Vec<IncomingVersion>,
+        Vec<SavedVersionSummary>,
+    ),
+    AppError,
+> {
+    let revisions = match &analysis.target_tree {
+        Some(tree) => vec![local_commit.to_string(), tree.clone()],
+        None => vec![format!("{local_commit}...{source_commit}")],
+    };
+    let revisions = revisions.iter().map(String::as_str).collect::<Vec<_>>();
+    let file_impact = file_impact(path, &revisions, &analysis.incoming)?;
+    let incoming_versions = incoming_versions(path, local_commit, source_commit)?;
+    let mut local_versions = if relation.ahead > 0 {
+        git_log_summaries(path, &[&format!("{source_commit}..{local_commit}")])?
+    } else {
+        Vec::new()
+    };
+    local_versions.truncate(MAX_LOCAL_VERSIONS);
+    Ok((file_impact, incoming_versions, local_versions))
+}
+
 pub(crate) fn plan_get_team_changes(
     path: String,
     session_epoch: String,
@@ -1266,40 +1319,20 @@ pub(crate) fn plan_get_team_changes(
     let identity = repository.common_git_dir.match_key().to_string();
     let validated =
         validate_get_team_changes(&path, &session_epoch, &identity, &recovery.reference)?;
-    let revisions = match &validated.analysis.target_tree {
-        Some(tree) => vec![validated.local_commit.clone(), tree.clone()],
-        None => vec![format!(
-            "{}...{}",
-            validated.local_commit, validated.remote_commit
-        )],
-    };
-    let revisions = revisions.iter().map(String::as_str).collect::<Vec<_>>();
-    let file_impact = file_impact(&path, &revisions, &validated.analysis.incoming)?;
-    let incoming_versions =
-        incoming_versions(&path, &validated.local_commit, &validated.remote_commit)?;
-    let mut local_versions = if validated.relation.ahead > 0 {
-        git_log_summaries(
-            &path,
-            &[&format!(
-                "{}..{}",
-                validated.remote_commit, validated.local_commit
-            )],
-        )?
-    } else {
-        Vec::new()
-    };
-    local_versions.truncate(MAX_LOCAL_VERSIONS);
+    let (file_impact, incoming_versions, local_versions) = plan_details(
+        &path,
+        &validated.local_commit,
+        &validated.remote_commit,
+        &validated.relation,
+        &validated.analysis,
+    )?;
     let forecast = validated
         .analysis
         .forecast(&validated.remote_commit, &validated.relation);
     Ok(GetTeamChangesPlan {
         operation_kind: OperationKind::HistoryMutation,
         requires_confirmation: true,
-        project_id: repository
-            .worktree_root
-            .backend_path()
-            .to_string_lossy()
-            .to_string(),
+        project_id: project_id(&repository),
         session_epoch,
         state_token: validated.state_token.clone(),
         target: validated.sync_target(),
@@ -1321,12 +1354,22 @@ pub(crate) fn plan_get_team_changes(
     })
 }
 
+fn project_id(repository: &RepositoryContext) -> String {
+    repository
+        .worktree_root
+        .backend_path()
+        .to_string_lossy()
+        .to_string()
+}
+
 fn observed_head(path: &str) -> Option<String> {
     run_git(path, &["rev-parse", "--verify", "HEAD"])
         .ok()
         .filter(|output| output.status.success())
         .map(|output| git_stdout(&output))
 }
+
+const UNCERTAIN_INSPECTION: &str = "Keep the project open, inspect its current files and HEAD, and keep the reported recovery reference. Do not retry until the observed state is understood.";
 
 fn uncertain_get_result(
     project_id: String,
@@ -1360,10 +1403,7 @@ fn uncertain_get_result(
             code: "localUpdateUncertain".to_string(),
             message: warning,
         }],
-        inspection_instructions: Some(
-            "Keep the project open, inspect its current files and HEAD, and keep the reported recovery reference. Do not retry until the observed state is understood."
-                .to_string(),
-        ),
+        inspection_instructions: Some(UNCERTAIN_INSPECTION.to_string()),
     }
 }
 
@@ -1561,7 +1601,7 @@ fn unsaved_snapshot_commit(
             "-p",
             parent,
             "-m",
-            "GitOdile: unsaved changes kept before getting project changes",
+            "GitOdile: unsaved changes kept before combining saved versions",
         ],
         &identity,
     )?;
@@ -1629,6 +1669,253 @@ fn release_combined_files(path: &str, files: &[String]) -> Result<bool, AppError
     Ok(run_git_with_env(path, &args, &[])?.status.success())
 }
 
+/// Everything one integration needs once its plan has been revalidated: what
+/// moves, where to, and how the recovery record describes the source.
+struct IntegrationRun<'a> {
+    path: &'a str,
+    repository: &'a RepositoryContext,
+    operation: HistoryRecoveryOperation,
+    recovery_reference: &'a str,
+    state_token: &'a str,
+    branch: &'a str,
+    local_commit: &'a str,
+    source_commit: &'a str,
+    relation: &'a SyncRelation,
+    analysis: &'a Analysis,
+    merge_message: String,
+    run_hooks: bool,
+    /// The source as the recovery record names it: its remote (empty for a
+    /// local branch), its branch, and the ref the plan read.
+    remote: String,
+    source_branch: String,
+    source_reference: String,
+}
+
+enum IntegrationApplied {
+    Completed {
+        commit: String,
+        recovery: HistoryRecoveryRecord,
+    },
+    /// Something may have moved after the recovery point was made.
+    Uncertain {
+        recovery: HistoryRecoveryRecord,
+        warning: String,
+    },
+}
+
+/// Applies a revalidated, clear analysis: the merge version first (so a hook,
+/// identity or signing failure changes nothing), then the recovery point, the
+/// two-tree update, the compare-and-swap branch move and the combined unsaved
+/// content, and finally the verification. Any failure after the recovery
+/// point is an uncertain result that keeps it.
+fn apply_integration(
+    run: IntegrationRun<'_>,
+    progress: &mut dyn FnMut(GetTeamChangesPhase),
+) -> Result<IntegrationApplied, AppError> {
+    let path = run.path;
+    let analysis = run.analysis;
+    let target_tree = match (analysis.outcome(), analysis.target_tree.clone()) {
+        (ForecastOutcome::Clear, Some(tree)) => tree,
+        _ => {
+            return Err(AppError::new(
+                AppErrorCode::IncomingTrackedChangeCollision,
+                "Something on this computer overlaps the incoming changes.",
+            )
+            .with_remediation("Review the update to see which files overlap."));
+        }
+    };
+    let combination = analysis.combination.clone();
+    let combined_paths = combination
+        .as_ref()
+        .map(|value| value.paths.clone())
+        .unwrap_or_default();
+    let combined_set = combined_paths
+        .iter()
+        .map(String::as_str)
+        .collect::<HashSet<_>>();
+    let (carried_records, carried_paths) = analysis.safety.carried(&combined_set);
+    let carried_path_refs = carried_paths.iter().map(String::as_str).collect::<Vec<_>>();
+    let carried_fingerprint = tracked_worktree_fingerprint(Path::new(path), &carried_path_refs)?;
+
+    let new_commit = match analysis.kind {
+        IntegrationKind::FastForward => run.source_commit.to_string(),
+        IntegrationKind::Merge => {
+            progress(GetTeamChangesPhase::CombiningVersions);
+            create_merge_version(
+                path,
+                &target_tree,
+                run.local_commit,
+                run.source_commit,
+                &run.merge_message,
+                run.run_hooks,
+            )?
+        }
+    };
+
+    progress(GetTeamChangesPhase::CreatingRecovery);
+    let unsaved_snapshot = match &combination {
+        Some(value) => Some(unsaved_snapshot_commit(
+            path,
+            &value.worktree_tree,
+            run.local_commit,
+        )?),
+        None => None,
+    };
+    let recovery = create_history_recovery_for(
+        run.repository,
+        run.operation,
+        run.recovery_reference,
+        HistoryRecoveryMetadata {
+            branch: run.branch.to_string(),
+            previous_commit: run.local_commit.to_string(),
+            target_commit: new_commit.clone(),
+            remote: run.remote.clone(),
+            destination_branch: run.source_branch.clone(),
+            tracking_ref: run.source_reference.clone(),
+            state_token: run.state_token.to_string(),
+            unsaved_snapshot,
+        },
+    )?;
+    let uncertain = |recovery: HistoryRecoveryRecord, warning: &str| {
+        Ok(IntegrationApplied::Uncertain {
+            recovery,
+            warning: warning.to_string(),
+        })
+    };
+
+    progress(GetTeamChangesPhase::UpdatingFilesAndHistory);
+    if let Some(value) = &combination {
+        // From here the combined files hold their saved content, so any
+        // failure, an error included, must put the unsaved content back
+        // before it is reported: `?` would return with it still swapped out.
+        let released = release_combined_files(path, &value.paths).unwrap_or(false);
+        let carried = released && can_carry(path, run.local_commit, &new_commit).unwrap_or(false);
+        if !carried {
+            // Nothing has moved yet: put the unsaved content back and stop.
+            if write_tree_content(path, &value.worktree_tree, &value.paths).is_ok()
+                && blobs_match_worktree(path, &value.worktree_tree, &value.paths).unwrap_or(false)
+            {
+                return Err(AppError::new(
+                    AppErrorCode::IncomingTrackedChangeCollision,
+                    "Git couldn't carry your unsaved changes across this update.",
+                )
+                .with_remediation(
+                    "Nothing was changed. Save your changes first, then try again.",
+                ));
+            }
+            return uncertain(
+                recovery,
+                "Your unsaved changes may not have been put back; their copy is in the recovery point.",
+            );
+        }
+    }
+    let read_tree = run_git(
+        path,
+        &["read-tree", "-u", "-m", run.local_commit, &new_commit],
+    );
+    if !read_tree
+        .as_ref()
+        .is_ok_and(|output| output.status.success())
+    {
+        return uncertain(
+            recovery,
+            "Git could not confirm whether every working file and index entry stayed unchanged during the update.",
+        );
+    }
+    let branch_ref = format!("refs/heads/{}", run.branch);
+    let update_ref = run_git(
+        path,
+        &["update-ref", &branch_ref, &new_commit, run.local_commit],
+    );
+    if !update_ref
+        .as_ref()
+        .is_ok_and(|output| output.status.success())
+    {
+        return uncertain(
+            recovery,
+            "The files and index may have advanced, but Git could not confirm the active branch reference.",
+        );
+    }
+    if let Some(value) = &combination {
+        if write_tree_content(path, &value.combined_tree, &value.paths).is_err() {
+            return uncertain(
+                recovery,
+                "The update finished, but some of your combined unsaved changes may not have been written back; their copy is in the recovery point.",
+            );
+        }
+    }
+
+    progress(GetTeamChangesPhase::Verifying);
+    let verification = (|| -> Result<(), AppError> {
+        let uncertain = |message: &str| {
+            AppError::new(AppErrorCode::GetTeamChangesUncertain, message.to_string())
+        };
+        let head = observed_head(path)
+            .ok_or_else(|| uncertain("The resulting HEAD could not be read."))?;
+        let branch = checked_git_stdout(run_git(path, &["symbolic-ref", "--short", "HEAD"])?)?;
+        if head != new_commit || branch != run.branch {
+            return Err(uncertain(
+                "The resulting branch or saved version did not match the reviewed target.",
+            ));
+        }
+        let safety = read_local_safety(path)?;
+        let (records_after, paths_after) = safety.carried(&combined_set);
+        let path_refs_after = paths_after.iter().map(String::as_str).collect::<Vec<_>>();
+        if records_after != carried_records
+            || tracked_worktree_fingerprint(Path::new(path), &path_refs_after)?
+                != carried_fingerprint
+        {
+            return Err(uncertain(
+                "Prepared or unsaved changes no longer match the reviewed local state.",
+            ));
+        }
+        if let Some(value) = &combination {
+            if !blobs_match_worktree(path, &value.combined_tree, &value.paths)? {
+                return Err(uncertain(
+                    "A combined file doesn't hold the reviewed combination of your edits and the incoming ones.",
+                ));
+            }
+        }
+        if safety.untracked.iter().any(|item| {
+            analysis
+                .incoming
+                .iter()
+                .any(|incoming| paths_overlap(item, &incoming.path))
+        }) {
+            return Err(uncertain(
+                "A local untracked path overlaps the resulting project files.",
+            ));
+        }
+        verify_history_recovery(path, &recovery)?;
+        let relation = classify_sync(path, &head, Some(run.source_commit))?;
+        let expected_ahead = match analysis.kind {
+            IntegrationKind::FastForward => 0,
+            IntegrationKind::Merge => run.relation.ahead + 1,
+        };
+        if relation.behind != 0 || relation.ahead != expected_ahead {
+            return Err(uncertain(
+                "The resulting branch doesn't contain the reviewed version as expected.",
+            ));
+        }
+        Ok(())
+    })();
+    match verification {
+        Ok(()) => Ok(IntegrationApplied::Completed {
+            commit: new_commit,
+            recovery,
+        }),
+        Err(error) => uncertain(recovery, &error.message),
+    }
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u128::from(u64::MAX)) as u64
+}
+
 pub(crate) fn get_team_changes(
     path: String,
     session_epoch: String,
@@ -1638,11 +1925,7 @@ pub(crate) fn get_team_changes(
     mut progress: impl FnMut(GetTeamChangesPhase),
 ) -> Result<GetTeamChangesResult, AppError> {
     let (repository, _access) = application::authorize_repository(&path, "get_team_changes", None)?;
-    let project_id = repository
-        .worktree_root
-        .backend_path()
-        .to_string_lossy()
-        .to_string();
+    let project_id = project_id(&repository);
     let identity = repository.common_git_dir.match_key().to_string();
     progress(GetTeamChangesPhase::CheckingLocalSafety);
     let validated =
@@ -1654,232 +1937,49 @@ pub(crate) fn get_team_changes(
         )
         .with_remediation("Review the updated changes before trying again."));
     }
-    let target_tree = match (
-        validated.analysis.outcome(),
-        validated.analysis.target_tree.clone(),
-    ) {
-        (ForecastOutcome::Clear, Some(tree)) => tree,
-        _ => {
-            return Err(AppError::new(
-                AppErrorCode::IncomingTrackedChangeCollision,
-                "Something on this computer overlaps the incoming changes.",
-            )
-            .with_remediation("Review the update to see which files overlap."));
-        }
-    };
-    let combination = validated.analysis.combination.clone();
-    let combined_paths = combination
-        .as_ref()
-        .map(|value| value.paths.clone())
-        .unwrap_or_default();
-    let combined_set = combined_paths
-        .iter()
-        .map(String::as_str)
-        .collect::<HashSet<_>>();
-    let (carried_records, carried_paths) = validated.analysis.safety.carried(&combined_set);
-    let carried_path_refs = carried_paths.iter().map(String::as_str).collect::<Vec<_>>();
-    let carried_fingerprint = tracked_worktree_fingerprint(Path::new(&path), &carried_path_refs)?;
-
-    let new_commit = match validated.analysis.kind {
-        IntegrationKind::FastForward => validated.remote_commit.clone(),
-        IntegrationKind::Merge => {
-            progress(GetTeamChangesPhase::CombiningVersions);
-            create_merge_version(
-                &path,
-                &target_tree,
-                &validated.local_commit,
-                &validated.remote_commit,
-                &merge_message(&validated.target, &validated.branch),
-                run_hooks,
-            )?
-        }
-    };
-
-    progress(GetTeamChangesPhase::CreatingRecovery);
-    let unsaved_snapshot = match &combination {
-        Some(value) => Some(unsaved_snapshot_commit(
-            &path,
-            &value.worktree_tree,
-            &validated.local_commit,
-        )?),
-        None => None,
-    };
-    let recovery = create_history_recovery(
-        &repository,
-        &recovery_reference,
-        HistoryRecoveryMetadata {
-            branch: validated.branch.clone(),
-            previous_commit: validated.local_commit.clone(),
-            target_commit: new_commit.clone(),
+    let applied = apply_integration(
+        IntegrationRun {
+            path: &path,
+            repository: &repository,
+            operation: HistoryRecoveryOperation::GetTeamChanges,
+            recovery_reference: &recovery_reference,
+            state_token: &validated.state_token,
+            branch: &validated.branch,
+            local_commit: &validated.local_commit,
+            source_commit: &validated.remote_commit,
+            relation: &validated.relation,
+            analysis: &validated.analysis,
+            merge_message: merge_message(&validated.target, &validated.branch),
+            run_hooks,
             remote: validated.target.remote.clone(),
-            destination_branch: validated.target.destination_branch.clone(),
-            tracking_ref: validated.target.tracking_ref.clone(),
-            state_token: validated.state_token.clone(),
-            unsaved_snapshot,
+            source_branch: validated.target.destination_branch.clone(),
+            source_reference: validated.target.tracking_ref.clone(),
         },
+        &mut progress,
     )?;
-
-    progress(GetTeamChangesPhase::UpdatingFilesAndHistory);
-    if let Some(value) = &combination {
-        // From here the combined files hold their saved content, so any
-        // failure, an error included, must put the unsaved content back
-        // before it is reported: `?` would return with it still swapped out.
-        let released = release_combined_files(&path, &value.paths).unwrap_or(false);
-        let carried =
-            released && can_carry(&path, &validated.local_commit, &new_commit).unwrap_or(false);
-        if !carried {
-            // Nothing has moved yet: put the unsaved content back and stop.
-            if write_tree_content(&path, &value.worktree_tree, &value.paths).is_ok()
-                && blobs_match_worktree(&path, &value.worktree_tree, &value.paths).unwrap_or(false)
-            {
-                return Err(AppError::new(
-                    AppErrorCode::IncomingTrackedChangeCollision,
-                    "Git couldn't carry your unsaved changes across this update.",
-                )
-                .with_remediation(
-                    "Nothing was changed. Save your changes first, then get the project changes.",
-                ));
-            }
+    let (new_commit, recovery) = match applied {
+        IntegrationApplied::Completed { commit, recovery } => (commit, recovery),
+        IntegrationApplied::Uncertain { recovery, warning } => {
             return Ok(uncertain_get_result(
                 project_id,
                 session_epoch,
                 &validated,
                 recovery,
-                "Your unsaved changes may not have been put back; their copy is in the recovery point."
-                    .to_string(),
-            ));
+                warning,
+            ))
         }
-    }
-    let read_tree = run_git(
+    };
+    let sync_status = match read_team_sync_status_inner(
         &path,
-        &[
-            "read-tree",
-            "-u",
-            "-m",
-            &validated.local_commit,
-            &new_commit,
-        ],
-    );
-    if !read_tree
-        .as_ref()
-        .is_ok_and(|output| output.status.success())
-    {
-        return Ok(uncertain_get_result(
-            project_id,
-            session_epoch,
-            &validated,
-            recovery,
-            "Git could not confirm whether every working file and index entry stayed unchanged during the update."
-                .to_string(),
-        ));
-    }
-    let branch_ref = format!("refs/heads/{}", validated.branch);
-    let update_ref = run_git(
-        &path,
-        &[
-            "update-ref",
-            &branch_ref,
-            &new_commit,
-            &validated.local_commit,
-        ],
-    );
-    if !update_ref
-        .as_ref()
-        .is_ok_and(|output| output.status.success())
-    {
-        return Ok(uncertain_get_result(
-            project_id,
-            session_epoch,
-            &validated,
-            recovery,
-            "The files and index may have advanced, but Git could not confirm the active branch reference."
-                .to_string(),
-        ));
-    }
-    if let Some(value) = &combination {
-        if write_tree_content(&path, &value.combined_tree, &value.paths).is_err() {
-            return Ok(uncertain_get_result(
-                project_id,
-                session_epoch,
-                &validated,
-                recovery,
-                "The update finished, but some of your combined unsaved changes may not have been written back; their copy is in the recovery point."
-                    .to_string(),
-            ));
+        &session_epoch,
+        SyncKnowledge::Fresh,
+        false,
+        &identity,
+    ) {
+        Ok(mut sync) => {
+            sync.checked_at = Some(now_ms());
+            sync
         }
-    }
-
-    progress(GetTeamChangesPhase::Verifying);
-    let verification = (|| -> Result<TeamSyncStatus, AppError> {
-        let uncertain = |message: &str| {
-            AppError::new(AppErrorCode::GetTeamChangesUncertain, message.to_string())
-        };
-        let head = observed_head(&path)
-            .ok_or_else(|| uncertain("The resulting HEAD could not be read."))?;
-        let branch = checked_git_stdout(run_git(&path, &["symbolic-ref", "--short", "HEAD"])?)?;
-        if head != new_commit || branch != validated.branch {
-            return Err(uncertain(
-                "The resulting branch or saved version did not match the reviewed target.",
-            ));
-        }
-        let safety = read_local_safety(&path)?;
-        let (records_after, paths_after) = safety.carried(&combined_set);
-        let path_refs_after = paths_after.iter().map(String::as_str).collect::<Vec<_>>();
-        if records_after != carried_records
-            || tracked_worktree_fingerprint(Path::new(&path), &path_refs_after)?
-                != carried_fingerprint
-        {
-            return Err(uncertain(
-                "Prepared or unsaved changes no longer match the reviewed local state.",
-            ));
-        }
-        if let Some(value) = &combination {
-            if !blobs_match_worktree(&path, &value.combined_tree, &value.paths)? {
-                return Err(uncertain(
-                    "A combined file doesn't hold the reviewed combination of your edits and the incoming ones.",
-                ));
-            }
-        }
-        if safety.untracked.iter().any(|item| {
-            validated
-                .analysis
-                .incoming
-                .iter()
-                .any(|incoming| paths_overlap(item, &incoming.path))
-        }) {
-            return Err(uncertain(
-                "A local untracked path overlaps the resulting project files.",
-            ));
-        }
-        verify_history_recovery(&path, &recovery)?;
-        let relation = classify_sync(&path, &head, Some(&validated.remote_commit))?;
-        let expected_ahead = match validated.analysis.kind {
-            IntegrationKind::FastForward => 0,
-            IntegrationKind::Merge => validated.relation.ahead + 1,
-        };
-        if relation.behind != 0 || relation.ahead != expected_ahead {
-            return Err(uncertain(
-                "The resulting branch doesn't contain the reviewed remote version as expected.",
-            ));
-        }
-        let mut sync = read_team_sync_status_inner(
-            &path,
-            &session_epoch,
-            SyncKnowledge::Fresh,
-            false,
-            &identity,
-        )?;
-        sync.checked_at = Some(
-            SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_millis()
-                .min(u128::from(u64::MAX)) as u64,
-        );
-        Ok(sync)
-    })();
-    let sync_status = match verification {
-        Ok(status) => status,
         Err(error) => {
             return Ok(uncertain_get_result(
                 project_id,
@@ -1902,12 +2002,528 @@ pub(crate) fn get_team_changes(
         resulting_commit: Some(new_commit.clone()),
         observed_head: Some(new_commit),
         received_count: validated.relation.behind,
-        combined_unsaved_count: combined_paths.len() as u32,
+        combined_unsaved_count: validated
+            .analysis
+            .combination
+            .as_ref()
+            .map_or(0, |value| value.paths.len() as u32),
         recovery,
         sync_status: Some(sync_status),
         warnings: Vec::new(),
         inspection_instructions: None,
         branch: validated.branch,
+    })
+}
+
+// Bringing in another branch (task 065-4). The source is a local branch or a
+// remote-tracking branch as of the last check; the analysis, the execution
+// and the recovery protocol are the ones above, under their own recovery
+// operation.
+
+/// A branch whose saved versions can be brought into the current one.
+#[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub(crate) enum IntegrationSource {
+    LocalBranch { name: String },
+    RemoteBranch { remote: String, branch: String },
+}
+
+/// The source as the plan read it: its ref and the exact commit brought in.
+#[derive(serde::Serialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ResolvedSource {
+    /// `feature` or `origin/feature`, as Git names it in a merge message.
+    pub(crate) label: String,
+    /// The remote, for a remote-tracking branch.
+    pub(crate) remote: Option<String>,
+    pub(crate) branch: String,
+    pub(crate) reference: String,
+    pub(crate) commit: String,
+}
+
+/// What bringing the source in would do.
+#[derive(serde::Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum BringInKind {
+    /// Every saved version of the source is already in this branch.
+    AlreadyContained,
+    /// This branch only advances to the source.
+    FastForward,
+    /// A merge version joins both sides.
+    Merge,
+    /// A merge version joins both sides, but no file changes: the source's
+    /// changes are already here in another form.
+    EmptyMerge,
+}
+
+#[derive(serde::Serialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BringInChangesPlan {
+    pub(crate) operation_kind: OperationKind,
+    pub(crate) requires_confirmation: bool,
+    pub(crate) project_id: String,
+    pub(crate) session_epoch: String,
+    pub(crate) state_token: String,
+    pub(crate) branch: String,
+    pub(crate) local_commit: String,
+    pub(crate) source: ResolvedSource,
+    pub(crate) kind: BringInKind,
+    pub(crate) incoming_count: u32,
+    pub(crate) incoming_versions: Vec<IncomingVersion>,
+    pub(crate) versions_truncated: bool,
+    pub(crate) local_count: u32,
+    pub(crate) local_versions: Vec<SavedVersionSummary>,
+    pub(crate) file_impact: IncomingFileImpact,
+    /// `None` when the source is already contained.
+    pub(crate) forecast: Option<IncomingForecast>,
+    /// The message the merge version will carry, before the project's hooks
+    /// see it. `None` unless a merge version is made.
+    pub(crate) merge_message: Option<String>,
+    pub(crate) recovery: HistoryRecoveryPreview,
+}
+
+#[derive(serde::Serialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct BringInChangesResult {
+    pub(crate) outcome: GetTeamChangesOutcome,
+    pub(crate) project_id: String,
+    pub(crate) session_epoch: String,
+    pub(crate) branch: String,
+    pub(crate) source: ResolvedSource,
+    pub(crate) kind: BringInKind,
+    pub(crate) previous_commit: String,
+    pub(crate) resulting_commit: Option<String>,
+    pub(crate) observed_head: Option<String>,
+    pub(crate) received_count: u32,
+    pub(crate) combined_unsaved_count: u32,
+    pub(crate) recovery: HistoryRecoveryRecord,
+    pub(crate) warnings: Vec<SyncWarning>,
+    pub(crate) inspection_instructions: Option<String>,
+}
+
+#[derive(Debug)]
+struct ValidatedBringIn {
+    branch: String,
+    local_commit: String,
+    source: ResolvedSource,
+    relation: SyncRelation,
+    kind: BringInKind,
+    /// `None` when the source is already contained.
+    analysis: Option<Analysis>,
+    /// The merge version's title, before the project's hooks see it.
+    merge_message: String,
+    state_token: String,
+}
+
+fn resolve_source(
+    path: &str,
+    source: &IntegrationSource,
+    current_branch: &str,
+) -> Result<ResolvedSource, AppError> {
+    let (remote, branch, reference) = match source {
+        IntegrationSource::LocalBranch { name } => {
+            validate_branch_ref_name(path, name)?;
+            if name == current_branch {
+                return Err(AppError::new(
+                    AppErrorCode::BranchIsActive,
+                    "That is the branch the project is on.",
+                )
+                .with_remediation("Choose another branch to bring in."));
+            }
+            (None, name.clone(), format!("refs/heads/{name}"))
+        }
+        IntegrationSource::RemoteBranch { remote, branch } => {
+            validate_remote_name(remote)?;
+            validate_branch_ref_name(path, branch)?;
+            if !list_configured_remotes(path)?
+                .iter()
+                .any(|candidate| candidate.info.name == *remote)
+            {
+                return Err(AppError::new(
+                    AppErrorCode::InvalidRemoteConfiguration,
+                    "This project has no remote with that name.",
+                ));
+            }
+            // The ref the remote's own fetch mapping keeps that branch in,
+            // exactly as a check of that remote would update it.
+            let source_ref = format!("refs/heads/{branch}");
+            let reference = read_config_values(path, &format!("remote.{remote}.fetch"))?
+                .iter()
+                .find_map(|refspec| map_fetch_refspec(refspec, &source_ref))
+                .filter(|tracking| {
+                    tracking.starts_with("refs/") && !tracking.chars().any(char::is_control)
+                })
+                .ok_or_else(|| {
+                    AppError::new(
+                        AppErrorCode::InvalidRemoteConfiguration,
+                        "This remote's fetch mapping doesn't cover that branch.",
+                    )
+                    .with_remediation("Repair this remote's fetch mapping in Git.")
+                })?;
+            (Some(remote.clone()), branch.clone(), reference)
+        }
+    };
+    let commit = resolve_commit(path, &reference)?.ok_or_else(|| {
+        AppError::new(
+            AppErrorCode::BranchMissing,
+            "That branch isn't on this computer anymore.",
+        )
+        .with_remediation("Refresh the branches and choose again.")
+    })?;
+    let label = match &remote {
+        Some(remote) => format!("{remote}/{branch}"),
+        None => branch.clone(),
+    };
+    Ok(ResolvedSource {
+        label,
+        remote,
+        branch,
+        reference,
+        commit,
+    })
+}
+
+/// A merge needs a version both sides started from. Without one, a shallow
+/// copy may simply not hold it yet; otherwise the two histories never met.
+fn require_shared_history(
+    path: &str,
+    local_commit: &str,
+    source_commit: &str,
+) -> Result<(), AppError> {
+    let output = run_git(path, &["merge-base", local_commit, source_commit])?;
+    if output.status.success() {
+        return Ok(());
+    }
+    if output.status.code() != Some(1) {
+        return Err(AppError::new(
+            AppErrorCode::GitCommandFailed,
+            "Git couldn't tell where these branches parted.",
+        )
+        .with_detail(truncate_detail(&String::from_utf8_lossy(&output.stderr))));
+    }
+    let shallow = checked_git_stdout(run_git(path, &["rev-parse", "--is-shallow-repository"])?)?;
+    if shallow == "true" {
+        return Err(AppError::new(
+            AppErrorCode::ShallowHistory,
+            "This copy of the project holds only its recent history, so GitOdile can't tell where these branches parted.",
+        )
+        .with_remediation(
+            "Download the project's full history (git fetch --unshallow) in another Git tool, then try again.",
+        ));
+    }
+    Err(AppError::new(
+        AppErrorCode::NoSharedHistory,
+        "These branches share no saved version, so GitOdile can't combine them safely.",
+    )
+    .with_remediation("Copy what you need from one branch to the other by hand."))
+}
+
+/// A sparse checkout leaves files out of the working tree on purpose; the
+/// two-tree update has not been proven against one.
+fn require_full_checkout(path: &str) -> Result<(), AppError> {
+    let output = run_git(path, &["config", "--bool", "--get", "core.sparseCheckout"])?;
+    if output.status.success() && git_stdout(&output) == "true" {
+        return Err(AppError::new(
+            AppErrorCode::UnsupportedMergeSetup,
+            "This project uses a sparse checkout, where GitOdile can't bring in changes yet.",
+        )
+        .with_remediation("Bring the changes in with another Git tool for now."));
+    }
+    Ok(())
+}
+
+/// The branches whose merge titles leave out ` into <branch>`, as Git's
+/// `merge.suppressDest` lists them: globs, `master` when it is unset, and an
+/// empty value clearing what came before.
+fn suppressed_destinations(path: &str) -> Result<Vec<String>, AppError> {
+    let output = run_git(path, &["config", "--get-all", "merge.suppressDest"])?;
+    if !output.status.success() {
+        return Ok(vec!["master".to_string()]);
+    }
+    let mut globs = Vec::new();
+    for value in String::from_utf8_lossy(&output.stdout).lines() {
+        if value.is_empty() {
+            globs.clear();
+        } else {
+            globs.push(value.to_string());
+        }
+    }
+    Ok(globs)
+}
+
+/// Git's `wildmatch` with `WM_PATHNAME` for the patterns a destination list
+/// holds: `*` and `?` never cross a `/`; anything else is literal.
+fn matches_branch_glob(pattern: &[u8], name: &[u8]) -> bool {
+    match pattern.split_first() {
+        None => name.is_empty(),
+        Some((b'*', rest)) => {
+            let mut index = 0;
+            loop {
+                if matches_branch_glob(rest, &name[index..]) {
+                    return true;
+                }
+                if index == name.len() || name[index] == b'/' {
+                    return false;
+                }
+                index += 1;
+            }
+        }
+        Some((b'?', rest)) => {
+            matches!(name.first(), Some(byte) if *byte != b'/')
+                && matches_branch_glob(rest, &name[1..])
+        }
+        Some((byte, rest)) => name.first() == Some(byte) && matches_branch_glob(rest, &name[1..]),
+    }
+}
+
+/// The title `git merge` would give this merge, so history reads the same
+/// whichever tool made it.
+fn bring_in_message(source: &ResolvedSource, branch: &str, suppressed: &[String]) -> String {
+    let what = match source.remote {
+        Some(_) => format!("Merge remote-tracking branch '{}'", source.label),
+        None => format!("Merge branch '{}'", source.label),
+    };
+    if suppressed
+        .iter()
+        .any(|glob| matches_branch_glob(glob.as_bytes(), branch.as_bytes()))
+    {
+        what
+    } else {
+        format!("{what} into {branch}")
+    }
+}
+
+fn validate_bring_in(
+    path: &str,
+    session_epoch: &str,
+    repository_identity: &str,
+    recovery_reference: &str,
+    source: &IntegrationSource,
+) -> Result<ValidatedBringIn, AppError> {
+    let (branch, local_commit) = require_branch_head(path, "bringing in changes")?;
+    let source = resolve_source(path, source, &branch)?;
+    require_full_checkout(path)?;
+    let relation = classify_sync(path, &local_commit, Some(&source.commit))?;
+    let (kind, analysis) = if relation.behind == 0 {
+        (BringInKind::AlreadyContained, None)
+    } else {
+        require_shared_history(path, &local_commit, &source.commit)?;
+        let analysis = analyze(path, &local_commit, &source.commit, &relation, true)?;
+        let kind = match analysis.kind {
+            IntegrationKind::FastForward => BringInKind::FastForward,
+            IntegrationKind::Merge => {
+                let local_tree = checked_git_stdout(run_git(
+                    path,
+                    &["rev-parse", "--verify", &format!("{local_commit}^{{tree}}")],
+                )?)?;
+                if analysis.target_tree.as_deref() == Some(local_tree.as_str()) {
+                    BringInKind::EmptyMerge
+                } else {
+                    BringInKind::Merge
+                }
+            }
+        };
+        (kind, Some(analysis))
+    };
+    let merge_message = bring_in_message(&source, &branch, &suppressed_destinations(path)?);
+    let state_token = compute_integration_state_token(IntegrationTokenEvidence {
+        repository_identity,
+        session_epoch,
+        branch: &branch,
+        local_commit: &local_commit,
+        source: &[
+            "bring-in",
+            source.remote.as_deref().unwrap_or_default(),
+            &source.branch,
+            &source.reference,
+            &merge_message,
+        ],
+        source_commit: &source.commit,
+        recovery_reference,
+        analysis: analysis.as_ref(),
+    });
+    Ok(ValidatedBringIn {
+        branch,
+        local_commit,
+        source,
+        relation,
+        kind,
+        analysis,
+        merge_message,
+        state_token,
+    })
+}
+
+/// Local only: the source is read as this computer has it (a remote branch as
+/// of its last check) and nothing contacts the network.
+pub(crate) fn plan_bring_in_changes(
+    path: String,
+    session_epoch: String,
+    source: IntegrationSource,
+) -> Result<BringInChangesPlan, AppError> {
+    let (repository, _access) =
+        application::authorize_repository(&path, "plan_bring_in_changes", None)?;
+    let recovery = plan_history_recovery_for(&repository, HistoryRecoveryOperation::BringInChanges);
+    let identity = repository.common_git_dir.match_key().to_string();
+    let validated = validate_bring_in(
+        &path,
+        &session_epoch,
+        &identity,
+        &recovery.reference,
+        &source,
+    )?;
+    let (file_impact, incoming_versions, local_versions, forecast) = match &validated.analysis {
+        Some(analysis) => {
+            let (impact, incoming, local) = plan_details(
+                &path,
+                &validated.local_commit,
+                &validated.source.commit,
+                &validated.relation,
+                analysis,
+            )?;
+            let forecast = analysis.forecast(&validated.source.commit, &validated.relation);
+            (impact, incoming, local, Some(forecast))
+        }
+        None => (
+            IncomingFileImpact {
+                total_count: 0,
+                counts: IncomingFileCounts::default(),
+                files: Vec::new(),
+                is_truncated: false,
+            },
+            Vec::new(),
+            Vec::new(),
+            None,
+        ),
+    };
+    let makes_merge = matches!(validated.kind, BringInKind::Merge | BringInKind::EmptyMerge);
+    // Nothing to bring in is an answer, not an operation to confirm.
+    let contained = validated.kind == BringInKind::AlreadyContained;
+    Ok(BringInChangesPlan {
+        operation_kind: if contained {
+            OperationKind::ReadOnly
+        } else {
+            OperationKind::HistoryMutation
+        },
+        requires_confirmation: !contained,
+        project_id: project_id(&repository),
+        session_epoch,
+        state_token: validated.state_token,
+        incoming_count: validated.relation.behind,
+        versions_truncated: validated.relation.behind as usize > incoming_versions.len(),
+        incoming_versions,
+        local_count: validated.relation.ahead,
+        local_versions,
+        file_impact,
+        forecast,
+        merge_message: makes_merge.then_some(validated.merge_message),
+        recovery,
+        kind: validated.kind,
+        source: validated.source,
+        branch: validated.branch,
+        local_commit: validated.local_commit,
+    })
+}
+
+/// `run_hooks` is the Settings switch: it decides whether the project's merge
+/// hooks run for a merge version. A fast-forward runs none, as Get's does.
+pub(crate) fn bring_in_changes(
+    path: String,
+    session_epoch: String,
+    source: IntegrationSource,
+    state_token: String,
+    recovery_reference: String,
+    run_hooks: bool,
+    mut progress: impl FnMut(GetTeamChangesPhase),
+) -> Result<BringInChangesResult, AppError> {
+    let (repository, _access) = application::authorize_repository(&path, "bring_in_changes", None)?;
+    let identity = repository.common_git_dir.match_key().to_string();
+    progress(GetTeamChangesPhase::CheckingLocalSafety);
+    let validated = validate_bring_in(
+        &path,
+        &session_epoch,
+        &identity,
+        &recovery_reference,
+        &source,
+    )?;
+    if validated.state_token != state_token {
+        return Err(AppError::new(
+            AppErrorCode::StaleBringInPlan,
+            "The project or the branch changed since these changes were reviewed.",
+        )
+        .with_remediation("Review the changes again before bringing them in."));
+    }
+    let Some(analysis) = &validated.analysis else {
+        return Err(AppError::new(
+            AppErrorCode::NothingToGet,
+            format!(
+                "This branch already includes every saved version of “{}”.",
+                validated.source.label
+            ),
+        ));
+    };
+    let applied = apply_integration(
+        IntegrationRun {
+            path: &path,
+            repository: &repository,
+            operation: HistoryRecoveryOperation::BringInChanges,
+            recovery_reference: &recovery_reference,
+            state_token: &validated.state_token,
+            branch: &validated.branch,
+            local_commit: &validated.local_commit,
+            source_commit: &validated.source.commit,
+            relation: &validated.relation,
+            analysis,
+            merge_message: validated.merge_message.clone(),
+            run_hooks,
+            remote: validated.source.remote.clone().unwrap_or_default(),
+            source_branch: validated.source.branch.clone(),
+            source_reference: validated.source.reference.clone(),
+        },
+        &mut progress,
+    )?;
+    let combined_unsaved_count = analysis
+        .combination
+        .as_ref()
+        .map_or(0, |value| value.paths.len() as u32);
+    let project_id = project_id(&repository);
+    let (outcome, resulting_commit, observed, recovery, warnings, inspection_instructions) =
+        match applied {
+            IntegrationApplied::Completed { commit, recovery } => (
+                GetTeamChangesOutcome::Completed,
+                Some(commit.clone()),
+                Some(commit),
+                recovery,
+                Vec::new(),
+                None,
+            ),
+            IntegrationApplied::Uncertain { recovery, warning } => (
+                GetTeamChangesOutcome::Uncertain,
+                None,
+                observed_head(&path),
+                recovery,
+                vec![SyncWarning {
+                    code: "localUpdateUncertain".to_string(),
+                    message: warning,
+                }],
+                Some(UNCERTAIN_INSPECTION.to_string()),
+            ),
+        };
+    Ok(BringInChangesResult {
+        outcome,
+        project_id,
+        session_epoch,
+        branch: validated.branch,
+        source: validated.source,
+        kind: validated.kind,
+        previous_commit: validated.local_commit,
+        resulting_commit,
+        observed_head: observed,
+        received_count: validated.relation.behind,
+        combined_unsaved_count,
+        recovery,
+        warnings,
+        inspection_instructions,
     })
 }
 
@@ -1948,6 +2564,71 @@ mod tests {
             merge_message(&target, "feature"),
             "Merge remote-tracking branch 'origin/main' into feature"
         );
+    }
+
+    #[test]
+    fn bring_in_titles_follow_git_merge_suppress_dest() {
+        let source = |remote: Option<&str>| ResolvedSource {
+            label: remote.map_or("topic".to_string(), |remote| format!("{remote}/topic")),
+            remote: remote.map(str::to_string),
+            branch: "topic".to_string(),
+            reference: String::new(),
+            commit: String::new(),
+        };
+        let unset = vec!["master".to_string()];
+        assert_eq!(
+            bring_in_message(&source(None), "master", &unset),
+            "Merge branch 'topic'"
+        );
+        assert_eq!(
+            bring_in_message(&source(None), "main", &unset),
+            "Merge branch 'topic' into main"
+        );
+        assert_eq!(
+            bring_in_message(&source(Some("origin")), "main", &[]),
+            "Merge remote-tracking branch 'origin/topic' into main"
+        );
+        let release = vec!["release/*".to_string(), "m?in".to_string()];
+        assert_eq!(
+            bring_in_message(&source(None), "release/2.0", &release),
+            "Merge branch 'topic'"
+        );
+        assert_eq!(
+            bring_in_message(&source(None), "release/2.0/hotfix", &release),
+            "Merge branch 'topic' into release/2.0/hotfix"
+        );
+        assert_eq!(
+            bring_in_message(&source(None), "main", &release),
+            "Merge branch 'topic'"
+        );
+    }
+
+    #[test]
+    fn integration_sources_cross_ipc_as_tagged_objects() {
+        let local: IntegrationSource =
+            serde_json::from_value(serde_json::json!({"kind": "localBranch", "name": "topic"}))
+                .unwrap();
+        assert_eq!(
+            local,
+            IntegrationSource::LocalBranch {
+                name: "topic".to_string()
+            }
+        );
+        let remote: IntegrationSource = serde_json::from_value(serde_json::json!({
+            "kind": "remoteBranch", "remote": "origin", "branch": "topic"
+        }))
+        .unwrap();
+        assert_eq!(
+            remote,
+            IntegrationSource::RemoteBranch {
+                remote: "origin".to_string(),
+                branch: "topic".to_string()
+            }
+        );
+        assert!(serde_json::from_value::<IntegrationSource>(
+            serde_json::json!({"kind": "upstream"})
+        )
+        .is_err());
     }
 
     #[test]

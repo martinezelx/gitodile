@@ -1,8 +1,8 @@
 //! Recovery records for workflows that move or remove a branch.
 //!
-//! Getting project changes moves the branch (a fast-forward or a merge
-//! version), so the previous tip is preserved as a hidden ref under
-//! `refs/gitodile/recovery/` per ADR 0008. When that update also combines
+//! Getting project changes, or bringing in another branch, moves the branch
+//! (a fast-forward or a merge version), so the previous tip is preserved as a
+//! hidden ref under `refs/gitodile/recovery/` per ADR 0008. When that update also combines
 //! unsaved edits with incoming ones, their previous content is kept as a
 //! snapshot commit under a sibling `-unsaved` namespace, owned by the same
 //! record (ADR 0030). Deleting a branch whose work reached the main branch only as
@@ -40,6 +40,7 @@ pub(crate) const MAX_CLEAN_UP_RECOVERY_RECORDS: usize = 50;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum HistoryRecoveryOperation {
     GetTeamChanges,
+    BringInChanges,
     DeleteBranch,
     CleanUpBranches,
 }
@@ -48,6 +49,7 @@ impl HistoryRecoveryOperation {
     fn slug(self) -> &'static str {
         match self {
             Self::GetTeamChanges => "get-team-changes",
+            Self::BringInChanges => "bring-in-changes",
             Self::DeleteBranch => "delete-branch",
             Self::CleanUpBranches => "clean-up-branches",
         }
@@ -56,7 +58,9 @@ impl HistoryRecoveryOperation {
     fn retention_limit(self) -> usize {
         match self {
             Self::CleanUpBranches => MAX_CLEAN_UP_RECOVERY_RECORDS,
-            Self::GetTeamChanges | Self::DeleteBranch => MAX_HISTORY_RECOVERY_RECORDS,
+            Self::GetTeamChanges | Self::BringInChanges | Self::DeleteBranch => {
+                MAX_HISTORY_RECOVERY_RECORDS
+            }
         }
     }
 
@@ -166,6 +170,10 @@ pub(crate) fn plan_history_recovery_for(
         HistoryRecoveryOperation::GetTeamChanges => (
             "GitOdile will protect the current saved version with a verified local reference before changing history or files.",
             "team-update",
+        ),
+        HistoryRecoveryOperation::BringInChanges => (
+            "GitOdile will protect the current saved version with a verified local reference before bringing in another branch's changes.",
+            "bring-in",
         ),
         HistoryRecoveryOperation::DeleteBranch => (
             "GitOdile will keep this branch's original saved versions with a verified local reference before deleting it.",
@@ -439,19 +447,6 @@ fn object_zero_oid(path: &str) -> Result<String, AppError> {
 
 fn cleanup_partial_history_ref(path: &str, reference: &str, commit: &str) {
     let _ = run_git(path, &["update-ref", "-d", reference, commit]);
-}
-
-pub(crate) fn create_history_recovery(
-    repository: &RepositoryContext,
-    planned_reference: &str,
-    metadata: HistoryRecoveryMetadata,
-) -> Result<HistoryRecoveryRecord, AppError> {
-    create_history_recovery_for(
-        repository,
-        HistoryRecoveryOperation::GetTeamChanges,
-        planned_reference,
-        metadata,
-    )
 }
 
 pub(crate) fn create_history_recovery_for(

@@ -1268,7 +1268,13 @@ fn history_recovery_names_are_create_only_and_retention_survives_reacquisition()
         fs::create_dir_all(pending.parent().unwrap()).unwrap();
         fs::write(&pending, serde_json::to_vec(&incomplete).unwrap()).unwrap();
 
-        let first = create_history_recovery(&repository, &preview.reference, metadata()).unwrap();
+        let first = create_history_recovery_for(
+            &repository,
+            HistoryRecoveryOperation::GetTeamChanges,
+            &preview.reference,
+            metadata(),
+        )
+        .unwrap();
         created.push(first.reference.clone());
         assert!(!pending.exists());
         assert!(!test_git(
@@ -1278,8 +1284,13 @@ fn history_recovery_names_are_create_only_and_retention_survives_reacquisition()
         .unwrap()
         .status
         .success());
-        let duplicate =
-            create_history_recovery(&repository, &preview.reference, metadata()).unwrap_err();
+        let duplicate = create_history_recovery_for(
+            &repository,
+            HistoryRecoveryOperation::GetTeamChanges,
+            &preview.reference,
+            metadata(),
+        )
+        .unwrap_err();
         assert_eq!(duplicate.code, AppErrorCode::RefLocked);
         assert_eq!(
             git_stdout(&test_git(&repo, &["rev-parse", &first.reference]).unwrap()),
@@ -1294,8 +1305,9 @@ fn history_recovery_names_are_create_only_and_retention_survives_reacquisition()
             application::authorize_repository(&repo, "get_team_changes", None).unwrap();
         for _ in 0..MAX_HISTORY_RECOVERY_RECORDS {
             let preview = plan_history_recovery(&repository);
-            let record = create_history_recovery(
+            let record = create_history_recovery_for(
                 &repository,
+                HistoryRecoveryOperation::GetTeamChanges,
                 &preview.reference,
                 HistoryRecoveryMetadata {
                     branch: current_branch(&repo),
@@ -1964,4 +1976,504 @@ fn remote_home_names_the_published_remote_and_never_reports_one_missing() {
         .unwrap();
     assert!(status.success());
     assert_eq!(crate::sync::read_remote_home(repo).unwrap(), None);
+}
+
+// Bringing in another branch (task 065-4-1).
+
+fn local_branch(name: &str) -> IntegrationSource {
+    IntegrationSource::LocalBranch {
+        name: name.to_string(),
+    }
+}
+
+fn plan_bring_in(
+    repo: &str,
+    label: &str,
+    source: &IntegrationSource,
+) -> Result<BringInChangesPlan, AppError> {
+    plan_bring_in_changes(repo.to_string(), session(label), source.clone())
+}
+
+fn bring_in(
+    repo: &str,
+    label: &str,
+    source: &IntegrationSource,
+    plan: &BringInChangesPlan,
+) -> Result<BringInChangesResult, AppError> {
+    bring_in_changes(
+        repo.to_string(),
+        session(label),
+        source.clone(),
+        plan.state_token.clone(),
+        plan.recovery.reference.clone(),
+        true,
+        |_| {},
+    )
+}
+
+fn parents_of_head(repo: &str) -> Vec<String> {
+    git_stdout(&test_git(repo, &["rev-list", "--parents", "-n", "1", "HEAD"]).unwrap())
+        .split_whitespace()
+        .skip(1)
+        .map(str::to_string)
+        .collect()
+}
+
+fn tree_of(repo: &str, revision: &str) -> String {
+    git_stdout(&test_git(repo, &["rev-parse", &format!("{revision}^{{tree}}")]).unwrap())
+}
+
+/// Git's merge wording names the destination unless `merge.suppressDest`
+/// leaves it out, which by default it does only for `master`.
+fn merge_subject(what: &str, into: &str) -> String {
+    if into == "master" {
+        what.to_string()
+    } else {
+        format!("{what} into {into}")
+    }
+}
+
+fn write_hook(repo: &str, name: &str, body: &str) {
+    let hooks = Path::new(repo).join(".git").join("hooks");
+    fs::create_dir_all(&hooks).unwrap();
+    let hook = hooks.join(name);
+    fs::write(&hook, format!("#!/bin/sh\n{body}\n")).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
+// About 9 s alone on Windows, 2.5 s of it the published fixture: three
+// integrations of about 30 Git processes each share that fixture, which three
+// separate tests would build three times.
+#[test]
+fn bringing_in_a_local_branch_fast_forwards_merges_and_records_an_empty_merge() {
+    let (repo, remote, main) = published_repo_and_remote("bring-in-outcomes");
+    set_identity(&repo);
+    assert!(git_succeeds(&repo, &["switch", "-q", "-c", "feature"]));
+    save_file(&repo, "feature.txt", "feature work");
+    let feature = head(&repo);
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    let base = head(&repo);
+    write_file(&repo, "a.txt", "hello, unsaved\n");
+
+    let source = local_branch("feature");
+    let plan = plan_bring_in(&repo, "outcomes", &source).unwrap();
+    assert_eq!(plan.kind, BringInKind::FastForward);
+    assert_eq!(plan.source.label, "feature");
+    assert_eq!(plan.source.reference, "refs/heads/feature");
+    assert_eq!(plan.source.commit, feature);
+    assert_eq!(plan.incoming_count, 1);
+    assert_eq!(plan.file_impact.total_count, 1);
+    assert!(plan.merge_message.is_none());
+    assert!(plan
+        .recovery
+        .reference
+        .starts_with("refs/gitodile/recovery/v1/bring-in-changes/"));
+    let result = bring_in(&repo, "outcomes", &source, &plan).unwrap();
+    assert_eq!(result.outcome, GetTeamChangesOutcome::Completed);
+    assert_eq!(result.kind, BringInKind::FastForward);
+    assert_eq!(head(&repo), feature);
+    assert_eq!(read_text(&repo, "a.txt"), "hello, unsaved\n");
+    assert_eq!(
+        git_stdout(&test_git(&repo, &["rev-parse", &plan.recovery.reference]).unwrap()),
+        base
+    );
+    assert_eq!(result.recovery.tracking_ref, "refs/heads/feature");
+
+    let contained = plan_bring_in(&repo, "outcomes", &source).unwrap();
+    assert_eq!(contained.kind, BringInKind::AlreadyContained);
+    assert!(contained.forecast.is_none());
+    assert!(!contained.requires_confirmation);
+    assert_eq!(
+        bring_in(&repo, "outcomes", &source, &contained)
+            .unwrap_err()
+            .code,
+        AppErrorCode::NothingToGet
+    );
+
+    // A branch that parted earlier is joined by a merge version, after the
+    // project's merge hook ran.
+    write_file(&repo, "a.txt", "hello\n");
+    assert!(git_succeeds(&repo, &["switch", "-q", "-c", "topic", &base]));
+    save_file(&repo, "topic.txt", "topic work");
+    let topic = head(&repo);
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    write_hook(&repo, "pre-merge-commit", "touch .git/pre-merge-ran");
+    let source = local_branch("topic");
+    let plan = plan_bring_in(&repo, "outcomes", &source).unwrap();
+    assert_eq!(plan.kind, BringInKind::Merge);
+    let subject = merge_subject("Merge branch 'topic'", &main);
+    assert_eq!(plan.merge_message.as_deref(), Some(subject.as_str()));
+    bring_in(&repo, "outcomes", &source, &plan).unwrap();
+    assert_eq!(parents_of_head(&repo), vec![feature.clone(), topic]);
+    assert!(Path::new(&repo).join(".git/pre-merge-ran").is_file());
+    assert_eq!(
+        git_stdout(&test_git(&repo, &["log", "-1", "--format=%s"]).unwrap()),
+        subject
+    );
+    assert_eq!(read_text(&repo, "topic.txt"), "topic work\n");
+
+    // The same change saved on both sides: a merge version records that the
+    // branch is included, and no file changes.
+    assert!(git_succeeds(
+        &repo,
+        &["switch", "-q", "-c", "same", &feature]
+    ));
+    save_file(&repo, "same.txt", "same change");
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    save_file(&repo, "same.txt", "same change");
+    let before = head(&repo);
+    let source = local_branch("same");
+    let plan = plan_bring_in(&repo, "outcomes", &source).unwrap();
+    assert_eq!(plan.kind, BringInKind::EmptyMerge);
+    assert_eq!(plan.file_impact.total_count, 0);
+    assert!(plan.merge_message.is_some());
+    bring_in(&repo, "outcomes", &source, &plan).unwrap();
+    assert_eq!(parents_of_head(&repo).len(), 2);
+    assert_eq!(tree_of(&repo, "HEAD"), tree_of(&repo, &before));
+
+    for path in [repo, remote] {
+        let _ = fs::remove_dir_all(path);
+    }
+}
+
+// About 5.5 s alone on Windows: the published fixture, a second clone that
+// pushes twice, and one merge.
+#[test]
+fn bringing_in_a_remote_branch_reads_its_last_check_and_names_it_like_git() {
+    let (repo, remote, _main) = published_repo_and_remote("bring-in-remote");
+    set_identity(&repo);
+    let other = clone_remote(&remote, "bring-in-remote-other");
+    set_identity(&other);
+    assert!(git_succeeds(&other, &["switch", "-q", "-c", "team"]));
+    save_file(&other, "team.txt", "team work");
+    assert!(git_succeeds(&other, &["push", "-q", "origin", "team"]));
+    assert!(git_succeeds(&repo, &["fetch", "-q", "origin"]));
+    let team = remote_branch_sha(&remote, "refs/heads/team").unwrap();
+    save_file(&repo, "local.txt", "local work");
+    let previous = head(&repo);
+    // The remote moves after the last check; nothing here may see it.
+    save_file(&other, "later.txt", "later work");
+    push(&other, "team");
+
+    let source = IntegrationSource::RemoteBranch {
+        remote: "origin".to_string(),
+        branch: "team".to_string(),
+    };
+    // The project's own `merge.suppressDest` decides the title, as for
+    // `git merge`.
+    assert!(git_succeeds(&repo, &["config", "merge.suppressDest", "*"]));
+    let plan = plan_bring_in(&repo, "remote", &source).unwrap();
+    assert_eq!(plan.kind, BringInKind::Merge);
+    assert_eq!(plan.source.label, "origin/team");
+    assert_eq!(plan.source.remote.as_deref(), Some("origin"));
+    assert_eq!(plan.source.reference, "refs/remotes/origin/team");
+    assert_eq!(plan.source.commit, team);
+    assert_eq!(
+        plan.merge_message.as_deref(),
+        Some("Merge remote-tracking branch 'origin/team'")
+    );
+    let result = bring_in(&repo, "remote", &source, &plan).unwrap();
+    assert_eq!(parents_of_head(&repo), vec![previous, team.clone()]);
+    assert_eq!(result.recovery.remote, "origin");
+    assert_eq!(
+        git_stdout(&test_git(&repo, &["rev-parse", "refs/remotes/origin/team"]).unwrap()),
+        team,
+        "bringing in never fetches"
+    );
+
+    for (source, code) in [
+        (
+            IntegrationSource::RemoteBranch {
+                remote: "upstream".to_string(),
+                branch: "team".to_string(),
+            },
+            AppErrorCode::InvalidRemoteConfiguration,
+        ),
+        (
+            IntegrationSource::RemoteBranch {
+                remote: "origin".to_string(),
+                branch: "never-checked".to_string(),
+            },
+            AppErrorCode::BranchMissing,
+        ),
+    ] {
+        assert_eq!(
+            plan_bring_in(&repo, "remote", &source).unwrap_err().code,
+            code
+        );
+    }
+
+    for path in [repo, remote, other] {
+        let _ = fs::remove_dir_all(path);
+    }
+}
+
+// About 6 s alone on Windows: the published fixture and three plans, one per
+// way a reviewed plan goes stale.
+#[test]
+fn bringing_in_is_stale_when_the_source_the_branch_or_the_work_moved_after_review() {
+    let (repo, remote, main) = published_repo_and_remote("bring-in-stale");
+    set_identity(&repo);
+    assert!(git_succeeds(&repo, &["switch", "-q", "-c", "feature"]));
+    save_file(&repo, "feature.txt", "feature work");
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    let source = local_branch("feature");
+    let mut references = Vec::new();
+
+    let moved_source = plan_bring_in(&repo, "stale", &source).unwrap();
+    assert!(git_succeeds(&repo, &["switch", "-q", "feature"]));
+    save_file(&repo, "other.txt", "another feature version");
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    let before = head(&repo);
+    assert_eq!(
+        bring_in(&repo, "stale", &source, &moved_source)
+            .unwrap_err()
+            .code,
+        AppErrorCode::StaleBringInPlan
+    );
+    references.push(moved_source.recovery.reference);
+
+    let changed_work = plan_bring_in(&repo, "stale", &source).unwrap();
+    write_file(&repo, "a.txt", "edited after the review\n");
+    assert_eq!(
+        bring_in(&repo, "stale", &source, &changed_work)
+            .unwrap_err()
+            .code,
+        AppErrorCode::StaleBringInPlan
+    );
+    references.push(changed_work.recovery.reference);
+
+    let moved_branch = plan_bring_in(&repo, "stale", &source).unwrap();
+    save_file(&repo, "main.txt", "main moved");
+    let moved = head(&repo);
+    assert_ne!(moved, before);
+    assert_eq!(
+        bring_in(&repo, "stale", &source, &moved_branch)
+            .unwrap_err()
+            .code,
+        AppErrorCode::StaleBringInPlan
+    );
+    references.push(moved_branch.recovery.reference);
+
+    assert_eq!(head(&repo), moved);
+    assert!(!Path::new(&repo).join("other.txt").exists());
+    for reference in references {
+        assert!(!recovery_ref_exists(&repo, &reference));
+    }
+
+    for path in [repo, remote] {
+        let _ = fs::remove_dir_all(path);
+    }
+}
+
+fn file_url(path: &str) -> String {
+    let path = path.replace('\\', "/");
+    if path.starts_with('/') {
+        format!("file://{path}")
+    } else {
+        format!("file:///{path}")
+    }
+}
+
+// About 5 s alone on Windows: the published fixture, a shallow clone and one
+// plan per blocking state, each refused before any analysis runs.
+#[test]
+fn bringing_in_refuses_states_it_cannot_combine_safely() {
+    let (repo, remote, main) = published_repo_and_remote("bring-in-blocked");
+    set_identity(&repo);
+    let code = |repo: &str, source: &IntegrationSource| {
+        plan_bring_in(repo, "blocked", source).unwrap_err().code
+    };
+    assert_eq!(
+        code(&repo, &local_branch(&main)),
+        AppErrorCode::BranchIsActive
+    );
+    assert_eq!(
+        code(&repo, &local_branch("missing")),
+        AppErrorCode::BranchMissing
+    );
+
+    assert!(git_succeeds(&repo, &["switch", "-q", "--orphan", "lonely"]));
+    save_file(&repo, "lonely.txt", "lonely work");
+    assert!(git_succeeds(&repo, &["switch", "-q", "-f", &main]));
+    let lonely = local_branch("lonely");
+    assert_eq!(code(&repo, &lonely), AppErrorCode::NoSharedHistory);
+
+    assert!(git_succeeds(
+        &repo,
+        &["config", "core.sparseCheckout", "true"]
+    ));
+    assert_eq!(code(&repo, &lonely), AppErrorCode::UnsupportedMergeSetup);
+    assert!(git_succeeds(
+        &repo,
+        &["config", "--unset", "core.sparseCheckout"]
+    ));
+
+    let marker = Path::new(&repo).join(".git").join("CHERRY_PICK_HEAD");
+    fs::write(&marker, format!("{}\n", head(&repo))).unwrap();
+    assert_eq!(code(&repo, &lonely), AppErrorCode::GitOperationInProgress);
+    fs::remove_file(&marker).unwrap();
+
+    assert!(git_succeeds(&repo, &["checkout", "-q", "--detach"]));
+    assert_eq!(code(&repo, &lonely), AppErrorCode::DetachedHead);
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+
+    let unborn = unique_temp_dir("bring-in-blocked-unborn");
+    git_init(&unborn);
+    assert_eq!(
+        code(&unborn, &local_branch("anything")),
+        AppErrorCode::UnbornBranchNoVersion
+    );
+
+    // A shallow copy holds neither branch's history back to where they parted.
+    assert!(git_succeeds(&repo, &["switch", "-q", "-c", "deep"]));
+    save_file(&repo, "deep.txt", "deep work");
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    save_file(&repo, "main.txt", "main work");
+    assert!(git_succeeds(
+        &repo,
+        &["push", "-q", "origin", &main, "deep"]
+    ));
+    let shallow = unique_temp_dir("bring-in-blocked-shallow");
+    assert!(base_git_command()
+        .args([
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            "--no-single-branch",
+            &file_url(&remote),
+            &shallow,
+        ])
+        .status()
+        .unwrap()
+        .success());
+    let deep = IntegrationSource::RemoteBranch {
+        remote: "origin".to_string(),
+        branch: "deep".to_string(),
+    };
+    assert_eq!(code(&shallow, &deep), AppErrorCode::ShallowHistory);
+
+    for path in [repo, remote, unborn, shallow] {
+        let _ = fs::remove_dir_all(path);
+    }
+}
+
+// About 7 s alone on Windows: the published fixture, three refused merge
+// versions against one plan, and an overlapping branch.
+#[test]
+fn merge_version_failures_and_overlaps_leave_the_project_untouched() {
+    let (repo, remote, main) = published_repo_and_remote("bring-in-failures");
+    set_identity(&repo);
+    assert!(git_succeeds(&repo, &["switch", "-q", "-c", "feature"]));
+    save_file(&repo, "feature.txt", "feature work");
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    save_file(&repo, "main.txt", "main work");
+    let before = head(&repo);
+    let source = local_branch("feature");
+    let plan = plan_bring_in(&repo, "failures", &source).unwrap();
+    assert_eq!(plan.kind, BringInKind::Merge);
+    // Each failure changes nothing, so the one reviewed plan stays valid for
+    // the next attempt.
+    let attempt = || {
+        let code = bring_in(&repo, "failures", &source, &plan)
+            .unwrap_err()
+            .code;
+        assert_eq!(head(&repo), before);
+        assert!(!Path::new(&repo).join("feature.txt").exists());
+        assert!(!recovery_ref_exists(&repo, &plan.recovery.reference));
+        code
+    };
+
+    write_failing_hook(&Path::new(&repo).join(".git"), "pre-merge-commit");
+    assert_eq!(attempt(), AppErrorCode::HookRejected);
+    fs::remove_file(Path::new(&repo).join(".git/hooks/pre-merge-commit")).unwrap();
+
+    assert!(git_succeeds(&repo, &["config", "user.name", ""]));
+    assert_eq!(attempt(), AppErrorCode::MissingIdentity);
+    set_identity(&repo);
+
+    let gpg = write_fake_failing_gpg("bring-in-failures");
+    assert!(git_succeeds(&repo, &["config", "commit.gpgSign", "true"]));
+    assert!(git_succeeds(&repo, &["config", "gpg.program", &gpg]));
+    assert_eq!(attempt(), AppErrorCode::SigningFailed);
+    assert!(git_succeeds(
+        &repo,
+        &["config", "--unset", "commit.gpgSign"]
+    ));
+
+    // The same lines changed on both sides: named, and refused until the
+    // user chooses to resolve them (task 065-4-2).
+    assert!(git_succeeds(
+        &repo,
+        &["switch", "-q", "-c", "clash", &before]
+    ));
+    save_file(&repo, "a.txt", "clash side");
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    save_file(&repo, "a.txt", "main side");
+    let clash = local_branch("clash");
+    let plan = plan_bring_in(&repo, "overlap", &clash).unwrap();
+    let forecast = plan.forecast.clone().unwrap();
+    assert_eq!(forecast.outcome, ForecastOutcome::Overlap);
+    assert_eq!(forecast.overlaps[0].path, "a.txt");
+    let main_tip = head(&repo);
+    assert_eq!(
+        bring_in(&repo, "overlap", &clash, &plan).unwrap_err().code,
+        AppErrorCode::IncomingTrackedChangeCollision
+    );
+    assert_eq!(head(&repo), main_tip);
+    assert_eq!(read_text(&repo, "a.txt"), "main side\n");
+
+    for path in [repo, remote] {
+        let _ = fs::remove_dir_all(path);
+    }
+}
+
+// About 5 s alone on Windows: the published fixture, a linked worktree and one
+// merge in it.
+#[test]
+fn a_linked_worktree_brings_changes_into_its_own_branch_and_owns_its_recovery() {
+    let (repo, remote, main) = published_repo_and_remote("bring-in-worktree");
+    set_identity(&repo);
+    assert!(git_succeeds(&repo, &["switch", "-q", "-c", "feature"]));
+    save_file(&repo, "feature.txt", "feature work");
+    let feature = head(&repo);
+    assert!(git_succeeds(&repo, &["switch", "-q", &main]));
+    let main_tip = head(&repo);
+    let linked = unique_temp_dir("bring-in-worktree-linked");
+    assert!(git_succeeds(
+        &repo,
+        &["worktree", "add", "-q", "-b", "side", &linked, &main]
+    ));
+    save_file(&linked, "side.txt", "side work");
+    let side = head(&linked);
+
+    let source = local_branch("feature");
+    let owner = |reference: &str| reference.split('/').nth(5).unwrap().to_string();
+    let main_plan = plan_bring_in(&repo, "worktree", &source).unwrap();
+    let plan = plan_bring_in(&linked, "worktree", &source).unwrap();
+    assert_eq!(plan.kind, BringInKind::Merge);
+    assert_ne!(
+        owner(&plan.recovery.reference),
+        owner(&main_plan.recovery.reference)
+    );
+    bring_in(&linked, "worktree", &source, &plan).unwrap();
+    assert_eq!(parents_of_head(&linked), vec![side.clone(), feature]);
+    assert_eq!(read_text(&linked, "feature.txt"), "feature work\n");
+    // The main worktree's branch and files are untouched; the recovery ref is
+    // shared through the common repository.
+    assert_eq!(head(&repo), main_tip);
+    assert!(!Path::new(&repo).join("feature.txt").exists());
+    assert_eq!(
+        git_stdout(&test_git(&repo, &["rev-parse", &plan.recovery.reference]).unwrap()),
+        side
+    );
+
+    for path in [linked, repo, remote] {
+        let _ = fs::remove_dir_all(path);
+    }
 }

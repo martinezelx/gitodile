@@ -268,6 +268,8 @@ pub fn run() {
             ipc::stop_tracking_remote,
             ipc::plan_get_team_changes,
             ipc::get_team_changes,
+            ipc::plan_bring_in_changes,
+            ipc::bring_in_changes,
             ipc::list_unpublished_versions,
             ipc::list_incoming_versions,
             ipc::read_commit_file_changes,
