@@ -799,23 +799,18 @@ pub(crate) fn mark_conflict_resolved(
             Some(entry)
         }
         Plan::Add => {
-            let output = run_git(&path, &["add", "--", &pathspec])?;
+            // The chosen permission goes in with the content, in one
+            // command, so the file is never staged with the other one.
+            let mut args = vec!["add"];
+            match executable {
+                Some(true) => args.push("--chmod=+x"),
+                Some(false) => args.push("--chmod=-x"),
+                None => {}
+            }
+            args.extend(["--", pathspec.as_str()]);
+            let output = run_git(&path, &args)?;
             if !output.status.success() {
                 return Err(git_failed("Git couldn't mark this file resolved.", &output));
-            }
-            if let Some(executable) = executable {
-                let flag = if executable {
-                    "--chmod=+x"
-                } else {
-                    "--chmod=-x"
-                };
-                let output = run_git(&path, &["update-index", flag, "--", &pathspec])?;
-                if !output.status.success() {
-                    return Err(git_failed(
-                        "Git couldn't record the file's permission.",
-                        &output,
-                    ));
-                }
             }
             None
         }
@@ -962,7 +957,7 @@ pub(crate) fn reset_conflict_file(
         };
         if !restorable {
             return Err(AppError::new(
-                AppErrorCode::RecoveryUnavailable,
+                AppErrorCode::ConflictContentNotKept,
                 "The snapshot couldn't keep this file's original content.",
             )
             .with_remediation(

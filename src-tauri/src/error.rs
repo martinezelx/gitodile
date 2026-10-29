@@ -121,6 +121,7 @@ pub(crate) enum AppErrorCode {
     ConflictActionUnavailable,
     ConflictMarkersRemain,
     ConflictChoiceNeeded,
+    ConflictContentNotKept,
     FileLocked,
     IgnoreFileTooLarge,
     IgnoreFileNotText,

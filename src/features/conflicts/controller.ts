@@ -125,6 +125,28 @@ export function createConflictsController(port: ConflictsPort) {
     }
   };
 
+  /** Runs one file mutation and makes the session it answers with the cached
+   * one. Rust reads that session after its own verified change, so it
+   * supersedes every read started before it; a failure leaves the session the
+   * reader was looking at, which is still what they decided from. */
+  const mutate = async (
+    query: ConflictsQuery,
+    run: (port: ConflictsPort) => Promise<ConflictSession | null>,
+  ): Promise<ConflictSession | null> => {
+    const entry = entryFor(query);
+    const session = await run(port);
+    if (entries.get(keyOf(query)) !== entry) return session;
+    entry.inFlight = null;
+    publish(entry, {
+      ...entry.state,
+      session,
+      error: null,
+      isLoading: false,
+      generation: entry.state.generation + 1,
+    });
+    return session;
+  };
+
   const readSideDiff = (query: ConflictSideDiffQuery): Promise<FileDiff> => {
     const key = sideDiffKey(query);
     const cached = sideDiffs.get(key);
@@ -159,6 +181,7 @@ export function createConflictsController(port: ConflictsPort) {
       return () => entry.listeners.delete(listener);
     },
     refresh,
+    mutate,
     readSideDiff,
     /** The resolved diff when it is already held, so the detail renders on
      * arrival without a loading frame. Never starts a read. */

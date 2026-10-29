@@ -141,6 +141,58 @@
   margin-inline-start: var(--space-2); color: var(--text-secondary-color); font-size: var(--text-caption); font-weight: var(--weight-normal);
 }
 .conflicts-detail__shape { margin: 0; color: var(--text-secondary-color); font-size: var(--text-caption); }
+/* The file's actions (task 037-6-2): a bar under the strip, as the Changes
+   toolbar sits under its list's strip. What the file holds now on the left,
+   the choices on the right with Mark resolved, the constructive one, last. */
+.conflicts-resolution { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; }
+.conflicts-resolution > .conflicts-notice { margin: var(--space-3) var(--space-4); }
+.conflicts-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); min-width: 0;
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.conflicts-actions__status {
+  flex: 1 1 12rem; min-width: 0; margin: 0;
+  color: var(--text-secondary-color); font-size: var(--text-label); line-height: var(--leading-normal);
+}
+.conflicts-actions__buttons { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); min-width: 0; }
+.conflicts-actions__label { min-width: 0; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conflicts-actions .secondary-button[aria-pressed="true"] {
+  border-color: var(--text-secondary-color);
+  background: color-mix(in srgb, var(--text-primary-color) var(--tint-selected), var(--surface-control));
+}
+.conflicts-more { position: relative; display: inline-flex; flex-shrink: 0; }
+.conflicts-more__trigger { width: var(--control-height-sm); min-width: var(--control-height-sm); padding: 0; justify-content: center; border-radius: var(--radius-round); }
+.conflicts-more__trigger svg { width: var(--icon-control); height: var(--icon-control); }
+.conflicts-more .app-menu__item--danger,
+.conflicts-more .app-menu__item--danger svg { color: var(--status-danger); }
+
+/* A question asked in the bar's place, the forget row of Restore at the
+   width of the panel: the tone of what it risks, the answers on the right. */
+.conflicts-ask {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-4); min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.conflicts-ask--danger { background: color-mix(in srgb, var(--status-danger) var(--tint-fill), transparent); }
+.conflicts-ask--warning { background: color-mix(in srgb, var(--status-warning) var(--tint-fill), transparent); }
+.conflicts-ask__question { flex: 1 1 20rem; min-width: 0; display: flex; align-items: flex-start; gap: var(--space-3); }
+.conflicts-ask__question > svg { width: var(--icon-nav); height: var(--icon-nav); flex-shrink: 0; color: var(--status-warning); }
+.conflicts-ask__text { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-body); line-height: var(--leading-normal); }
+.conflicts-ask__text > strong { font-weight: var(--weight-strong); }
+.conflicts-ask__body { color: var(--text-secondary-color); }
+.conflicts-ask__answers { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-inline-start: auto; }
+.conflicts-ask .conflicts-details__commands code { display: block; }
+
+/* The side a pending choice would replace: dimmed, and said in words in its
+   heading, so neither colour nor opacity carries the meaning alone. */
+.conflicts-side--discarding .conflicts-side__diff,
+.conflicts-side--discarding > .conflicts-detail__note { opacity: var(--opacity-muted); }
+.conflicts-side__discarding {
+  flex-shrink: 0; margin-inline-start: auto;
+  color: var(--status-danger); font-size: var(--text-label); font-weight: var(--weight-normal);
+}
+
 /* Both sides side by side, the current branch on the left and the incoming
    one on the right, each an equal column with a scroller of its own. A side
    that is only a sentence (deleted, a link, unchanged) keeps its column, so

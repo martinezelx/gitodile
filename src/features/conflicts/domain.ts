@@ -116,3 +116,59 @@ export function filterConflictFiles(files: readonly ConflictFile[], query: strin
 export function sideName(label: SideLabel): string | null {
   return label.name ?? (label.commit ? label.commit.slice(0, 7) : null);
 }
+
+/** A whole-file choice: one side's version, or the deletion one side made. */
+export type SideChoice = "keep-current" | "keep-incoming" | "delete";
+
+/** What the file's action bar offers, from what Rust allows. Open in editor
+ * is not here yet (task 037-6-3). */
+export type FileActions = {
+  choices: SideChoice[];
+  canMarkResolved: boolean;
+  canReset: boolean;
+};
+
+const CHOICES: readonly SideChoice[] = ["keep-current", "keep-incoming", "delete"];
+
+export function fileActions(file: ConflictFile): FileActions {
+  return {
+    choices: CHOICES.filter((choice) => file.allowedActions.includes(choice)),
+    canMarkResolved: file.allowedActions.includes("mark-resolved"),
+    canReset: file.allowedActions.includes("reset-file"),
+  };
+}
+
+/** The side whose version a keep choice writes; `null` for a deletion. */
+export function keptSide(choice: SideChoice): ConflictSideName | null {
+  return choice === "keep-current" ? "current" : choice === "keep-incoming" ? "incoming" : null;
+}
+
+/** The side whose version a choice throws away, so the question can name it
+ * before anything runs. A deletion discards the side that kept the file;
+ * `null` when no side has a version to lose (both deleted it). */
+export function discardedSide(file: ConflictFile, choice: SideChoice): ConflictSideName | null {
+  switch (choice) {
+    case "keep-current": return "incoming";
+    case "keep-incoming": return "current";
+    case "delete": return file.current ? "current" : file.incoming ? "incoming" : null;
+  }
+}
+
+/** The choice whose result the file still holds, so the bar can say which
+ * side was kept and leave that button pressed. */
+export function keptChoice(file: ConflictFile): SideChoice | null {
+  switch (file.kept) {
+    case "current": return "keep-current";
+    case "incoming": return "keep-incoming";
+    case "deleted": return "delete";
+    case null: return null;
+  }
+}
+
+/** Which side runs as a program, for the permission question Mark resolved
+ * asks when the sides disagree and the file was edited rather than kept. */
+export function executableSide(file: ConflictFile): ConflictSideName | null {
+  if (file.current?.mode === "100755" && file.incoming?.mode !== "100755") return "current";
+  if (file.incoming?.mode === "100755" && file.current?.mode !== "100755") return "incoming";
+  return null;
+}

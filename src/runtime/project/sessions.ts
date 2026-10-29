@@ -12,7 +12,7 @@ export type ProjectView = "overview" | "workbench" | "branches" | "console" | "c
  * between screens, and a project left on History comes back to History. */
 export type WorkbenchTab = "changes" | "history";
 
-export type ProjectMutationKind = "save" | "publish" | "discard" | "branch" | "sync";
+export type ProjectMutationKind = "save" | "publish" | "discard" | "branch" | "sync" | "resolve";
 export type ProjectMutationPhase =
   | "planning"
   | "executing"

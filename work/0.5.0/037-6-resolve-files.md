@@ -107,7 +107,7 @@ Tasks 037-1 and 037-3.
 - 2026-10-29 (user): split into three slices, each closing with
   `pnpm run check` green:
   [037-6-1](../done/037-6-1-resolution-core.md) (Rust commands and the resolution
-  journal), [037-6-2](037-6-2-resolution-actions-ui.md) (the actions on the
+  journal), [037-6-2](../done/037-6-2-resolution-actions-ui.md) (the actions on the
   screen) and [037-6-3](037-6-3-editor-and-hard-classes.md) (the user's
   editor, reconciliation and the blocked classes, with the desktop pass).
 - 2026-10-29 (user), from the mockup review: the file's actions sit in a bar

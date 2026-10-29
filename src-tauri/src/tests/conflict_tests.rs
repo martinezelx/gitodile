@@ -616,6 +616,25 @@ fn each_file_is_kept_marked_and_reset_exactly() {
         );
     }
 
+    // Edited rather than kept, a file whose sides disagree on running as a
+    // program asks which permission to keep, and gets exactly that one.
+    current = reset(&path, &current, "mode.sh").unwrap();
+    assert_eq!(
+        mark(&path, &current, "mode.sh", true).unwrap_err().code,
+        AppErrorCode::ConflictChoiceNeeded
+    );
+    current = mark_conflict_resolved(
+        path.clone(),
+        "mode.sh".to_string(),
+        expected(file(&current, "mode.sh")),
+        current.state_token.clone(),
+        true,
+        Some(true),
+    )
+    .map(Option::unwrap)
+    .unwrap();
+    assert_eq!(index_of(&path, "mode.sh")[0].1, "100755");
+
     // A link has no text to edit: it needs a side before it can be marked.
     assert!(!file(&first, "link")
         .allowed_actions

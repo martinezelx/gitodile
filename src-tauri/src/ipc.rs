@@ -2099,6 +2099,7 @@ mod contract_tests {
             AppErrorCode::ConflictActionUnavailable,
             AppErrorCode::ConflictMarkersRemain,
             AppErrorCode::ConflictChoiceNeeded,
+            AppErrorCode::ConflictContentNotKept,
             AppErrorCode::FileLocked,
             AppErrorCode::IgnoreFileTooLarge,
             AppErrorCode::IgnoreFileNotText,

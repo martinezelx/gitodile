@@ -110,6 +110,7 @@ export const es: SharedTranslations = {
   errorConflictActionUnavailable: "Este archivo no permite eso ahora. Vuelve a leer los cambios solapados.",
   errorConflictMarkersRemain: "Este archivo aún tiene partes solapadas marcadas. Quítalas o márcalo como resuelto de todos modos.",
   errorConflictChoiceNeeded: "Elige primero qué lado conservar en este archivo.",
+  errorConflictContentNotKept: "GitOdile no pudo guardar el contenido original de este archivo. No se ha cambiado nada; aún puedes recuperar solo el solapamiento.",
   errorFileLocked: "Otro programa está usando este archivo. Ciérralo allí y vuelve a intentarlo. No se ha cambiado nada.",
   errorIgnoreFileTooLarge: "Este archivo es demasiado grande para editarlo aquí. Ábrelo en un editor de texto.",
   errorIgnoreFileNotText: "Este archivo no es texto plano, así que GitOdile no lo reescribirá.",

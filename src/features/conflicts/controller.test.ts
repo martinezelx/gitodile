@@ -40,8 +40,8 @@ const runtime = {
   },
 } as unknown as ProjectRuntime;
 
-function port(read: ConflictsPort["readSession"]): ConflictsPort {
-  return { readSession: read, readSideDiff: vi.fn() };
+function port(read: ConflictsPort["readSession"], overrides: Partial<ConflictsPort> = {}): ConflictsPort {
+  return { readSession: read, readSideDiff: vi.fn(), keepSide: vi.fn(), markResolved: vi.fn(), resetFile: vi.fn(), ...overrides };
 }
 
 describe("conflicts controller", () => {
@@ -86,10 +86,29 @@ describe("conflicts controller", () => {
     expect(controller.getSnapshot(query).session).toBeUndefined();
   });
 
+  it("makes a mutation's session the cached one, over a read started before it", async () => {
+    let resolveOld!: (value: ConflictSession) => void;
+    const read = vi.fn<ConflictsPort["readSession"]>()
+      .mockResolvedValueOnce(session("one"))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+    const controller = createConflictsController(port(read));
+    await controller.refresh(query);
+
+    const older = controller.refresh(query);
+    await controller.mutate(query, async () => session("after"));
+    resolveOld(session("before"));
+    await older;
+    expect(controller.getSnapshot(query)).toMatchObject({ session: { stateToken: "after" }, isLoading: false });
+
+    // A refusal changes nothing the reader decided from.
+    await expect(controller.mutate(query, () => Promise.reject(new Error("stale")))).rejects.toThrow("stale");
+    expect(controller.getSnapshot(query).session?.stateToken).toBe("after");
+  });
+
   it("asks for one side's diff once per pair of objects", async () => {
     const diff: FileDiff = { kind: "unchanged", path: "a.txt", originalPath: null, change: "changed" };
     const readSideDiff = vi.fn<ConflictsPort["readSideDiff"]>().mockResolvedValue(diff);
-    const controller = createConflictsController({ readSession: vi.fn(), readSideDiff });
+    const controller = createConflictsController(port(vi.fn(), { readSideDiff }));
     const sideQuery = { ...query, filePath: "a.txt", side: "current" as const, baseObjectId: "1".repeat(40), sideObjectId: "2".repeat(40) };
 
     await Promise.all([controller.readSideDiff(sideQuery), controller.readSideDiff(sideQuery)]);

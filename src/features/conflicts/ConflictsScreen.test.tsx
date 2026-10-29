@@ -1,4 +1,5 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { StrictMode } from "react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -10,7 +11,10 @@ import { createConflictsController } from "./controller";
 import type { ConflictFile, ConflictSession, PausedOperation } from "./domain";
 import type { ConflictsPort } from "./port";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  localStorage.clear();
+});
 
 const query = { projectId: "/repo", sessionEpoch: "epoch-1" };
 const BASE = "1".repeat(40);
@@ -61,26 +65,56 @@ function session(operation: Partial<PausedOperation>, files: ConflictFile[]): Co
 
 const unchanged = (path: string): FileDiff => ({ kind: "unchanged", path, originalPath: null, change: "changed" });
 
-async function renderScreen(value: ConflictSession | null, readSideDiff = vi.fn<ConflictsPort["readSideDiff"]>(async (request) => unchanged(request.filePath))) {
+async function renderScreen(
+  value: ConflictSession | null,
+  readSideDiff = vi.fn<ConflictsPort["readSideDiff"]>(async (request) => unchanged(request.filePath)),
+  { mutations = {}, isProjectBusy = false }: { mutations?: Partial<ConflictsPort>; isProjectBusy?: boolean } = {},
+) {
   const readSession = vi.fn<ConflictsPort["readSession"]>().mockResolvedValue(value);
-  const controller = createConflictsController({ readSession, readSideDiff });
+  const controller = createConflictsController({
+    readSession,
+    readSideDiff,
+    keepSide: vi.fn(),
+    markResolved: vi.fn(),
+    resetFile: vi.fn(),
+    ...mutations,
+  });
   await controller.refresh(query);
   const onGoToOverview = vi.fn();
+  const slot = {
+    onOperationStart: vi.fn(() => true),
+    onOperationFinish: vi.fn(),
+    onOperationPhaseChange: vi.fn(),
+    onChanged: vi.fn(),
+  };
+  // StrictMode as the app runs in development: it mounts every effect twice.
   render(
-    <LanguageProvider>
-      <ScreenLifecycleProvider controller={createScreenLifecycleController("active")}>
-        <ConflictsScreen
-          controller={controller}
-          projectPath={query.projectId}
-          sessionEpoch={query.sessionEpoch}
-          onBack={() => undefined}
-          onGoToOverview={onGoToOverview}
-        />
-      </ScreenLifecycleProvider>
-    </LanguageProvider>,
+    <StrictMode>
+      <LanguageProvider>
+        <ScreenLifecycleProvider controller={createScreenLifecycleController("active")}>
+          <ConflictsScreen
+            controller={controller}
+            projectPath={query.projectId}
+            sessionEpoch={query.sessionEpoch}
+            onBack={() => undefined}
+            onGoToOverview={onGoToOverview}
+            isProjectBusy={isProjectBusy}
+            {...slot}
+          />
+        </ScreenLifecycleProvider>
+      </LanguageProvider>
+    </StrictMode>,
   );
-  return { readSession, readSideDiff, onGoToOverview };
+  return { readSession, readSideDiff, onGoToOverview, slot };
 }
+
+const appError = (code: string) => ({ code, message: "English text", remediation: null });
+const EXPECTED = {
+  base: { mode: "100644", objectId: BASE },
+  current: { mode: "100644", objectId: MAIN },
+  incoming: { mode: "100644", objectId: FEATURE },
+};
+const CHOICES = ["keep-current", "keep-incoming", "mark-resolved"] as const;
 
 describe("ConflictsScreen", () => {
   it("explains a paused merge read-only and shows what both sides changed", async () => {
@@ -140,5 +174,104 @@ describe("ConflictsScreen", () => {
     expect(screen.getByText("Nothing is paused")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Go to Overview" }));
     expect(onGoToOverview).toHaveBeenCalled();
+  });
+
+  it("names what a side choice discards before it runs, then says which side was kept", async () => {
+    const user = userEvent.setup();
+    const file = conflict("src/login.ts", { allowedActions: [...CHOICES] });
+    const keepSide = vi.fn<ConflictsPort["keepSide"]>().mockResolvedValue(
+      session({}, [{ ...file, state: "editedOutside", kept: "incoming", allowedActions: [...CHOICES, "reset-file"] }]),
+    );
+    const { slot } = await renderScreen(session({}, [file]), undefined, { mutations: { keepSide } });
+
+    const keep = screen.getByRole("button", { name: "Keep “feature”" });
+    await user.click(keep);
+    expect(screen.getByText("What “main” changed in this file is replaced. A copy is kept, so you can reset the file.")).toBeTruthy();
+    expect(within(screen.getByRole("heading", { name: /What “main” changed/ })).getByText("Will be replaced")).toBeTruthy();
+    await user.keyboard("{Escape}");
+    expect(keepSide).not.toHaveBeenCalled();
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Keep “feature”" })));
+
+    await user.click(screen.getByRole("button", { name: "Keep “feature”" }));
+    await user.click(within(screen.getByRole("group", { name: "Keep the version on “feature”?" })).getByRole("button", { name: "Keep “feature”" }));
+
+    expect(keepSide).toHaveBeenCalledWith({
+      ...query, filePath: "src/login.ts", stateToken: "token", choice: "keep-incoming", expected: EXPECTED,
+    });
+    expect(slot.onOperationStart).toHaveBeenCalledTimes(1);
+    expect(slot.onChanged).toHaveBeenCalledTimes(1);
+    expect(slot.onOperationFinish).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("Kept “feature” · not marked resolved yet")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Keep “feature”" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByText("Kept “feature” in src/login.ts. It isn't marked resolved yet.")).toBeTruthy();
+  });
+
+  it("explains Mark resolved once, then asks about markers and the permission it needs", async () => {
+    const user = userEvent.setup();
+    const file = conflict("run.sh", { allowedActions: [...CHOICES], facets: ["mode-change"], incoming: { mode: "100755", objectId: FEATURE } });
+    const markResolved = vi.fn<ConflictsPort["markResolved"]>()
+      .mockRejectedValueOnce(appError("conflict_markers_remain"))
+      .mockRejectedValueOnce(appError("conflict_choice_needed"))
+      .mockResolvedValueOnce(session({}, [{ ...file, state: "markedResolved", allowedActions: ["reset-file"] }]));
+    await renderScreen(session({}, [file]), undefined, { mutations: { markResolved } });
+
+    await user.click(screen.getByRole("button", { name: "Mark resolved" }));
+    expect(screen.getByText("Mark this file resolved?")).toBeTruthy();
+    expect(screen.getByText("git add -- run.sh")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Mark resolved" }));
+    expect(markResolved).toHaveBeenLastCalledWith(expect.objectContaining({ allowMarkers: false, executable: null }));
+
+    await user.click(await screen.findByRole("button", { name: "Mark resolved anyway" }));
+    expect(markResolved).toHaveBeenLastCalledWith(expect.objectContaining({ allowMarkers: true, executable: null }));
+
+    expect(await screen.findByText("On “feature” it runs as a program; on “main” it doesn't. Choose which to keep.")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Run as a program" }));
+    expect(markResolved).toHaveBeenLastCalledWith(expect.objectContaining({ allowMarkers: true, executable: true }));
+    expect(await screen.findByText("run.sh is marked resolved. No file overlaps any more.")).toBeTruthy();
+    expect(localStorage.length).toBe(1);
+  });
+
+  it("resets a file through a confirmation, and the overlap alone when the content was not kept", async () => {
+    const user = userEvent.setup();
+    const file = conflict("a.txt", { state: "markedResolved", allowedActions: ["reset-file"] });
+    const resetFile = vi.fn<ConflictsPort["resetFile"]>()
+      .mockRejectedValueOnce(appError("conflict_content_not_kept"))
+      .mockResolvedValueOnce(session({}, [{ ...file, state: "unresolved", allowedActions: [...CHOICES] }]));
+    await renderScreen(session({}, [file]), undefined, { mutations: { resetFile } });
+
+    await user.click(screen.getByRole("button", { name: "More actions for this file" }));
+    await user.click(screen.getByRole("menuitem", { name: "Reset this file…" }));
+    const dialog = screen.getByRole("dialog", { name: "Reset this file?" });
+    await user.click(within(dialog).getByRole("button", { name: "Reset file" }));
+    expect(resetFile).toHaveBeenLastCalledWith(expect.objectContaining({ filePath: "a.txt", stagesOnly: false }));
+
+    await user.click(await within(dialog).findByRole("button", { name: "Reset the overlap only" }));
+    expect(resetFile).toHaveBeenLastCalledWith(expect.objectContaining({ stagesOnly: true }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect(screen.getByText("a.txt is back to how the merge left it.")).toBeTruthy();
+  });
+
+  it.each([
+    ["a moved session", "stale_conflict_session", "These files changed since GitOdile read them", "Read again"],
+    ["a file another program holds", "file_locked", "Another program is using this file", "Try again"],
+  ])("keeps the screen honest after %s and offers the way out", async (_label, code, title, way) => {
+    const user = userEvent.setup();
+    const file = conflict("a.txt", { allowedActions: [...CHOICES] });
+    const keepSide = vi.fn<ConflictsPort["keepSide"]>().mockRejectedValue(appError(code));
+    const { readSession } = await renderScreen(session({}, [file]), undefined, { mutations: { keepSide } });
+
+    await user.click(screen.getByRole("button", { name: "Keep “main”" }));
+    await user.click(within(screen.getByRole("group", { name: "Keep the version on “main”?" })).getByRole("button", { name: "Keep “main”" }));
+    expect(await screen.findByText(title)).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: way }));
+    if (code === "file_locked") expect(keepSide).toHaveBeenCalledTimes(2);
+    else expect(readSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds the actions while another change to the project runs", async () => {
+    await renderScreen(session({}, [conflict("a.txt", { allowedActions: [...CHOICES] })]), undefined, { isProjectBusy: true });
+
+    expect(screen.getByText("Another change to this project is running. These actions wait for it.")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mark resolved" })).toHaveProperty("disabled", true);
   });
 });

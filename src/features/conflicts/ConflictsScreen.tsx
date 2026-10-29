@@ -21,6 +21,7 @@ import {
   autoHideScrollbarProps,
   copyTextToClipboard,
 } from "../../shared/ui";
+import { FileResolution, type ResolutionSlot } from "./FileResolution";
 import { useActiveConflictsState } from "./hooks";
 import type { ConflictsController, ConflictsViewMemory } from "./controller";
 import {
@@ -47,7 +48,9 @@ export type ConflictsScreenProps = {
   sessionEpoch: string;
   onBack: () => void;
   onGoToOverview: () => void;
-};
+  /** Another change to this project is running: the file actions wait. */
+  isProjectBusy: boolean;
+} & ResolutionSlot;
 
 /** The names a reader knows the two sides by. A rebase replays the reader's
  * own versions onto another branch, so its incoming side is "your versions"
@@ -125,12 +128,15 @@ export function ConflictsScreen({
   sessionEpoch,
   onBack,
   onGoToOverview,
+  isProjectBusy,
+  ...slot
 }: ConflictsScreenProps): React.JSX.Element {
   const { t } = useLanguage();
   const query = useMemo(() => ({ projectId: projectPath, sessionEpoch }), [projectPath, sessionEpoch]);
   const state = useActiveConflictsState(controller, query);
   const [memory, setMemory] = useState<ConflictsViewMemory>(() => controller.viewMemory(query));
   const [isDetailFocused, setIsDetailFocused] = useState(false);
+  const [announcement, setAnnouncement] = useState("");
   const update = (patch: Partial<ConflictsViewMemory>): void => {
     setMemory((current) => ({ ...current, ...patch }));
     controller.rememberView(query, patch);
@@ -255,8 +261,22 @@ export function ConflictsScreen({
                 controller={controller}
                 projectPath={projectPath}
                 sessionEpoch={sessionEpoch}
+                session={session}
                 file={selected}
                 names={names}
+                isReading={state.isLoading}
+                isProjectBusy={isProjectBusy}
+                slot={{
+                  ...slot,
+                  // A change may move the file to the other group, which
+                  // must not move the reader to another file.
+                  onOperationStart: () => {
+                    const started = slot.onOperationStart();
+                    if (started) update({ selectedPath: selected.path });
+                    return started;
+                  },
+                }}
+                onAnnounce={setAnnouncement}
                 onBackToList={() => setIsDetailFocused(false)}
                 onReadAgain={refresh}
                 t={t}
@@ -267,6 +287,7 @@ export function ConflictsScreen({
           </div>
         </>
       ) : null}
+      <p className="visually-hidden" role="status">{announcement}</p>
     </div>
   );
 }
@@ -505,8 +526,13 @@ function FileDetail({
   controller,
   projectPath,
   sessionEpoch,
+  session,
   file,
   names,
+  isReading,
+  isProjectBusy,
+  slot,
+  onAnnounce,
   onBackToList,
   onReadAgain,
   t,
@@ -514,13 +540,21 @@ function FileDetail({
   controller: ConflictsController;
   projectPath: string;
   sessionEpoch: string;
+  session: ConflictSession;
   file: ConflictFile;
   names: Record<ConflictSideName, string>;
+  isReading: boolean;
+  isProjectBusy: boolean;
+  slot: ResolutionSlot;
+  onAnnounce: (text: string) => void;
   onBackToList: () => void;
   onReadAgain: () => void;
   t: Translations;
 }): React.JSX.Element {
   const { name, dir } = splitPath(file.path);
+  const query = useMemo(() => ({ projectId: projectPath, sessionEpoch }), [projectPath, sessionEpoch]);
+  const [discarding, setDiscarding] = useState<ConflictSideName | null>(null);
+  const headingRef = useRef<HTMLHeadingElement>(null);
   return (
     <section className="conflicts-detail" aria-label={t.conflictsDetailAriaLabel(file.path)}>
       <button type="button" className="conflicts-detail__back" onClick={onBackToList}>
@@ -529,13 +563,32 @@ function FileDetail({
       </button>
       <header className="conflicts-detail__header">
         <div className="conflicts-detail__title">
-          <h2 className="conflicts-detail__path">
+          <h2 className="conflicts-detail__path" ref={headingRef} tabIndex={-1}>
             <span className="conflicts-detail__name">{name}</span>
             {dir && <span className="conflicts-detail__dir">{dir}</span>}
           </h2>
           <p className="conflicts-detail__shape">{fileDescription(file, names, t)}</p>
         </div>
       </header>
+      <FileResolution
+        controller={controller}
+        query={query}
+        session={session}
+        file={file}
+        names={names}
+        isReading={isReading}
+        isProjectBusy={isProjectBusy}
+        slot={slot}
+        onPreviewDiscard={setDiscarding}
+        onSettled={(text) => {
+          onAnnounce(text);
+          // After the frame that closes a dialog hands focus back to what
+          // opened it: the file is where the reader goes on from.
+          requestAnimationFrame(() => headingRef.current?.focus());
+        }}
+        onReadAgain={onReadAgain}
+        t={t}
+      />
       {/* Both sides at once, each against the common base, the current
           branch on the left and the incoming one on the right: the overlap is
           the two of them together, so neither hides behind a choice. */}
@@ -549,6 +602,7 @@ function FileDetail({
             file={file}
             side={side}
             name={names[side]}
+            isDiscarding={discarding === side}
             onReadAgain={onReadAgain}
             t={t}
           />
@@ -567,6 +621,7 @@ function SideChanges({
   file,
   side,
   name,
+  isDiscarding,
   onReadAgain,
   t,
 }: {
@@ -576,6 +631,8 @@ function SideChanges({
   file: ConflictFile;
   side: ConflictSideName;
   name: string;
+  /** A pending choice would replace what this side changed. */
+  isDiscarding: boolean;
   onReadAgain: () => void;
   t: Translations;
 }): React.JSX.Element {
@@ -621,10 +678,14 @@ function SideChanges({
   const headingId = `conflicts-side-${side}`;
 
   return (
-    <section className={`conflicts-side${hasDiff ? " conflicts-side--diff" : ""}`} aria-labelledby={headingId}>
+    <section
+      className={`conflicts-side${hasDiff ? " conflicts-side--diff" : ""}${isDiscarding ? " conflicts-side--discarding" : ""}`}
+      aria-labelledby={headingId}
+    >
       <h3 className="conflicts-side__heading" id={headingId}>
         <GitBranch aria-hidden="true" />
         <span>{t.conflictsSideChanged(name)}</span>
+        {isDiscarding && <span className="conflicts-side__discarding">{t.conflictsWillBeReplaced}</span>}
       </h3>
       {limitation ? (
         <p className="conflicts-detail__note">{limitationText(limitation, name, t)}</p>

@@ -12,7 +12,7 @@ areas:
 created: 2026-10-29
 completed:
 parent: "037-6"
-queue: "02"
+queue: "01"
 ---
 
 # Goal
@@ -31,7 +31,7 @@ path explains what to do instead of failing.
 
 Completes the parent [037-6](037-6-resolve-files.md) after
 [037-6-1](../done/037-6-1-resolution-core.md) and
-[037-6-2](037-6-2-resolution-actions-ui.md). Today only
+[037-6-2](../done/037-6-2-resolution-actions-ui.md). Today only
 `reveal_project_file` exists; nothing opens a file in an application.
 
 # Scope

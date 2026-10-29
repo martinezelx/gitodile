@@ -3708,6 +3708,33 @@ the common base with the Changes diff renderer; a side with nothing to
 compare as text (deleted, a link, a submodule, a changed kind) says so in a
 sentence instead of drawing an empty diff.
 
+**A file's actions sit in one bar under its strip**, the Changes toolbar's
+place under its list: on the left what the file holds now ("Kept “main” ·
+not marked resolved yet"), on the right Keep “main”, Keep “feature” — each
+side named by its branch — Delete where a side deleted the path, a `⋯` menu
+holding Reset, and Mark resolved last as the solid primary. The kept side's
+button stays pressed (`aria-pressed`, the selected recipe of
+`choice-list__option--active`) and carries a tick, so the choice is never
+told by colour alone. Choosing a side never runs on the first press: **the
+question takes the bar's place**, as the forget row of Restore takes its
+row's — a `--tint-fill` of `--status-danger` behind the title ("Keep the
+version on “feature”?"), what the other side loses and that a copy is kept,
+then Cancel and the verb in `danger-button`. While it is asked, the column
+that would be replaced is dimmed to `--opacity-muted` and its heading says
+"Will be replaced" in words. Mark resolved asks in the same place the first
+time only, in plain words with the exact command behind Technical details;
+markers left in the file ask again in the `warning` tint with "Mark resolved
+anyway", and sides that disagree on running as a program ask which to keep.
+Escape cancels any of them and focus returns to the button that asked.
+**Reset is a dialog**, `s` in the `danger` tone, because it throws away what
+the reader wrote: what is undone, then the safe fact that what the file
+holds now is kept. When the snapshot could not keep the original content it
+says so in a `warning` banner and offers to reset the overlap alone. A
+moved session, a file another program holds and a refused action are
+in-panel notices under the bar with their way out (Read again, Try again);
+while another change to the project runs the bar holds its buttons and says
+why. A finished action is announced and hands focus to the file's name.
+
 **Dropping a folder on the window** opens it. While a drag is over the window
 — and only then — a window-sized overlay names what a drop will do. It is
 feedback about a gesture, not chrome: it never takes the pointer (an overlay

@@ -513,6 +513,11 @@ export function App(): React.JSX.Element {
   /** The paused operation, when one was read: Overview, Changes and the
    * palette offer the overlapping-changes screen from the same cached read. */
   const conflictSession = activeConflicts.session ?? null;
+  const activeOperationPhase = activeSession?.operation?.phase;
+  /** A save, publish, get or branch change of this project still running:
+   * the overlapping-changes screen holds its actions until it settles. */
+  const isActiveOperationRunning =
+    activeOperationPhase !== undefined && activeOperationPhase !== "error" && activeOperationPhase !== "success";
   const project = activeSession?.project ?? null;
   const [favouriteBranches, toggleFavouriteBranch] =
     useStoredFavouriteBranches(project?.commonGitDir ?? null);
@@ -711,7 +716,8 @@ export function App(): React.JSX.Element {
     saveDialogSessionId !== null ||
     getTeamDialogSessionId !== null ||
     activeSession?.operation?.kind === "branch" ||
-    activeSession?.operation?.kind === "discard";
+    activeSession?.operation?.kind === "discard" ||
+    activeSession?.operation?.kind === "resolve";
   const showErrorDialog = (title: string, message: string): void => {
     setOpenErrorTitle(title);
     setOpenError(message);
@@ -1269,7 +1275,9 @@ export function App(): React.JSX.Element {
   const handleMutationSucceeded = (path: string): Promise<void> =>
     repositoryReads.refreshAfterMutation(projectRuntime, sessionsState, path);
 
-  const startBranchOperation = (path: string): boolean => {
+  /* Branch changes and resolving an overlapping file take the project's
+     mutation slot the same way: refused while another project's runs. */
+  const startLocalOperation = (path: string, kind: "branch" | "resolve"): boolean => {
     const session = sessionsState.byId[path];
     if (!session) {
       return false;
@@ -1282,9 +1290,10 @@ export function App(): React.JSX.Element {
       );
       return false;
     }
-    dispatchSessions({ type: "startOperation", id: path, kind: "branch" });
+    dispatchSessions({ type: "startOperation", id: path, kind });
     return true;
   };
+  const startBranchOperation = (path: string): boolean => startLocalOperation(path, "branch");
 
   const finishSessionOperation = (path: string): void => {
     dispatchSessions({ type: "finishOperation", id: path });
@@ -3232,6 +3241,11 @@ export function App(): React.JSX.Element {
                           sessionEpoch={activeSession?.epoch ?? ""}
                           onBack={goBack}
                           onGoToOverview={() => navigateToView("overview")}
+                          isProjectBusy={isActiveOperationRunning}
+                          onOperationStart={() => startLocalOperation(project.path, "resolve")}
+                          onOperationFinish={() => finishSessionOperation(project.path)}
+                          onOperationPhaseChange={(phase) => setBranchOperationPhase(project.path, phase)}
+                          onChanged={() => handleMutationSucceeded(project.path)}
                         />
                       </Suspense>
                     ),

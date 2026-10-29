@@ -23,7 +23,7 @@ what it replaces.
 
 # User outcome
 
-None visible yet; task [037-6-2](../0.5.0/037-6-2-resolution-actions-ui.md) puts these
+None visible yet; task [037-6-2](037-6-2-resolution-actions-ui.md) puts these
 commands on the screen. Every later action has a tested, recoverable contract.
 
 # Context

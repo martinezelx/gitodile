@@ -110,6 +110,7 @@ export const en: SharedTranslations = {
   errorConflictActionUnavailable: "This file doesn't allow that right now. Read the overlapping changes again.",
   errorConflictMarkersRemain: "This file still has overlapping parts marked in it. Edit them out, or mark it resolved anyway.",
   errorConflictChoiceNeeded: "Choose which side to keep for this file first.",
+  errorConflictContentNotKept: "GitOdile couldn't keep this file's original content. Nothing was changed; you can still put back the overlap alone.",
   errorFileLocked: "Another program is using this file. Close it there, then try again. Nothing was changed.",
   errorIgnoreFileTooLarge: "This file is too large to edit here. Open it in a text editor.",
   errorIgnoreFileNotText: "This file isn't plain text, so GitOdile won't rewrite it.",

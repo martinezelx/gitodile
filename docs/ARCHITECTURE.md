@@ -771,7 +771,13 @@ palette and the refusing dialogs. Its controller caches one session read per
 project incarnation and the side diffs by the objects they compare. The
 session is read after a status snapshot that lists overlapping files (and once
 more after one that no longer does), and on every entry press; a project with
-no overlap costs no Git process, and visibility never reads.
+no overlap costs no Git process, and visibility never reads. The three
+mutations go through the controller's `mutate`, which makes the session Rust
+answers with the cached one and supersedes any read started before it; the
+screen takes the project's mutation slot (`resolve`) for each, and a success
+runs the one coordinated refresh after a mutation. A reset whose snapshot
+could not keep the working content is refused as `conflict_content_not_kept`,
+which is how the screen knows to offer the overlap alone.
 
 Before a session's first change, `recovery::create_conflict_snapshot` writes
 `<git-dir>/gitodile/conflicts/v1/<session-id>/` under the write lock, after
