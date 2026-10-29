@@ -523,8 +523,11 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
    its rounded shape leaves inside the square, and the attention dot lost the
    part that overhangs. */
 .status-bar .status-bar__project-avatar { position: relative; flex-shrink: 0; display: inline-grid; overflow: visible; }
+/* 26px: Overview's chip proportion (initials about 62% of its width) at the
+   10px floor, which leaves no smaller type. At 18px two wide bold initials
+   ("MW", "TW") ran past the chip, and at 22px they still crowded it. */
 .status-bar__avatar {
-  width: 18px; height: 18px; display: grid; place-items: center;
+  width: 26px; height: 26px; display: grid; place-items: center;
   border-radius: var(--radius-identity); color: var(--avatar-foreground);
   box-shadow: var(--avatar-ring);
   font-size: var(--text-micro); font-weight: var(--weight-title); letter-spacing: var(--tracking-wide);

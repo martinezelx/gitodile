@@ -3467,8 +3467,9 @@ Markdown choices across sessions independently of code-file view choices.
 If a read fails or the document exceeds size/comparison limits, show the text
 diff with an explanation; keep the preference and offer retry through View.
 It compares complete saved/current documents,
-highlighting affected blocks in red/green with minus/plus markers in one unified
-document. Unchanged context appears once; a replacement shows the removed block
+highlighting affected blocks in red/green with a 3px bar and a tint, and no
+minus/plus sign, in one unified document. The removed bar is dashed and the
+added one solid, so the two read apart by shape and not by colour alone. Unchanged context appears once; a replacement shows the removed block
 before the added block at the same position. Compatible lists, tables and quotes
 merge their items/rows so shared context stays in place. New files show additions;
 deleted files retain their saved content and disclose deletion. A summary counts source-line

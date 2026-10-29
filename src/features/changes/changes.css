@@ -813,14 +813,15 @@
    base styles locally so lists, headings and tables keep Markdown's shape. */
 .markdown-preview { width: 100%; min-width: 0; color: var(--text-primary-color); }
 .markdown-preview__summary { padding: var(--space-3) var(--space-4); color: var(--text-secondary-color); font-size: var(--text-label); }
-.markdown-preview__document .markdown-preview__removed { background: color-mix(in srgb, var(--diff-removed) var(--tint-fill), transparent); border-inline-start: 3px solid var(--diff-removed); }
+.markdown-preview__document .markdown-preview__removed { background: color-mix(in srgb, var(--diff-removed) var(--tint-fill), transparent); border-inline-start: 3px dashed var(--diff-removed); }
 .markdown-preview__document .markdown-preview__added { background: color-mix(in srgb, var(--diff-added) var(--tint-fill), transparent); border-inline-start: 3px solid var(--diff-added); }
 .markdown-preview__document .markdown-preview__removed + .markdown-preview__added { margin-top: var(--space-2); }
-.markdown-preview__document :is(.markdown-preview__added, .markdown-preview__removed):not(tr)::before { display: inline; margin-inline-end: .4em; font-family: var(--font-mono); }
-.markdown-preview__document .markdown-preview__added:not(tr)::before,
-.markdown-preview__document tr.markdown-preview__added > :first-child::before { content: "+ "; color: var(--diff-added); }
-.markdown-preview__document .markdown-preview__removed:not(tr)::before,
-.markdown-preview__document tr.markdown-preview__removed > :first-child::before { content: "− "; color: var(--diff-removed); }
+/* The bar and the tint mark a block; no `+`/`−` sign, which brought a diff's
+   vocabulary into prose and indented the changed text. The removed bar is
+   dashed so the two read apart by shape as well as by red and green. A little
+   space keeps the text off the bar; a code block and a table cell already
+   have padding of their own. */
+.markdown-preview__document :is(.markdown-preview__added, .markdown-preview__removed):not(tr, pre) { padding-inline-start: .75em; }
 .markdown-preview__notice {
   padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-subtle);
   color: var(--text-secondary-color); font-size: var(--text-label);
