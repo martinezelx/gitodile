@@ -112,6 +112,8 @@ export const es: SharedTranslations = {
   errorConflictChoiceNeeded: "Elige primero qué lado conservar en este archivo.",
   errorConflictContentNotKept: "GitOdile no pudo guardar el contenido original de este archivo. No se ha cambiado nada; aún puedes recuperar solo el solapamiento.",
   errorFileLocked: "Otro programa está usando este archivo. Ciérralo allí y vuelve a intentarlo. No se ha cambiado nada.",
+  errorConflictCaseCollision: "El nombre de este archivo solo se diferencia en mayúsculas de otro archivo del disco, y este equipo no puede mantenerlos separados. Cambia el nombre del otro archivo o quítalo y vuelve a leer los cambios que se solapan.",
+  errorFileRunsAsProgram: "Tu sistema lo ejecutaría como un programa en lugar de abrirlo. Muéstralo en su carpeta y ábrelo con la aplicación que elijas.",
   errorIgnoreFileTooLarge: "Este archivo es demasiado grande para editarlo aquí. Ábrelo en un editor de texto.",
   errorIgnoreFileNotText: "Este archivo no es texto plano, así que GitOdile no lo reescribirá.",
   errorStaleIgnoreFile: "Este archivo cambió fuera de GitOdile. Vuelve a abrirlo antes de guardar.",

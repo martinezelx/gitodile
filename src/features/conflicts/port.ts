@@ -1,5 +1,5 @@
 import type { FileDiff } from "../changes";
-import type { ConflictFile, ConflictSession, ConflictSideName, SideChoice } from "./domain";
+import type { ConflictFile, ConflictSession, ConflictSideName, SideChoice, WorkingFileCheck } from "./domain";
 
 export type ConflictsQuery = { projectId: string; sessionEpoch: string };
 
@@ -38,4 +38,17 @@ export interface ConflictsPort {
   /** Puts the file back as the merge left it, from the snapshot; with
    * `stagesOnly`, the overlap alone, leaving the working file as it is. */
   resetFile(target: ConflictFileTarget & { stagesOnly: boolean }): Promise<ConflictSession | null>;
+  /** Opens the file in the application the system uses for its type, after
+   * taking the session's snapshot if it has none. Refuses a type the system
+   * would run (`file_runs_as_program`). Never resolves anything. */
+  openFile(target: ConflictFileTarget): Promise<void>;
+  /** Whether the working file still holds conflict markers, as of the
+   * session token it answers with. Read-only. */
+  checkWorkingFile(target: ConflictsQuery & { filePath: string }): Promise<WorkingFileCheck>;
+  /** Shows the path in the system's file manager, for what GitOdile will
+   * not open or write. */
+  revealFile(target: ConflictsQuery & { filePath: string }): Promise<void>;
+  /** Opens the project's folder, for a file whose name GitOdile cannot
+   * spell exactly. */
+  openProjectFolder(query: ConflictsQuery): Promise<void>;
 }

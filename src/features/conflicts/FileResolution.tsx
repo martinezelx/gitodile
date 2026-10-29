@@ -1,5 +1,17 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Check, CircleAlert, Ellipsis, FileX, LoaderCircle, RotateCcw, ShieldCheck, Trash2, TriangleAlert } from "lucide-react";
+import {
+  Check,
+  CircleAlert,
+  Ellipsis,
+  FileX,
+  FolderOpen,
+  LoaderCircle,
+  RotateCcw,
+  ShieldCheck,
+  SquareArrowOutUpRight,
+  Trash2,
+  TriangleAlert,
+} from "lucide-react";
 
 import type { Translations } from "../../i18n";
 import { isAppError, localizeAppError } from "../../shared/i18n";
@@ -16,12 +28,15 @@ import {
   discardedSide,
   executableSide,
   fileActions,
+  fileBlock,
   keptChoice,
   keptSide,
+  needsMarkerCheck,
   type ConflictFile,
   type ConflictSession,
   type ConflictSideName,
   type SideChoice,
+  type WorkingFileCheck,
 } from "./domain";
 import type { ConflictFileTarget, ConflictsPort, ConflictsQuery, ExpectedStages } from "./port";
 import { hasSeenMarkResolvedExplanation, rememberMarkResolvedExplanation } from "./resolutionPreference";
@@ -52,7 +67,9 @@ type Running = SideChoice | "mark" | "reset";
 type Problem =
   | { kind: "stale" }
   | { kind: "unavailable"; error: unknown }
-  | { kind: "failed"; error: unknown; retry: () => void };
+  | { kind: "failed"; error: unknown; retry: () => void }
+  /** Opening was refused or failed: the folder is the way on. */
+  | { kind: "open"; error: unknown };
 
 type ResetDialogState = { contentNotKept: boolean; error: unknown | null };
 
@@ -91,6 +108,7 @@ export function FileResolution({
   slot,
   onPreviewDiscard,
   onSettled,
+  onAnnounce,
   onReadAgain,
   t,
 }: {
@@ -108,6 +126,8 @@ export function FileResolution({
   onPreviewDiscard: (side: ConflictSideName | null) => void;
   /** A change landed: what to announce. Focus returns to the file. */
   onSettled: (announcement: string) => void;
+  /** Says something without moving focus: opening leaves it where it is. */
+  onAnnounce: (announcement: string) => void;
   onReadAgain: () => void;
   t: Translations;
 }): React.JSX.Element | null {
@@ -115,6 +135,11 @@ export function FileResolution({
   const [running, setRunning] = useState<Running | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [resetDialog, setResetDialog] = useState<ResetDialogState | null>(null);
+  const [opening, setOpening] = useState(false);
+  /** The file and session state it was opened in, until an edit moves it. */
+  const [opened, setOpened] = useState<{ path: string; stateToken: string } | null>(null);
+  /** The last marker check, with the file and token it was asked for. */
+  const [check, setCheck] = useState<{ path: string; stateToken: string; result: WorkingFileCheck } | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const askRef = useRef<HTMLDivElement>(null);
   // Set in the effect, not only at creation: StrictMode unmounts and mounts
@@ -135,6 +160,32 @@ export function FileResolution({
   const kept = keptChoice(file);
   const isResolved = file.state === "markedResolved";
   const disabled = running !== null || isReading || isProjectBusy;
+
+  // A session read that shows the file edited outside GitOdile is the
+  // moment to look at it again: once per state of the file, never because
+  // it is on screen.
+  const shouldCheck = needsMarkerCheck(file);
+  const filePath = file.path;
+  const stateToken = session.stateToken;
+  useEffect(() => {
+    if (!shouldCheck) return;
+    let current = true;
+    controller
+      .checkWorkingFile(query, filePath, stateToken)
+      .then((result) => {
+        if (current) setCheck({ path: filePath, stateToken, result });
+      })
+      .catch(() => {
+        // Say so rather than "checking" for good; Mark resolved still
+        // scans the file itself before taking it.
+        if (current) {
+          setCheck({ path: filePath, stateToken, result: { stateToken, markers: { kind: "unknown", limit: "unreadable" } } });
+        }
+      });
+    return () => {
+      current = false;
+    };
+  }, [controller, filePath, query, shouldCheck, stateToken]);
 
   useEffect(() => {
     if (!ask) return;
@@ -177,7 +228,9 @@ export function FileResolution({
     const code = errorCode(error);
     if (code === "stale_conflict_session") {
       setProblem({ kind: "stale" });
-    } else if (code === "conflict_action_unavailable") {
+    } else if (code === "conflict_action_unavailable" || code === "conflict_case_collision") {
+      // A retry cannot pass either: what the file allows, or the name on
+      // disk, has to change first.
       setProblem({ kind: "unavailable", error });
       onReadAgain();
     } else {
@@ -252,6 +305,42 @@ export function FileResolution({
     }
   };
 
+  /** Opens the file in the application its type opens in. Not a change to
+   * the project, so it takes no mutation slot; what the reader does there
+   * comes back through the watcher. */
+  const open = async (): Promise<void> => {
+    setProblem(null);
+    setOpening(true);
+    const { file: now, session: read } = latest.current;
+    try {
+      await controller.port.openFile({ ...query, filePath: now.path, stateToken: read.stateToken });
+      if (!mounted.current) return;
+      setOpened({ path: now.path, stateToken: read.stateToken });
+      onAnnounce(t.conflictsAnnounceOpened(now.path));
+    } catch (error) {
+      const code = errorCode(error);
+      if (code === "file_runs_as_program" || code === "path_unusable") {
+        if (mounted.current) setProblem({ kind: "open", error });
+      } else {
+        fail(error, () => void open());
+      }
+    } finally {
+      if (mounted.current) setOpening(false);
+    }
+  };
+
+  const showInFolder = (path: string): void => {
+    void controller.port.revealFile({ ...query, filePath: path }).catch((error: unknown) => {
+      if (mounted.current) setProblem({ kind: "failed", error, retry: () => showInFolder(path) });
+    });
+  };
+
+  const openProjectFolder = (): void => {
+    void controller.port.openProjectFolder(query).catch((error: unknown) => {
+      if (mounted.current) setProblem({ kind: "failed", error, retry: openProjectFolder });
+    });
+  };
+
   const askChoice = (choice: SideChoice): void => {
     setProblem(null);
     setAsk({ kind: "choice", choice });
@@ -267,17 +356,31 @@ export function FileResolution({
     }
   };
 
-  const hasBar = actions.choices.length > 0 || actions.canMarkResolved || actions.canReset;
-  if (!hasBar && !problem) return null;
+  const block = fileBlock(file);
+  const hasBar = actions.choices.length > 0 || actions.canOpen || actions.canMarkResolved || actions.canReset;
+  if (!hasBar && !problem && !block) return null;
 
   const keptName = kept ? keptSide(kept) : null;
+  const checked = check && check.path === file.path && check.stateToken === session.stateToken ? check.result.markers : null;
+  const markerStatus = !shouldCheck
+    ? null
+    : !checked
+      ? t.conflictsCheckingMarkers
+      : checked.kind === "found"
+        ? t.conflictsMarkersLeft(checked.blocks)
+        : checked.kind === "none"
+          ? t.conflictsNoMarkersLeft
+          : t.conflictsMarkersUnknown(checked.limit);
+  const isOpenedHere = opened !== null && opened.path === file.path && opened.stateToken === session.stateToken;
   const status = isResolved
     ? t.conflictsStateResolved
     : keptName
       ? t.conflictsKeptStatus(names[keptName])
       : kept === "delete"
         ? t.conflictsDeletedStatus
-        : null;
+        : (markerStatus ?? (isOpenedHere ? t.conflictsOpenedStatus : null));
+  const statusWarns = !isResolved && !kept && checked?.kind === "found";
+  const waiting = isProjectBusy && !running;
 
   return (
     <div className="conflicts-resolution">
@@ -303,9 +406,16 @@ export function FileResolution({
           aria-label={t.conflictsActionsAriaLabel(file.path)}
           aria-busy={running !== null}
         >
-          <p className="conflicts-actions__status" role={isProjectBusy && !running ? "status" : undefined}>
-            {isProjectBusy && !running ? t.conflictsBusyNote : status}
-          </p>
+          {/* Only when there is something to say: an empty line would still
+              take its share of the bar and push the buttons off the right. */}
+          {waiting ? (
+            <p className="conflicts-actions__status" role="status">{t.conflictsBusyNote}</p>
+          ) : status ? (
+            <p className={`conflicts-actions__status${statusWarns ? " conflicts-actions__status--warning" : ""}`}>
+              {statusWarns && <TriangleAlert aria-hidden="true" />}
+              {status}
+            </p>
+          ) : null}
           <div className="conflicts-actions__buttons">
             {actions.choices.map((choice) => {
               const isKept = kept === choice;
@@ -332,6 +442,23 @@ export function FileResolution({
                 </button>
               );
             })}
+            {actions.canOpen && (
+              <button
+                type="button"
+                className="secondary-button secondary-button--sm"
+                data-action="open"
+                disabled={disabled || opening}
+                aria-busy={opening}
+                onClick={() => void open()}
+              >
+                {opening ? (
+                  <LoaderCircle className="icon--spinning" aria-hidden="true" />
+                ) : (
+                  <SquareArrowOutUpRight aria-hidden="true" />
+                )}
+                {t.conflictsOpenInEditor}
+              </button>
+            )}
             {actions.canReset && (
               <MoreMenu
                 disabled={disabled}
@@ -356,8 +483,25 @@ export function FileResolution({
         </div>
       ) : null}
 
+      {block && (
+        <BlockNotice
+          block={block}
+          file={file}
+          session={session}
+          onShowInFolder={() => showInFolder(file.path)}
+          onOpenProjectFolder={openProjectFolder}
+          onReadAgain={onReadAgain}
+          t={t}
+        />
+      )}
+
       {problem && (
-        <ProblemNotice problem={problem} onReadAgain={() => { setProblem(null); onReadAgain(); }} t={t} />
+        <ProblemNotice
+          problem={problem}
+          onReadAgain={() => { setProblem(null); onReadAgain(); }}
+          onShowInFolder={() => showInFolder(file.path)}
+          t={t}
+        />
       )}
 
       {resetDialog && (
@@ -577,15 +721,96 @@ function MoreMenu({
   );
 }
 
+/** What a file no whole-file choice can handle needs instead, in words, with
+ * the one step GitOdile can take toward it. */
+function BlockNotice({
+  block,
+  file,
+  session,
+  onShowInFolder,
+  onOpenProjectFolder,
+  onReadAgain,
+  t,
+}: {
+  block: NonNullable<ReturnType<typeof fileBlock>>;
+  file: ConflictFile;
+  session: ConflictSession;
+  onShowInFolder: () => void;
+  onOpenProjectFolder: () => void;
+  onReadAgain: () => void;
+  t: Translations;
+}): React.JSX.Element {
+  let title: string;
+  let body: string;
+  switch (block) {
+    case "folder":
+      title = t.conflictsBlockFolderTitle;
+      body = t.conflictsBlockFolderBody;
+      break;
+    case "case": {
+      const folded = file.path.toLocaleLowerCase();
+      const others = session.files
+        .filter((other) => other.path !== file.path && other.path.toLocaleLowerCase() === folded)
+        .map((other) => `“${other.path}”`)
+        .join(", ");
+      title = t.conflictsBlockCaseTitle;
+      body = t.conflictsBlockCaseBody(others);
+      break;
+    }
+    case "inexact-path":
+      title = t.conflictsBlockInexactTitle;
+      body = t.conflictsBlockInexactBody;
+      break;
+  }
+  return (
+    <div className="conflicts-notice conflicts-notice--warning" role="note">
+      <TriangleAlert aria-hidden="true" />
+      <div className="conflicts-notice__body">
+        <strong>{title}</strong>
+        <p>{body}</p>
+      </div>
+      <div className="conflicts-notice__actions">
+        {block === "inexact-path" ? (
+          <button type="button" className="secondary-button" onClick={onOpenProjectFolder}>
+            <FolderOpen aria-hidden="true" />{t.conflictsOpenProjectFolder}
+          </button>
+        ) : (
+          <button type="button" className="secondary-button" onClick={onShowInFolder}>
+            <FolderOpen aria-hidden="true" />{t.conflictsShowInFolder}
+          </button>
+        )}
+        <button type="button" className="secondary-button" onClick={onReadAgain}>{t.conflictsReadAgain}</button>
+      </div>
+    </div>
+  );
+}
+
 function ProblemNotice({
   problem,
   onReadAgain,
+  onShowInFolder,
   t,
 }: {
   problem: Problem;
   onReadAgain: () => void;
+  onShowInFolder: () => void;
   t: Translations;
 }): React.JSX.Element {
+  if (problem.kind === "open") {
+    const refused = errorCode(problem.error) === "file_runs_as_program";
+    return (
+      <div className={`conflicts-notice conflicts-notice--${refused ? "warning" : "danger"}`} role="alert">
+        {refused ? <TriangleAlert aria-hidden="true" /> : <CircleAlert aria-hidden="true" />}
+        <div className="conflicts-notice__body">
+          <strong>{refused ? t.conflictsRunsAsProgramTitle : t.conflictsOpenFailedTitle}</strong>
+          <p>{refused ? localizeAppError(problem.error, t, t.conflictsOpenFailedTitle) : t.conflictsOpenFailedBody}</p>
+        </div>
+        <button type="button" className="secondary-button" onClick={onShowInFolder}>
+          <FolderOpen aria-hidden="true" />{t.conflictsShowInFolder}
+        </button>
+      </div>
+    );
+  }
   if (problem.kind === "stale") {
     return (
       <div className="conflicts-notice conflicts-notice--warning" role="alert">

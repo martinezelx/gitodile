@@ -598,6 +598,15 @@ fn each_file_is_kept_marked_and_reset_exactly() {
         file(&marked, "crlf.txt").state,
         ConflictFileState::MarkedResolved
     );
+    // Its sides still read from the snapshot once the index holds stage 0.
+    let side = read_conflict_side_diff(
+        path.clone(),
+        "crlf.txt".to_string(),
+        ConflictSide::Incoming,
+        crlf.base.as_ref().map(|stage| stage.object_id.clone()),
+        incoming.object_id.clone(),
+    );
+    assert!(matches!(side, Ok(FileDiff::Text { .. })), "{side:?}");
 
     // The executable side keeps its mode in the index, whatever the file
     // system can say about it; a link stays a link in the index.
@@ -911,4 +920,182 @@ fn linked_worktrees_own_their_sessions_and_share_the_common_lock() {
 
 fn git_commit_all(path: &str, message: &str) {
     git_ok(path, &["commit", "-q", "-a", "-m", message]);
+}
+
+fn git_with_input(path: &str, args: &[&str], input: &[u8]) -> String {
+    let output = git_command(path)
+        .args(args)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .and_then(|mut child| {
+            use std::io::Write;
+            child.stdin.take().unwrap().write_all(input)?;
+            child.wait_with_output()
+        })
+        .unwrap();
+    assert!(output.status.success(), "git {args:?} failed");
+    String::from_utf8_lossy(&output.stdout).trim().to_string()
+}
+
+/// A paused merge whose overlapping paths are written straight into the
+/// index, so it can hold what a real merge on this disk could not: two paths
+/// equal but for case, and a folder where a file overlaps.
+fn synthetic_merge(label: &str, names: &[&str]) -> String {
+    let path = unique_temp_dir(label);
+    git_ok(&path, &["init", "-q", "-b", "main"]);
+    git_ok(&path, &["config", "core.autocrlf", "false"]);
+    git_ok(&path, &["commit", "-q", "--allow-empty", "-m", "base"]);
+    let head = git_ok(&path, &["rev-parse", "HEAD"]);
+    let blobs = ["base\n", "current\n", "incoming\n"]
+        .map(|text| git_with_input(&path, &["hash-object", "-w", "--stdin"], text.as_bytes()));
+    let mut input = Vec::new();
+    for name in names {
+        for (stage, blob) in blobs.iter().enumerate() {
+            input.extend(format!("100644 {blob} {}\t{name}\0", stage + 1).into_bytes());
+        }
+    }
+    git_with_input(&path, &["update-index", "-z", "--index-info"], &input);
+    fs::write(
+        Path::new(&path).join(".git/MERGE_HEAD"),
+        format!("{head}\n"),
+    )
+    .unwrap();
+    path
+}
+
+#[test]
+fn a_working_file_is_checked_for_markers_and_blocked_classes_offer_nothing() {
+    let names = [
+        "notes.txt",
+        "wide.txt",
+        "bin.dat",
+        "dir.txt",
+        "Guide.md",
+        "Readme.md",
+        "README.md",
+        "app.jar",
+    ];
+    let path = synthetic_merge("conflict-check", &names);
+    let root = Path::new(&path);
+    write_bytes(
+        &path,
+        "notes.txt",
+        b"a\n<<<<<<< HEAD\nx\n=======\ny\n>>>>>>> f\n",
+    );
+    write_bytes(&path, "wide.txt", b"\xff\xfeh\0i\0");
+    write_bytes(&path, "bin.dat", b"\0\x01");
+    fs::create_dir(root.join("dir.txt")).unwrap();
+    // On a disk that ignores case this is where Git's `Guide.md` lands.
+    write_bytes(&path, "GUIDE.md", b"other\n");
+    write_bytes(&path, "Readme.md", b"readme\n");
+    write_bytes(&path, "app.jar", b"PK\x03\x04");
+    let disk_ignores_case = root.join("readme.md").exists();
+    // A name that is not valid UTF-8, which GitOdile cannot spell exactly.
+    let blob = git_with_input(&path, &["hash-object", "-w", "--stdin"], b"odd\n");
+    let mut odd = Vec::new();
+    for stage in 1..=3 {
+        odd.extend(format!("100644 {blob} {stage}\t").into_bytes());
+        odd.extend(b"odd-\xff.txt\0");
+    }
+    git_with_input(&path, &["update-index", "-z", "--index-info"], &odd);
+
+    let check = |name: &str| check_conflict_working_file(path.clone(), name.to_string());
+    let first = session(&path);
+    let found = check("notes.txt").unwrap();
+    assert_eq!(found.state_token, first.state_token);
+    assert_eq!(found.markers, MarkerScan::Found { blocks: 1 });
+    for (name, limit) in [
+        ("wide.txt", MarkerScanLimit::Utf16),
+        ("bin.dat", MarkerScanLimit::Binary),
+    ] {
+        assert_eq!(check(name).unwrap().markers, MarkerScan::Unknown { limit });
+    }
+    write_bytes(&path, "notes.txt", b"a\nx and y\n");
+    let edited = check("notes.txt").unwrap();
+    assert_eq!(edited.markers, MarkerScan::None);
+    assert_ne!(
+        edited.state_token, first.state_token,
+        "the edit moved the token"
+    );
+    assert_eq!(
+        check("absent.txt").unwrap_err().code,
+        AppErrorCode::StaleConflictSession
+    );
+
+    let inexact = first.files.iter().find(|file| !file.path_is_exact).unwrap();
+    assert_eq!(inexact.state, ConflictFileState::Unsupported);
+    assert!(inexact.allowed_actions.is_empty());
+
+    // A folder in the way: no choice, nothing to check, nothing to open.
+    let folder = file(&first, "dir.txt");
+    assert!(folder.facets.contains(&ConflictFacet::FileDirectory));
+    assert!(folder.allowed_actions.is_empty());
+    assert_eq!(
+        check("dir.txt").unwrap_err().code,
+        AppErrorCode::ConflictActionUnavailable
+    );
+    assert_eq!(
+        open_conflict_file(
+            path.clone(),
+            "dir.txt".to_string(),
+            first.state_token.clone()
+        )
+        .unwrap_err()
+        .code,
+        AppErrorCode::ConflictActionUnavailable
+    );
+
+    // Every platform runs a `.jar` rather than opening it: refused before
+    // the snapshot that opening would otherwise take, and with an old token
+    // nothing is opened at all.
+    let now = session(&path);
+    let open = |name: &str, token: &str| {
+        open_conflict_file(path.clone(), name.to_string(), token.to_string())
+            .unwrap_err()
+            .code
+    };
+    assert_eq!(
+        open("app.jar", &now.state_token),
+        AppErrorCode::FileRunsAsProgram
+    );
+    assert_eq!(
+        open("app.jar", &first.state_token),
+        AppErrorCode::StaleConflictSession
+    );
+    assert!(session(&path).snapshot.is_none());
+
+    // Two paths equal but for case collide only where the disk ignores case.
+    for name in ["Readme.md", "README.md"] {
+        let twin = file(&first, name);
+        assert_eq!(
+            twin.facets.contains(&ConflictFacet::CaseCollision),
+            disk_ignores_case,
+            "{name}"
+        );
+        assert_eq!(twin.allowed_actions.is_empty(), disk_ignores_case, "{name}");
+    }
+    if disk_ignores_case {
+        // Git's `Guide.md` is `GUIDE.md` on disk: nothing reaches it.
+        let fresh = session(&path);
+        assert_eq!(
+            keep(&path, &fresh, "Guide.md", SideChoice::KeepCurrent)
+                .unwrap_err()
+                .code,
+            AppErrorCode::ConflictCaseCollision
+        );
+        assert_eq!(fs::read(root.join("GUIDE.md")).unwrap(), b"other\n");
+        assert_eq!(
+            open_conflict_file(
+                path.clone(),
+                "Guide.md".to_string(),
+                session(&path).state_token
+            )
+            .unwrap_err()
+            .code,
+            AppErrorCode::ConflictCaseCollision
+        );
+    }
+    let _ = fs::remove_dir_all(path);
 }

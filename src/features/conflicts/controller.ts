@@ -1,6 +1,6 @@
 import type { FileDiff } from "../changes";
 import type { ProjectRuntime } from "../../runtime/project/runtime";
-import type { ConflictSession } from "./domain";
+import type { ConflictSession, WorkingFileCheck } from "./domain";
 import type { ConflictSideDiffQuery, ConflictsPort, ConflictsQuery } from "./port";
 
 export type ConflictsState = {
@@ -27,6 +27,12 @@ const MAX_SIDE_DIFFS = 48;
 
 function keyOf(query: ConflictsQuery): string {
   return `${query.projectId}\0${query.sessionEpoch}`;
+}
+
+/** A marker check answers for one state of the file, which the session's
+ * token names: an edit moves the token and asks again. */
+function markerCheckKey(query: ConflictsQuery, filePath: string, stateToken: string): string {
+  return `${keyOf(query)}\0${filePath}\0${stateToken}`;
 }
 
 function sideDiffKey(query: ConflictSideDiffQuery): string {
@@ -64,6 +70,7 @@ export function createConflictsController(port: ConflictsPort) {
   const views = new Map<string, ConflictsViewMemory>();
   const sideDiffs = new Map<string, FileDiff>();
   const sideDiffRequests = new Map<string, Promise<FileDiff>>();
+  const markerChecks = new Map<string, Promise<WorkingFileCheck>>();
 
   const publish = (entry: Entry, next: ConflictsState): void => {
     if (Object.is(entry.state, next)) return;
@@ -170,6 +177,27 @@ export function createConflictsController(port: ConflictsPort) {
     return request;
   };
 
+  /** Checks a file for markers once per state of it. Asked when a session
+   * read shows the file edited outside GitOdile, never on visibility; a
+   * failure is forgotten so the next state can ask again. */
+  const checkWorkingFile = (
+    query: ConflictsQuery,
+    filePath: string,
+    stateToken: string,
+  ): Promise<WorkingFileCheck> => {
+    const key = markerCheckKey(query, filePath, stateToken);
+    const held = markerChecks.get(key);
+    if (held) return held;
+    const request = port.checkWorkingFile({ ...query, filePath });
+    request.catch(() => markerChecks.delete(key));
+    markerChecks.set(key, request);
+    if (markerChecks.size > MAX_SIDE_DIFFS) {
+      const oldest = markerChecks.keys().next();
+      if (!oldest.done) markerChecks.delete(oldest.value);
+    }
+    return request;
+  };
+
   return {
     port,
     getSnapshot(query: ConflictsQuery): ConflictsState {
@@ -183,6 +211,7 @@ export function createConflictsController(port: ConflictsPort) {
     refresh,
     mutate,
     readSideDiff,
+    checkWorkingFile,
     /** The resolved diff when it is already held, so the detail renders on
      * arrival without a loading frame. Never starts a read. */
     peekSideDiff(query: ConflictSideDiffQuery): FileDiff | null {
@@ -211,6 +240,9 @@ export function createConflictsController(port: ConflictsPort) {
       const prefix = `${keyOf(query)}\0`;
       for (const key of [...sideDiffs.keys()]) {
         if (key.startsWith(prefix)) sideDiffs.delete(key);
+      }
+      for (const key of [...markerChecks.keys()]) {
+        if (key.startsWith(prefix)) markerChecks.delete(key);
       }
       const entry = entries.get(keyOf(query));
       if (!entry) return;

@@ -100,6 +100,7 @@ const FACET_KEYS = {
   submodule: "conflictsFacetSubmodule",
   "type-change": "conflictsFacetTypeChange",
   "file-directory": "conflictsFacetFileDirectory",
+  "case-collision": "conflictsFacetCaseCollision",
 } as const;
 
 const STATE_KEYS = {
@@ -586,6 +587,7 @@ function FileDetail({
           // opened it: the file is where the reader goes on from.
           requestAnimationFrame(() => headingRef.current?.focus());
         }}
+        onAnnounce={onAnnounce}
         onReadAgain={onReadAgain}
         t={t}
       />

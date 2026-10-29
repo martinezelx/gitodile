@@ -41,7 +41,18 @@ const runtime = {
 } as unknown as ProjectRuntime;
 
 function port(read: ConflictsPort["readSession"], overrides: Partial<ConflictsPort> = {}): ConflictsPort {
-  return { readSession: read, readSideDiff: vi.fn(), keepSide: vi.fn(), markResolved: vi.fn(), resetFile: vi.fn(), ...overrides };
+  return {
+    readSession: read,
+    readSideDiff: vi.fn(),
+    keepSide: vi.fn(),
+    markResolved: vi.fn(),
+    resetFile: vi.fn(),
+    openFile: vi.fn(),
+    checkWorkingFile: vi.fn(),
+    revealFile: vi.fn(),
+    openProjectFolder: vi.fn(),
+    ...overrides,
+  };
 }
 
 describe("conflicts controller", () => {
@@ -103,6 +114,22 @@ describe("conflicts controller", () => {
     // A refusal changes nothing the reader decided from.
     await expect(controller.mutate(query, () => Promise.reject(new Error("stale")))).rejects.toThrow("stale");
     expect(controller.getSnapshot(query).session?.stateToken).toBe("after");
+  });
+
+  it("checks a file for markers once per state of it, and asks again after a failure", async () => {
+    const checkWorkingFile = vi.fn<ConflictsPort["checkWorkingFile"]>()
+      .mockRejectedValueOnce(new Error("busy"))
+      .mockResolvedValue({ stateToken: "one", markers: { kind: "none" } });
+    const controller = createConflictsController(port(vi.fn(), { checkWorkingFile }));
+
+    await expect(controller.checkWorkingFile(query, "a.txt", "one")).rejects.toThrow("busy");
+    await controller.checkWorkingFile(query, "a.txt", "one");
+    await controller.checkWorkingFile(query, "a.txt", "one");
+    expect(checkWorkingFile).toHaveBeenCalledTimes(2);
+
+    // An edit moves the token: that state is a new question.
+    await controller.checkWorkingFile(query, "a.txt", "two");
+    expect(checkWorkingFile).toHaveBeenCalledTimes(3);
   });
 
   it("asks for one side's diff once per pair of objects", async () => {

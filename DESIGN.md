@@ -3711,8 +3711,16 @@ sentence instead of drawing an empty diff.
 **A file's actions sit in one bar under its strip**, the Changes toolbar's
 place under its list: on the left what the file holds now ("Kept “main” ·
 not marked resolved yet"), on the right Keep “main”, Keep “feature” — each
-side named by its branch — Delete where a side deleted the path, a `⋯` menu
-holding Reset, and Mark resolved last as the solid primary. The kept side's
+side named by its branch — Delete where a side deleted the path, Open in
+editor, a `⋯` menu holding Reset, and Mark resolved last as the solid primary.
+Open in editor opens the file in the application its type opens in and asks
+nothing, since it changes nothing; the left of the bar then says the file is
+open and that GitOdile looks again when it is saved. Once an edit comes back
+the left says what it left — overlapping parts still marked (in words, with a
+`warning` glyph), none, or why GitOdile cannot look (not text, UTF-16) — and
+Mark resolved still asks before taking a file with markers. A type the system
+would run instead of open is not opened: a `warning` notice under the bar says
+so and offers Show in folder. The kept side's
 button stays pressed (`aria-pressed`, the selected recipe of
 `choice-list__option--active`) and carries a tick, so the choice is never
 told by colour alone. Choosing a side never runs on the first press: **the
@@ -3734,6 +3742,11 @@ moved session, a file another program holds and a refused action are
 in-panel notices under the bar with their way out (Read again, Try again);
 while another change to the project runs the bar holds its buttons and says
 why. A finished action is announced and hands focus to the file's name.
+A file no whole-file choice can handle — a folder where the file goes, a name
+the disk cannot hold apart from another overlapping one, a name GitOdile
+cannot spell — gets one `warning` notice in the same place saying what to do
+instead, with the step GitOdile can take toward it (Show in folder, or Open
+project folder for a name it cannot spell) and Read again.
 
 **Dropping a folder on the window** opens it. While a drag is over the window
 — and only then — a window-sized overlay names what a drop will do. It is

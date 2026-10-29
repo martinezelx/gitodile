@@ -742,7 +742,8 @@ with its files and the exact Git commands, and has no action.
 `read_conflict_stage` reads one stage lazily, capped at the diff limit, after
 checking that the requested object is still that path's stage.
 `read_conflict_side_diff` answers "what did this side change" for one regular
-file: it checks both object IDs against the path's stages, runs a blob-to-blob
+file: it checks both object IDs against the path's stages (once the file is
+marked resolved, the stages its snapshot records and pins), runs a blob-to-blob
 `git diff` (or builds an all-added hunk when there is no base) and returns the
 Changes tab's typed `FileDiff`. All three are read-only and run under a shared
 read permit; `git_operation_in_progress` asks the same marker detection, so a
@@ -765,6 +766,19 @@ target (`git_command::run_git_to_file`, so an LFS file is never held in
 memory) and is renamed over it; a Windows file held open by another program
 fails as `file_locked` with nothing changed.
 
+`conflicts/mod.rs` also holds what neither mutates nor belongs to one action:
+the exact-path check every write and open goes through
+(`exact_working_path`: inside the project, spelled on disk as Git spells it,
+no folder a link), the marker scan, and the case-collision facet.
+`open_conflict_file` opens one file in the system's default application
+through `desktop::open_in_default_application`, after
+`desktop::ensure_opens_as_document` has refused any type the platform would
+run instead (per-platform lists plus `PATHEXT` on Windows and the executable
+bit elsewhere) and after the session's snapshot exists; it is a
+`repository_write` command for that snapshot alone and never changes the
+index or the file. `check_conflict_working_file` is a read that says whether
+markers remain, or why it cannot tell.
+
 The frontend owner is `src/features/conflicts/`: a lazy screen registered
 with no rail or fixed palette entry, reached from Overview, Changes, the
 palette and the refusing dialogs. Its controller caches one session read per
@@ -777,7 +791,10 @@ answers with the cached one and supersedes any read started before it; the
 screen takes the project's mutation slot (`resolve`) for each, and a success
 runs the one coordinated refresh after a mutation. A reset whose snapshot
 could not keep the working content is refused as `conflict_content_not_kept`,
-which is how the screen knows to offer the overlap alone.
+which is how the screen knows to offer the overlap alone. Opening a file in
+its application takes no mutation slot and no refresh: the edit comes back
+through the watcher, and when a session read shows the file
+`editedOutside` the controller asks for one marker check per state token.
 
 Before a session's first change, `recovery::create_conflict_snapshot` writes
 `<git-dir>/gitodile/conflicts/v1/<session-id>/` under the write lock, after

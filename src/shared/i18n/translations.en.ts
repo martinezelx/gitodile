@@ -112,6 +112,8 @@ export const en: SharedTranslations = {
   errorConflictChoiceNeeded: "Choose which side to keep for this file first.",
   errorConflictContentNotKept: "GitOdile couldn't keep this file's original content. Nothing was changed; you can still put back the overlap alone.",
   errorFileLocked: "Another program is using this file. Close it there, then try again. Nothing was changed.",
+  errorConflictCaseCollision: "This file's name differs only by capital letters from another file on disk, which this computer can't keep apart. Rename or remove the other file, then read the overlapping changes again.",
+  errorFileRunsAsProgram: "Your system would run it as a program instead of opening it. Show it in its folder and open it with an app you choose.",
   errorIgnoreFileTooLarge: "This file is too large to edit here. Open it in a text editor.",
   errorIgnoreFileNotText: "This file isn't plain text, so GitOdile won't rewrite it.",
   errorStaleIgnoreFile: "This file changed outside GitOdile. Reopen it before saving.",

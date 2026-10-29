@@ -77,8 +77,10 @@ editable. With no such name the label is the short commit. A rebase reads
 Each path is classified from which stages exist and their modes: both
 changed, both added, deleted by current or by incoming, deleted by both, added
 by one side only (the residue of a rename or a file/directory conflict), and
-the facets mode change, symbolic link, submodule (gitlink), type change, and
-file/directory (the path is a directory on disk). Binary content, encoding and
+the facets mode change, symbolic link, submodule (gitlink), type change,
+file/directory (the path is a directory on disk), and case collision (another
+overlapping path equals it but for case, on a file system that ignores case;
+added by the 2026-10-29 amendment in §8). Binary content, encoding and
 line endings are facts of a stage's content and are reported when that stage
 is read.
 
@@ -254,6 +256,41 @@ its record.
 
 A rename over a file another program holds open fails on Windows; the action
 reports `file_locked`, removes its temporary file and changes nothing.
+
+**Opening a file in the user's own application** (task 037-6-3) uses the
+system's default application for the file's type, never `GIT_EDITOR` or
+`core.editor`, which are shell command lines. It reaches the file through the
+same exact-path check as every write: inside the project, spelled on disk as
+Git spells it, no folder of it a link, a regular file. A type the system would
+run, install or follow instead of opening is refused before anything else
+happens (`file_runs_as_program`) and the reader is offered the folder: on
+Windows every `PATHEXT` extension plus shortcuts, installers, registry files,
+scripts and control-panel items; on macOS applications, `.command`, `.tool`,
+installer packages and location files; on Linux `.desktop`, AppImages and
+`.run`; and on macOS and Linux any file with an executable bit. A conflicted
+script that runs as a program is therefore shown in its folder rather than
+opened. Opening takes the session's snapshot first when there is none, as
+before any change: the reader's editor is where the next change comes from,
+and an edit made there before the first GitOdile action would otherwise
+become the original that Reset returns to. It changes neither the index nor
+the file, and never implies resolution.
+
+**What the reader did there** is read back from fresh state: the watcher
+reports the edit, the session token moves and the file becomes
+`editedOutside`. For such a file the screen asks
+`check_conflict_working_file` once per token, a bounded read (32 MiB, the same
+scan as Mark resolved) that answers markers found, none, or why it cannot say
+(binary, UTF-16, too large, unreadable). It decides nothing: Mark resolved
+still refuses on markers until the reader confirms.
+
+**A path that equals another overlapping path but for case** is a collision
+only where the file system ignores case, which one `stat` of the Git
+directory's name with its case flipped tells. Both paths get no whole-file
+choice, since writing either would land on the other; every write and open
+also proves the name on disk is spelled exactly as Git spells it
+(`conflict_case_collision`). Paths that differ in a folder's case, or only in
+Unicode normalization, are caught by that write-time check rather than the
+facet.
 
 ## Consequences
 

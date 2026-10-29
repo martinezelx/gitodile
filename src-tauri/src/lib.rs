@@ -187,6 +187,8 @@ pub fn run() {
             ipc::resolve_conflict_side,
             ipc::mark_conflict_resolved,
             ipc::reset_conflict_file,
+            ipc::open_conflict_file,
+            ipc::check_conflict_working_file,
             ipc::glab_diagnostics,
             ipc::install_glab,
             ipc::update_glab,

@@ -33,7 +33,13 @@ export type ConflictShape =
   | "deleted-by-both"
   | "added-by-current"
   | "added-by-incoming";
-export type ConflictFacet = "mode-change" | "symbolic-link" | "submodule" | "type-change" | "file-directory";
+export type ConflictFacet =
+  | "mode-change"
+  | "symbolic-link"
+  | "submodule"
+  | "type-change"
+  | "file-directory"
+  | "case-collision";
 export type ConflictFileState = "unresolved" | "editedOutside" | "markedResolved" | "stale" | "unsupported";
 export type ConflictAction = "keep-current" | "keep-incoming" | "delete" | "open-in-editor" | "mark-resolved" | "reset-file";
 export type WorkingKind = "absent" | "file" | "symbolic-link" | "directory" | "other";
@@ -120,10 +126,10 @@ export function sideName(label: SideLabel): string | null {
 /** A whole-file choice: one side's version, or the deletion one side made. */
 export type SideChoice = "keep-current" | "keep-incoming" | "delete";
 
-/** What the file's action bar offers, from what Rust allows. Open in editor
- * is not here yet (task 037-6-3). */
+/** What the file's action bar offers, from what Rust allows. */
 export type FileActions = {
   choices: SideChoice[];
+  canOpen: boolean;
   canMarkResolved: boolean;
   canReset: boolean;
 };
@@ -133,9 +139,39 @@ const CHOICES: readonly SideChoice[] = ["keep-current", "keep-incoming", "delete
 export function fileActions(file: ConflictFile): FileActions {
   return {
     choices: CHOICES.filter((choice) => file.allowedActions.includes(choice)),
+    canOpen: file.allowedActions.includes("open-in-editor"),
     canMarkResolved: file.allowedActions.includes("mark-resolved"),
     canReset: file.allowedActions.includes("reset-file"),
   };
+}
+
+/** Why no whole-file choice can be made here, so the screen can say what to
+ * do instead: a folder where Git expects the file, a name the disk cannot
+ * hold apart from another overlapping one, or a name GitOdile cannot spell
+ * exactly. `null` when the file is not blocked. */
+export type FileBlock = "folder" | "case" | "inexact-path";
+
+export function fileBlock(file: ConflictFile): FileBlock | null {
+  if (!file.pathIsExact) return "inexact-path";
+  if (file.facets.includes("file-directory")) return "folder";
+  if (file.facets.includes("case-collision")) return "case";
+  return null;
+}
+
+/** What a check of the working file for conflict markers found
+ * (`check_conflict_working_file`). */
+export type MarkerScan =
+  | { kind: "found"; blocks: number }
+  | { kind: "none" }
+  | { kind: "unknown"; limit: "binary" | "utf16" | "too-large" | "unreadable" };
+
+export type WorkingFileCheck = { stateToken: string; markers: MarkerScan };
+
+/** Whether the file holds something the reader wrote outside GitOdile that
+ * no check has looked at: edited since the snapshot, and not exactly a side
+ * an action wrote (that one has no markers to find). */
+export function needsMarkerCheck(file: ConflictFile): boolean {
+  return file.pathIsExact && file.working === "file" && file.state === "editedOutside" && file.kept === null;
 }
 
 /** The side whose version a keep choice writes; `null` for a deletion. */

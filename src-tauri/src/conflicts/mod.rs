@@ -1,12 +1,14 @@
 //! Conflict sessions: what is paused, which files overlap, and what each side
 //! holds (ADR 0041).
 //!
-//! Everything in this file is read-only. The index (`ls-files -u`) and Git's
+//! Nothing in this file changes the project. The index (`ls-files -u`) and Git's
 //! operation markers are the only truth; conflict markers in the working tree
 //! decide nothing. The durable snapshot taken before a session's first change
 //! is a recovery owner, [`crate::recovery`], which reads the session from
 //! here. The per-file mutations (keep a side, mark resolved, reset) live in
-//! [`resolve`], whose write helpers nothing else may call.
+//! [`resolve`], whose write helpers nothing else may call. Opening a file in
+//! the user's own application and checking it for markers are here: neither
+//! writes, and both reach the file through the exact-path check writes use.
 
 pub(crate) mod resolve;
 
@@ -15,18 +17,20 @@ use crate::changes::{
     is_binary_diff_output, parse_diff_body, validate_repo_relative_path, FileDiff,
     MAX_DIFF_OUTPUT_BYTES,
 };
+use crate::desktop;
 use crate::error::{AppError, AppErrorCode};
 use crate::git_command::{run_git, run_git_capped, run_git_with_input_capped};
 use crate::recovery::{
-    last_written, read_conflict_journal, read_conflict_snapshot, ConflictJournal,
-    ConflictSnapshotManifest, JournalAction, SnapshotPath, SnapshotWorking,
+    create_conflict_snapshot, last_written, read_conflict_journal, read_conflict_snapshot,
+    ConflictJournal, ConflictSnapshotManifest, JournalAction, SnapshotPath, SnapshotWorking,
 };
 use crate::repository_access::RepositoryContext;
 use crate::status::ChangeCategory;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::fs;
-use std::path::Path;
+use std::fs::{self, File};
+use std::io::{ErrorKind, Read};
+use std::path::{Path, PathBuf};
 use std::time::UNIX_EPOCH;
 
 /// Paths listed in one session; a session past it says its list is partial.
@@ -168,6 +172,9 @@ pub(crate) enum ConflictFacet {
     TypeChange,
     /// The path is a directory on disk while the index holds a file.
     FileDirectory,
+    /// Another overlapping path differs from this one only by case, on a
+    /// file system that cannot hold both.
+    CaseCollision,
 }
 
 #[derive(serde::Serialize, Debug, PartialEq, Eq, Clone, Copy)]
@@ -349,6 +356,316 @@ pub(crate) fn unreadable() -> AppError {
     .with_remediation("Check that the project and its Git metadata are readable, then try again.")
 }
 
+/// A name Git spells one way that the disk holds spelled another way: on a
+/// file system that ignores case, `Readme.md` would land on `README.md`,
+/// which is another path to Git.
+pub(crate) fn case_collision() -> AppError {
+    AppError::new(
+        AppErrorCode::ConflictCaseCollision,
+        "This file's name differs only by capital letters from one on disk.",
+    )
+    .with_remediation(
+        "Rename or remove the other file yourself, then read the overlapping changes again.",
+    )
+}
+
+/// The working path of `relative`, inside the project and spelled on disk
+/// exactly as Git spells it, with no folder of it a link. Writing, opening
+/// and checking a file all go through it, so none of them reaches a
+/// different file than the one Git names.
+pub(crate) fn exact_working_path(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
+    let invalid = || {
+        AppError::new(
+            AppErrorCode::PathInvalid,
+            "GitOdile won't use this file where Git expects it.",
+        )
+        .with_remediation("Read the overlapping changes again.")
+    };
+    let root = root.canonicalize().map_err(|_| invalid())?;
+    let mut current = root.clone();
+    let components = relative.split('/').collect::<Vec<_>>();
+    for (index, component) in components.iter().enumerate() {
+        let next = current.join(component);
+        match fs::symlink_metadata(&next) {
+            Ok(metadata) => {
+                let spelled = fs::read_dir(&current)
+                    .map_err(|_| invalid())?
+                    .filter_map(Result::ok)
+                    .any(|entry| entry.file_name().to_str() == Some(*component));
+                if !spelled {
+                    return Err(case_collision());
+                }
+                let is_last = index + 1 == components.len();
+                if !is_last && metadata.file_type().is_symlink() {
+                    // A folder of the path is a link: following it could
+                    // land outside the project.
+                    return Err(invalid());
+                }
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(_) => return Err(invalid()),
+        }
+        current = next;
+    }
+    Ok(current)
+}
+
+/// Whether the file system holding `probe` ignores case: one look at the
+/// nearest of its names that has letters, spelled with their case flipped.
+pub(crate) fn ignores_case(probe: &Path) -> bool {
+    for candidate in probe.ancestors() {
+        let (Some(name), Some(parent)) = (
+            candidate.file_name().and_then(|name| name.to_str()),
+            candidate.parent(),
+        ) else {
+            continue;
+        };
+        let flipped = name
+            .chars()
+            .flat_map(|letter| {
+                if letter.is_lowercase() {
+                    letter.to_uppercase().collect::<Vec<_>>()
+                } else {
+                    letter.to_lowercase().collect()
+                }
+            })
+            .collect::<String>();
+        if flipped == name {
+            continue;
+        }
+        return fs::symlink_metadata(candidate).is_ok()
+            && fs::symlink_metadata(parent.join(flipped)).is_ok();
+    }
+    false
+}
+
+/// The paths among `paths` that another one equals but for case: a file
+/// system that ignores case holds only one of them, so no whole-file choice
+/// can write either without landing on the other. Folders spelled two ways
+/// are caught when a write or an open checks the exact spelling.
+pub(crate) fn case_collisions<'a>(paths: impl IntoIterator<Item = &'a str>) -> HashSet<String> {
+    let mut groups: HashMap<String, Vec<&str>> = HashMap::new();
+    for path in paths {
+        groups.entry(path.to_lowercase()).or_default().push(path);
+    }
+    groups
+        .into_values()
+        .filter(|group| group.len() > 1)
+        .flatten()
+        .map(ToString::to_string)
+        .collect()
+}
+
+/// Bytes read from a working file to look for conflict markers; a larger
+/// file is not scanned, and marking it resolved does not stop on markers.
+const MAX_MARKER_SCAN_BYTES: u64 = 32 * 1024 * 1024;
+/// Git's default `conflict-marker-size`.
+const MARKER_SIZE: usize = 7;
+
+/// Why a working file could not be scanned for conflict markers.
+#[derive(serde::Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum MarkerScanLimit {
+    Binary,
+    Utf16,
+    TooLarge,
+    Unreadable,
+}
+
+/// What a scan of a working file for conflict markers found.
+#[derive(serde::Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub(crate) enum MarkerScan {
+    /// Complete `<<<<<<<` … `=======` … `>>>>>>>` blocks.
+    Found {
+        blocks: usize,
+    },
+    None,
+    /// Nothing can be said, and why.
+    Unknown {
+        limit: MarkerScanLimit,
+    },
+}
+
+fn marker_line(line: &[u8], marker: u8) -> bool {
+    line.len() >= MARKER_SIZE
+        && line[..MARKER_SIZE].iter().all(|byte| *byte == marker)
+        && line
+            .get(MARKER_SIZE)
+            .is_none_or(|next| matches!(next, b' ' | b'\t' | b'\r'))
+}
+
+/// Counts whole conflict blocks. A lone `=======` (a Markdown underline) or
+/// a stray opening line is not a block. UTF-16 is told apart from binary by
+/// its byte-order mark, since its text holds NUL bytes too.
+pub(crate) fn scan_conflict_markers(content: &[u8]) -> MarkerScan {
+    if content.starts_with(&[0xff, 0xfe]) || content.starts_with(&[0xfe, 0xff]) {
+        return MarkerScan::Unknown {
+            limit: MarkerScanLimit::Utf16,
+        };
+    }
+    if content[..content.len().min(BINARY_PROBE_BYTES)].contains(&0) {
+        return MarkerScan::Unknown {
+            limit: MarkerScanLimit::Binary,
+        };
+    }
+    let mut blocks = 0;
+    // 0: outside, 1: after <<<<<<<, 2: after =======
+    let mut state = 0;
+    for line in content.split(|byte| *byte == b'\n') {
+        match state {
+            0 if marker_line(line, b'<') => state = 1,
+            1 if marker_line(line, b'<') => state = 1,
+            1 if marker_line(line, b'=') => state = 2,
+            2 if marker_line(line, b'>') => {
+                blocks += 1;
+                state = 0;
+            }
+            _ => {}
+        }
+    }
+    if blocks == 0 {
+        MarkerScan::None
+    } else {
+        MarkerScan::Found { blocks }
+    }
+}
+
+pub(crate) fn scan_working_markers(target: &Path) -> MarkerScan {
+    let unreadable = MarkerScan::Unknown {
+        limit: MarkerScanLimit::Unreadable,
+    };
+    let Ok(file) = File::open(target) else {
+        return unreadable;
+    };
+    match file.metadata() {
+        Ok(metadata) if metadata.len() > MAX_MARKER_SCAN_BYTES => {
+            return MarkerScan::Unknown {
+                limit: MarkerScanLimit::TooLarge,
+            }
+        }
+        Ok(_) => {}
+        Err(_) => return unreadable,
+    }
+    let mut content = Vec::new();
+    if file
+        .take(MAX_MARKER_SCAN_BYTES)
+        .read_to_end(&mut content)
+        .is_err()
+    {
+        return unreadable;
+    }
+    scan_conflict_markers(&content)
+}
+
+/// One overlapping file of the session as it is on disk now: a regular file
+/// at its exact path, which `action` (when given) is allowed on.
+struct SessionWorkingFile {
+    origin: ConflictOrigin,
+    state_token: String,
+    target: PathBuf,
+    metadata: fs::Metadata,
+}
+
+fn session_working_file(
+    path: &str,
+    repository: &RepositoryContext,
+    file_path: &str,
+    action: Option<ConflictAction>,
+) -> Result<SessionWorkingFile, AppError> {
+    validate_repo_relative_path(file_path)?;
+    let read = read_session(path, repository)?.ok_or_else(stale)?;
+    let session = describe_session(repository, read);
+    let file = session
+        .files
+        .iter()
+        .find(|file| file.path == file_path && file.path_is_exact)
+        .ok_or_else(stale)?;
+    if action.is_some_and(|action| !file.allowed_actions.contains(&action)) {
+        return Err(AppError::new(
+            AppErrorCode::ConflictActionUnavailable,
+            "This file doesn't allow that right now.",
+        )
+        .with_remediation("Read the overlapping changes again to see what this file allows."));
+    }
+    let target = exact_working_path(repository.worktree_root.backend_path(), file_path)?;
+    let metadata = fs::symlink_metadata(&target)
+        .ok()
+        .filter(fs::Metadata::is_file)
+        .ok_or_else(|| {
+            AppError::new(
+                AppErrorCode::ConflictActionUnavailable,
+                "This path isn't a file on disk right now.",
+            )
+            .with_remediation("Read the overlapping changes again.")
+        })?;
+    Ok(SessionWorkingFile {
+        origin: session.origin,
+        state_token: session.state_token,
+        target,
+        metadata,
+    })
+}
+
+/// Opens one overlapping file in the application the system uses for its
+/// type, never `GIT_EDITOR` or `core.editor`. Opening never changes the
+/// file's state: what the user does there is read back from the working
+/// tree once the watcher reports it.
+///
+/// A type the system would run rather than open is refused before anything
+/// is written. Otherwise the session's snapshot is taken first when it has
+/// none, as before any change: the user's editor is where the next change
+/// comes from, and without a snapshot an edit made there would become the
+/// "original" that Reset returns to, and could not be told apart from it.
+pub(crate) fn open_conflict_file(
+    path: String,
+    file_path: String,
+    state_token: String,
+) -> Result<(), AppError> {
+    let (repository, _access) =
+        application::authorize_repository(&path, "open_conflict_file", None)?;
+    let working = session_working_file(
+        &path,
+        &repository,
+        &file_path,
+        Some(ConflictAction::OpenInEditor),
+    )?;
+    if working.state_token != state_token {
+        return Err(stale());
+    }
+    desktop::ensure_opens_as_document(
+        &working.target,
+        desktop::has_executable_bit(&working.metadata),
+    )?;
+    create_conflict_snapshot(&path, &repository, &state_token, working.origin)?;
+    desktop::open_in_default_application(&working.target)
+}
+
+/// What a check of one overlapping file found, as of the session read it
+/// was made against.
+#[derive(serde::Serialize, Debug, PartialEq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkingFileCheck {
+    pub(crate) state_token: String,
+    pub(crate) markers: MarkerScan,
+}
+
+/// Whether an overlapping file still holds conflict markers, read with the
+/// same bound as Mark resolved. Read-only; the screen asks it after a session
+/// read shows the file edited, never because the file became visible.
+pub(crate) fn check_conflict_working_file(
+    path: String,
+    file_path: String,
+) -> Result<WorkingFileCheck, AppError> {
+    let (repository, _access) =
+        application::authorize_repository(&path, "check_conflict_working_file", None)?;
+    let working = session_working_file(&path, &repository, &file_path, None)?;
+    Ok(WorkingFileCheck {
+        markers: scan_working_markers(&working.target),
+        state_token: working.state_token,
+    })
+}
+
 /// Parses `git ls-files -u -z`: `<mode> SP <object> SP <stage> TAB <path> NUL`.
 /// Paths stay raw bytes; nothing here assumes they are UTF-8.
 pub(crate) fn parse_unmerged_entries(output: &[u8]) -> Result<Vec<UnmergedEntry>, AppError> {
@@ -489,7 +806,10 @@ pub(crate) fn classify_facets(path: &UnmergedPath, working: WorkingKind) -> Vec<
 /// that deleted the path is `Delete`, never a "keep" of nothing.
 ///
 /// A folder in the way of a file gets no choice at all: every one of them
-/// would have to replace the folder. A link, a submodule or a change of kind
+/// would have to replace the folder. Neither does a path that another one
+/// equals but for case where the disk can hold only one of them: a choice
+/// would write over the other. Reset stays, since it restores evidence the
+/// snapshot already holds. A link, a submodule or a change of kind
 /// has no text to edit, so it is marked resolved only once a side was kept.
 pub(crate) fn allowed_file_actions(
     path: &UnmergedPath,
@@ -503,7 +823,8 @@ pub(crate) fn allowed_file_actions(
         return Vec::new();
     }
     let mut actions = Vec::new();
-    let blocked = facets.contains(&ConflictFacet::FileDirectory);
+    let blocked = facets.contains(&ConflictFacet::FileDirectory)
+        || facets.contains(&ConflictFacet::CaseCollision);
     if state != ConflictFileState::MarkedResolved && !blocked {
         if path.current.is_some() {
             actions.push(ConflictAction::KeepCurrent);
@@ -1074,6 +1395,26 @@ pub(crate) fn describe_session(
     let journal = read.journal;
     let index = snapshot.as_ref().map(index_snapshot);
     let supported = read.operation.supported;
+    // Only a file system that ignores case can be asked to hold two of
+    // these paths in one place, so only there do they collide. The disk is
+    // asked only when two names fold together at all.
+    let listed = read
+        .listing
+        .paths
+        .iter()
+        .filter_map(|unmerged| std::str::from_utf8(&unmerged.path).ok());
+    let resolved = index.iter().flat_map(|index| index.stages.keys().copied());
+    let mut collisions = case_collisions(listed.chain(resolved).collect::<HashSet<_>>());
+    if !collisions.is_empty() && !ignores_case(repository.git_dir.backend_path()) {
+        collisions.clear();
+    }
+    let facets_of = |stages: &UnmergedPath, relative: &str, kind: WorkingKind| {
+        let mut facets = classify_facets(stages, kind);
+        if collisions.contains(relative) {
+            facets.push(ConflictFacet::CaseCollision);
+        }
+        facets
+    };
     let mut files = Vec::with_capacity(read.listing.paths.len());
     for unmerged in &read.listing.paths {
         let (relative, exact) = display_path(&unmerged.path);
@@ -1086,7 +1427,7 @@ pub(crate) fn describe_session(
                 modified_ns: 0,
             }
         };
-        let facets = classify_facets(unmerged, fingerprint.kind);
+        let facets = facets_of(unmerged, &relative, fingerprint.kind);
         let state = if exact && validate_repo_relative_path(&relative).is_ok() {
             snapshot_state(index.as_ref(), &relative, unmerged, fingerprint)
         } else {
@@ -1139,7 +1480,7 @@ pub(crate) fn describe_session(
             .collect::<Vec<_>>();
         for (relative, stages) in resolved {
             let fingerprint = working_fingerprint(root, &relative);
-            let facets = classify_facets(&stages, fingerprint.kind);
+            let facets = facets_of(&stages, &relative, fingerprint.kind);
             let state = ConflictFileState::MarkedResolved;
             let kept = kept_side(journal.as_ref(), &relative, fingerprint);
             files.push(ConflictFile {
@@ -1404,7 +1745,7 @@ pub(crate) fn read_conflict_side_diff(
     side_object_id: String,
 ) -> Result<FileDiff, AppError> {
     let subject = format!("{file_path}:{side:?}");
-    let (_repository, _access) =
+    let (repository, _access) =
         application::authorize_repository_read_of(&path, "read_conflict_side_diff", &subject)?;
     validate_repo_relative_path(&file_path)?;
     let invalid = || {
@@ -1425,10 +1766,31 @@ pub(crate) fn read_conflict_side_diff(
     if !output.status.success() {
         return Err(unreadable());
     }
-    let entries = parse_unmerged_entries(&output.stdout)?
+    let mut entries = parse_unmerged_entries(&output.stdout)?
         .into_iter()
         .filter(|entry| entry.path == file_path.as_bytes())
         .collect::<Vec<_>>();
+    if entries.is_empty() {
+        // Marked resolved since the snapshot: its sides are the stages the
+        // snapshot recorded and pins, so the screen still shows what each
+        // side changed, and nothing outside that record can be asked for.
+        entries = read_session(&path, &repository)?
+            .and_then(|read| read.snapshot)
+            .map(|manifest| {
+                manifest
+                    .entries
+                    .into_iter()
+                    .filter(|entry| entry.path == file_path)
+                    .map(|entry| UnmergedEntry {
+                        mode: entry.mode,
+                        object_id: entry.object_id,
+                        stage: entry.stage,
+                        path: entry.path.into_bytes(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+    }
     let side_stage = match side {
         ConflictSide::Current => 2,
         ConflictSide::Incoming => 3,
@@ -1654,18 +2016,51 @@ mod tests {
                 [KeepCurrent, Delete, MarkResolved, ResetFile]
             );
         }
-        // A folder in the way: no choice would leave the folder alone.
-        assert_eq!(
-            actions(
-                &[ConflictFacet::FileDirectory],
-                WorkingKind::Directory,
-                Unresolved,
-                true,
-                None
-            ),
-            [] as [ConflictAction; 0]
-        );
+        // A folder in the way: no choice would leave the folder alone. A
+        // case-only twin: any choice would write over the other path.
+        for (facet, working) in [
+            (ConflictFacet::FileDirectory, WorkingKind::Directory),
+            (ConflictFacet::CaseCollision, WorkingKind::File),
+        ] {
+            assert_eq!(
+                actions(&[facet], working, Unresolved, true, None),
+                [] as [ConflictAction; 0]
+            );
+        }
         assert!(actions(&[], WorkingKind::File, Unsupported, true, None).is_empty());
+    }
+
+    #[test]
+    fn only_paths_equal_but_for_case_collide() {
+        let collisions = case_collisions(["README.md", "Readme.md", "src/a.rs", "src/b.rs"]);
+        assert_eq!(
+            collisions,
+            HashSet::from(["README.md".to_string(), "Readme.md".to_string()])
+        );
+        assert!(case_collisions(["a.txt", "b.txt"]).is_empty());
+    }
+
+    #[test]
+    fn only_whole_marker_blocks_count() {
+        let unknown = |limit| MarkerScan::Unknown { limit };
+        for (content, expected) in [
+            (
+                &b"a\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\nb\n"[..],
+                MarkerScan::Found { blocks: 1 },
+            ),
+            (
+                b"<<<<<<< HEAD\r\nours\r\n||||||| base\r\nold\r\n=======\r\ntheirs\r\n>>>>>>> x\r\n",
+                MarkerScan::Found { blocks: 1 },
+            ),
+            (b"Title\n=======\n\ntext\n", MarkerScan::None),
+            (b"<<<<<<< HEAD\nnever closed\n", MarkerScan::None),
+            (b"<<<<<<<<< not a marker\n=======\n>>>>>>>\n", MarkerScan::None),
+            (b"\xff\xfe<\0<\0", unknown(MarkerScanLimit::Utf16)),
+            (b"\xfe\xff\0<\0<", unknown(MarkerScanLimit::Utf16)),
+            (b"bin\0ary", unknown(MarkerScanLimit::Binary)),
+        ] {
+            assert_eq!(scan_conflict_markers(content), expected);
+        }
     }
 
     #[test]

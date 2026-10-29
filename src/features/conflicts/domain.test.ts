@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { discardedSide, fileActions, keptChoice, sideLimitation, type ConflictFile } from "./domain";
+import {
+  discardedSide,
+  fileActions,
+  fileBlock,
+  keptChoice,
+  needsMarkerCheck,
+  sideLimitation,
+  type ConflictFile,
+} from "./domain";
 
 const A = "1".repeat(40);
 const B = "2".repeat(40);
@@ -42,8 +50,36 @@ describe("sideLimitation", () => {
 describe("file actions", () => {
   it("offers what Rust allows, in the bar's order", () => {
     const conflict = file({ allowedActions: ["mark-resolved", "delete", "keep-incoming", "open-in-editor", "reset-file"] });
-    expect(fileActions(conflict)).toEqual({ choices: ["keep-incoming", "delete"], canMarkResolved: true, canReset: true });
-    expect(fileActions(file({}))).toEqual({ choices: [], canMarkResolved: false, canReset: false });
+    expect(fileActions(conflict)).toEqual({
+      choices: ["keep-incoming", "delete"],
+      canOpen: true,
+      canMarkResolved: true,
+      canReset: true,
+    });
+    expect(fileActions(file({}))).toEqual({ choices: [], canOpen: false, canMarkResolved: false, canReset: false });
+  });
+
+  // What blocks every whole-file choice, and the one block that wins when a
+  // file has several: a name GitOdile cannot spell decides before the disk.
+  it.each([
+    ["an ordinary file", file({}), null],
+    ["a folder in the way", file({ facets: ["file-directory"], working: "directory" }), "folder"],
+    ["a case-only twin", file({ facets: ["case-collision"] }), "case"],
+    ["a name that is not exact", file({ pathIsExact: false, facets: ["case-collision"] }), "inexact-path"],
+  ] as const)("blocks %s", (_label, conflict, expected) => {
+    expect(fileBlock(conflict)).toBe(expected);
+  });
+
+  // Only what the reader wrote outside GitOdile is looked at again: not a
+  // file still as the merge left it, not a side an action wrote.
+  it.each([
+    ["an edit outside GitOdile", file({ state: "editedOutside" }), true],
+    ["the merge's own content", file({}), false],
+    ["a side GitOdile kept", file({ state: "editedOutside", kept: "current" }), false],
+    ["a folder", file({ state: "editedOutside", working: "directory" }), false],
+    ["a file marked resolved", file({ state: "markedResolved" }), false],
+  ] as const)("checks %s for markers: %s", (_label, conflict, expected) => {
+    expect(needsMarkerCheck(conflict)).toBe(expected);
   });
 
   // A choice names what it throws away before it runs: the other side, or

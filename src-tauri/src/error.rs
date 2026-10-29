@@ -123,6 +123,8 @@ pub(crate) enum AppErrorCode {
     ConflictChoiceNeeded,
     ConflictContentNotKept,
     FileLocked,
+    ConflictCaseCollision,
+    FileRunsAsProgram,
     IgnoreFileTooLarge,
     IgnoreFileNotText,
     StaleIgnoreFile,

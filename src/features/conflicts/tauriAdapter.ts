@@ -11,4 +11,10 @@ export const conflictsPort: ConflictsPort = {
     invoke("mark_conflict_resolved", { path, sessionEpoch, filePath, expected, stateToken, allowMarkers, executable }),
   resetFile: ({ projectId: path, sessionEpoch, filePath, stateToken, stagesOnly }) =>
     invoke("reset_conflict_file", { path, sessionEpoch, filePath, stateToken, stagesOnly }),
+  openFile: ({ projectId: path, sessionEpoch, filePath, stateToken }) =>
+    invoke("open_conflict_file", { path, sessionEpoch, filePath, stateToken }),
+  checkWorkingFile: ({ projectId: path, sessionEpoch, filePath }) =>
+    invoke("check_conflict_working_file", { path, sessionEpoch, filePath }),
+  revealFile: ({ projectId: path, sessionEpoch, filePath }) => invoke("reveal_project_file", { path, sessionEpoch, filePath }),
+  openProjectFolder: ({ projectId: path, sessionEpoch }) => invoke("open_project_folder", { path, sessionEpoch }),
 };

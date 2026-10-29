@@ -50,6 +50,7 @@ export const en: ConflictsTranslations = {
   conflictsFacetSubmodule: "submodule",
   conflictsFacetTypeChange: "kind changed",
   conflictsFacetFileDirectory: "a folder is in the way",
+  conflictsFacetCaseCollision: "another file differs only by capital letters",
   conflictsSideChanged: (side) => `What “${side}” changed`,
   conflictsSideDeleted: (side) => `“${side}” deleted this file.`,
   conflictsSideUnchanged: (side) => `“${side}” didn't change this file.`,
@@ -124,4 +125,33 @@ export const en: ConflictsTranslations = {
   conflictsAnnounceResolved: (path, remaining) =>
     `${path} is marked resolved. ${remaining === 0 ? "No file overlaps any more." : `${remaining.toLocaleString()} ${remaining === 1 ? "file still overlaps" : "files still overlap"}.`}`,
   conflictsAnnounceReset: (path) => `${path} is back to how the merge left it.`,
+  conflictsOpenInEditor: "Open in editor",
+  conflictsOpenedStatus: "Opened in its app · GitOdile looks at it again when you save",
+  conflictsAnnounceOpened: (path) => `Opened ${path}. Opening it doesn't resolve it.`,
+  conflictsCheckingMarkers: "Edited outside GitOdile · checking it…",
+  conflictsMarkersLeft: (blocks) =>
+    `Edited outside GitOdile · ${blocks.toLocaleString()} overlapping ${blocks === 1 ? "part is" : "parts are"} still marked in it`,
+  conflictsNoMarkersLeft: "Edited outside GitOdile · no overlapping parts marked in it",
+  conflictsMarkersUnknown: (limit) =>
+    `Edited outside GitOdile · ${
+      limit === "utf16"
+        ? "it's saved as UTF-16, so GitOdile can't look for marked parts"
+        : limit === "binary"
+          ? "it isn't text, so GitOdile can't look for marked parts"
+          : limit === "too-large"
+            ? "it's too large for GitOdile to look for marked parts"
+            : "GitOdile couldn't read it to look for marked parts"
+    }`,
+  conflictsShowInFolder: "Show in folder",
+  conflictsOpenProjectFolder: "Open project folder",
+  conflictsRunsAsProgramTitle: "GitOdile won't open this file",
+  conflictsOpenFailedTitle: "Couldn't open this file",
+  conflictsOpenFailedBody: "No app on this computer opened it. Show it in its folder and open it with an app you choose.",
+  conflictsBlockFolderTitle: "A folder is where this file goes",
+  conflictsBlockFolderBody: "Git expects a file at this place, but a folder is there, so no choice can be made without replacing it. Move or rename the folder yourself, then read again.",
+  conflictsBlockCaseTitle: "Two files differ only by capital letters",
+  conflictsBlockCaseBody: (others) =>
+    `This computer can't keep this file and ${others} apart, so GitOdile won't write either. Rename one of them with Git, on a computer that tells capital letters apart or in a terminal, then read again.`,
+  conflictsBlockInexactTitle: "GitOdile can't name this file exactly",
+  conflictsBlockInexactBody: "Its name isn't valid text, so GitOdile won't change it. Resolve it with Git in a terminal, where git status lists it, then read again.",
 };

@@ -13,10 +13,10 @@
 //! written beside its target and renamed over it.
 
 use super::{
-    describe_session, is_object_id, is_regular_file_mode, kept_side, read_blob_capped,
-    read_session, stale, unreadable, working_fingerprint, ConflictAction, ConflictFacet,
-    ConflictFile, ConflictSession, ConflictStage, KeptSide, UnmergedPath, WorkingKind,
-    MODE_EXECUTABLE, MODE_GITLINK, MODE_SYMLINK,
+    describe_session, exact_working_path, is_object_id, is_regular_file_mode, kept_side,
+    read_blob_capped, read_session, scan_working_markers, stale, unreadable, working_fingerprint,
+    ConflictAction, ConflictFacet, ConflictFile, ConflictSession, ConflictStage, KeptSide,
+    MarkerScan, UnmergedPath, WorkingKind, MODE_EXECUTABLE, MODE_GITLINK, MODE_SYMLINK,
 };
 use crate::application;
 use crate::changes::validate_repo_relative_path;
@@ -33,16 +33,10 @@ use crate::recovery::{
     ConflictSnapshotManifest, JournalAction, SnapshotStageEntry, SnapshotWorking,
 };
 use crate::repository_access::RepositoryContext;
-use std::fs::{self, File, OpenOptions};
-use std::io::{ErrorKind, Read};
+use std::fs::{self, OpenOptions};
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-
-/// Bytes read from a working file to look for conflict markers; a larger
-/// file is not scanned, and marking it resolved does not stop on markers.
-const MAX_MARKER_SCAN_BYTES: u64 = 32 * 1024 * 1024;
-/// Git's default `conflict-marker-size`.
-const MARKER_SIZE: usize = 7;
 
 #[derive(serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
@@ -310,52 +304,6 @@ fn symlinks_enabled(path: &str) -> Result<bool, AppError> {
     Ok(String::from_utf8_lossy(&output.stdout).trim() == "true")
 }
 
-/// The path to write, inside the project and spelled on disk exactly as
-/// Git spells it: on a file system that ignores case, `Readme.md` would
-/// otherwise land on `README.md`, which is another path to Git.
-fn write_target(root: &Path, relative: &str) -> Result<PathBuf, AppError> {
-    let invalid = || {
-        AppError::new(
-            AppErrorCode::PathInvalid,
-            "GitOdile won't write this file where Git expects it.",
-        )
-        .with_remediation("Read the overlapping changes again.")
-    };
-    let root = root.canonicalize().map_err(|_| invalid())?;
-    let mut current = root.clone();
-    let components = relative.split('/').collect::<Vec<_>>();
-    for (index, component) in components.iter().enumerate() {
-        let next = current.join(component);
-        match fs::symlink_metadata(&next) {
-            Ok(metadata) => {
-                let spelled = fs::read_dir(&current)
-                    .map_err(|_| invalid())?
-                    .filter_map(Result::ok)
-                    .any(|entry| entry.file_name().to_str() == Some(*component));
-                if !spelled {
-                    return Err(AppError::new(
-                        AppErrorCode::ConflictActionUnavailable,
-                        "This file's name differs only by capital letters from one on disk.",
-                    )
-                    .with_remediation(
-                        "Rename or remove the other file yourself, then read again.",
-                    ));
-                }
-                let is_last = index + 1 == components.len();
-                if !is_last && metadata.file_type().is_symlink() {
-                    // A folder of the path is a link: writing through it
-                    // could land outside the project.
-                    return Err(invalid());
-                }
-            }
-            Err(error) if error.kind() == ErrorKind::NotFound => {}
-            Err(_) => return Err(invalid()),
-        }
-        current = next;
-    }
-    Ok(current)
-}
-
 fn temporary_beside(target: &Path) -> PathBuf {
     static SEQUENCE: AtomicU64 = AtomicU64::new(0);
     let name = target
@@ -436,7 +384,7 @@ fn write_stage(
     relative: &str,
     stage: &ConflictStage,
 ) -> Result<(), AppError> {
-    let target = write_target(root, relative)?;
+    let target = exact_working_path(root, relative)?;
     if fs::symlink_metadata(&target).is_ok_and(|metadata| metadata.is_dir()) {
         return Err(unavailable("A folder is in the way of this file."));
     }
@@ -495,7 +443,7 @@ fn write_stage(
 }
 
 fn remove_working(root: &Path, relative: &str) -> Result<(), AppError> {
-    let target = write_target(root, relative)?;
+    let target = exact_working_path(root, relative)?;
     match fs::symlink_metadata(&target) {
         Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
         Err(error) => Err(write_failed(&error)),
@@ -609,74 +557,6 @@ pub(crate) fn resolve_conflict_side(
     fresh_session(&path, &prepared.repository)
 }
 
-/// What a scan of a working file for conflict markers found.
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-pub(crate) enum MarkerScan {
-    /// Complete `<<<<<<<` … `=======` … `>>>>>>>` blocks.
-    Found(usize),
-    None,
-    /// Binary, UTF-16, too large or unreadable: nothing can be said.
-    Unknown,
-}
-
-fn marker_line(line: &[u8], marker: u8) -> bool {
-    line.len() >= MARKER_SIZE
-        && line[..MARKER_SIZE].iter().all(|byte| *byte == marker)
-        && line
-            .get(MARKER_SIZE)
-            .is_none_or(|next| matches!(next, b' ' | b'\t' | b'\r'))
-}
-
-/// Counts whole conflict blocks. A lone `=======` (a Markdown underline) or
-/// a stray opening line is not a block.
-pub(crate) fn scan_conflict_markers(content: &[u8]) -> MarkerScan {
-    let probe = &content[..content.len().min(8000)];
-    if probe.contains(&0) || probe.starts_with(&[0xff, 0xfe]) || probe.starts_with(&[0xfe, 0xff]) {
-        return MarkerScan::Unknown;
-    }
-    let mut blocks = 0;
-    // 0: outside, 1: after <<<<<<<, 2: after =======
-    let mut state = 0;
-    for line in content.split(|byte| *byte == b'\n') {
-        match state {
-            0 if marker_line(line, b'<') => state = 1,
-            1 if marker_line(line, b'<') => state = 1,
-            1 if marker_line(line, b'=') => state = 2,
-            2 if marker_line(line, b'>') => {
-                blocks += 1;
-                state = 0;
-            }
-            _ => {}
-        }
-    }
-    if blocks == 0 {
-        MarkerScan::None
-    } else {
-        MarkerScan::Found(blocks)
-    }
-}
-
-pub(crate) fn scan_working_markers(target: &Path) -> MarkerScan {
-    let Ok(file) = File::open(target) else {
-        return MarkerScan::Unknown;
-    };
-    if file
-        .metadata()
-        .map_or(true, |metadata| metadata.len() > MAX_MARKER_SCAN_BYTES)
-    {
-        return MarkerScan::Unknown;
-    }
-    let mut content = Vec::new();
-    if file
-        .take(MAX_MARKER_SCAN_BYTES)
-        .read_to_end(&mut content)
-        .is_err()
-    {
-        return MarkerScan::Unknown;
-    }
-    scan_conflict_markers(&content)
-}
-
 /// Tells Git a file is done, as it is now. A side kept and untouched since is
 /// staged as that exact stage, with its mode, because `git add` would take the
 /// mode from the current side where the project ignores modes or links;
@@ -743,7 +623,8 @@ pub(crate) fn mark_conflict_resolved(
             WorkingKind::Absent => Plan::Remove,
             WorkingKind::File | WorkingKind::SymbolicLink => {
                 if fingerprint.kind == WorkingKind::File && !allow_markers {
-                    if let MarkerScan::Found(blocks) = scan_working_markers(&root.join(&file_path))
+                    if let MarkerScan::Found { blocks } =
+                        scan_working_markers(&root.join(&file_path))
                     {
                         return Err(AppError::new(
                             AppErrorCode::ConflictMarkersRemain,
@@ -865,7 +746,7 @@ fn restore_snapshot_file(
     sha256: &str,
     modified_ns: u128,
 ) -> Result<(), AppError> {
-    let target = write_target(root, relative)?;
+    let target = exact_working_path(root, relative)?;
     create_parent(root, &target)?;
     let temporary = temporary_beside(&target);
     let result = fs::copy(source, &temporary)
@@ -1008,7 +889,7 @@ pub(crate) fn reset_conflict_file(
                 captured_modified_ns,
             )?,
             SnapshotWorking::SymbolicLink { target } => {
-                let at = write_target(root, &file_path)?;
+                let at = exact_working_path(root, &file_path)?;
                 create_parent(root, &at)?;
                 let temporary = temporary_beside(&at);
                 create_link(target, &temporary).map_err(|error| write_failed(&error))?;
@@ -1045,27 +926,6 @@ pub(crate) fn reset_conflict_file(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn only_whole_marker_blocks_count() {
-        for (content, expected) in [
-            (
-                &b"a\n<<<<<<< HEAD\nours\n=======\ntheirs\n>>>>>>> feature\nb\n"[..],
-                MarkerScan::Found(1),
-            ),
-            (
-                b"<<<<<<< HEAD\r\nours\r\n||||||| base\r\nold\r\n=======\r\ntheirs\r\n>>>>>>> x\r\n",
-                MarkerScan::Found(1),
-            ),
-            (b"Title\n=======\n\ntext\n", MarkerScan::None),
-            (b"<<<<<<< HEAD\nnever closed\n", MarkerScan::None),
-            (b"<<<<<<<<< not a marker\n=======\n>>>>>>>\n", MarkerScan::None),
-            (b"\xff\xfe<\0<\0", MarkerScan::Unknown),
-            (b"bin\0ary", MarkerScan::Unknown),
-        ] {
-            assert_eq!(scan_conflict_markers(content), expected);
-        }
-    }
 
     #[test]
     fn index_info_removes_the_path_before_adding_its_entries() {

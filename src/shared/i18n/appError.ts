@@ -40,6 +40,7 @@ export const APP_ERROR_CODES = [
   "dirty_working_tree", "incoming_tracked_change_collision", "ref_locked", "nothing_to_discard", "stale_discard_plan",
   "recovery_unavailable", "recovery_conflict", "recovery_failed", "stale_conflict_session",
   "conflict_action_unavailable", "conflict_markers_remain", "conflict_choice_needed", "conflict_content_not_kept", "file_locked",
+  "conflict_case_collision", "file_runs_as_program",
   "ignore_file_too_large", "ignore_file_not_text", "stale_ignore_file", "ignore_file_write_failed",
   "install_blocked", "unsupported_server",
 ] as const;
@@ -175,6 +176,8 @@ export function localizeAppError(error: unknown, t: SharedTranslations, fallback
     conflict_choice_needed: t.errorConflictChoiceNeeded,
     conflict_content_not_kept: t.errorConflictContentNotKept,
     file_locked: t.errorFileLocked,
+    conflict_case_collision: t.errorConflictCaseCollision,
+    file_runs_as_program: t.errorFileRunsAsProgram,
     ignore_file_too_large: t.errorIgnoreFileTooLarge,
     ignore_file_not_text: t.errorIgnoreFileNotText,
     stale_ignore_file: t.errorStaleIgnoreFile,

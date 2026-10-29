@@ -38,6 +38,7 @@
   margin: 0; color: var(--text-secondary-color); font-size: var(--text-body); line-height: var(--leading-normal);
 }
 .conflicts-notice .secondary-button { flex-shrink: 0; }
+.conflicts-notice__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); flex-shrink: 0; }
 .conflicts-side > .conflicts-notice { margin: var(--space-4); }
 
 /* Technical details: the dialogs' disclosure, set on the card it explains. */
@@ -155,7 +156,14 @@
   flex: 1 1 12rem; min-width: 0; margin: 0;
   color: var(--text-secondary-color); font-size: var(--text-label); line-height: var(--leading-normal);
 }
-.conflicts-actions__buttons { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); min-width: 0; }
+/* Markers left after an edit outside GitOdile: said in words and a glyph,
+   not by colour alone. */
+.conflicts-actions__status--warning { display: flex; align-items: center; gap: var(--space-1); color: var(--text-primary-color); }
+.conflicts-actions__status--warning > svg { width: var(--icon-meta); height: var(--icon-meta); flex-shrink: 0; color: var(--status-warning); }
+.conflicts-actions__buttons {
+  display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); min-width: 0;
+  margin-inline-start: auto;
+}
 .conflicts-actions__label { min-width: 0; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conflicts-actions .secondary-button[aria-pressed="true"] {
   border-color: var(--text-secondary-color);

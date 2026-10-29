@@ -27,7 +27,7 @@ use crate::{
     conflicts::{
         self,
         resolve::{ExpectedStages, SideChoice},
-        ConflictSession, ConflictSide, ConflictStageContent,
+        ConflictSession, ConflictSide, ConflictStageContent, WorkingFileCheck,
     },
     console::{
         self, ConsoleHost, ConsoleHostingResult, ConsoleModes, ConsolePlan, ConsoleQueryResult,
@@ -925,6 +925,37 @@ pub(crate) fn reset_conflict_file(
         (|| {
             validate_session(&path, &session_epoch)?;
             conflicts::resolve::reset_conflict_file(path, file_path, state_token, stages_only)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn open_conflict_file(
+    path: String,
+    file_path: String,
+    state_token: String,
+    session_epoch: String,
+) -> Result<(), AppError> {
+    report_result(
+        "open_conflict_file",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::open_conflict_file(path, file_path, state_token)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn check_conflict_working_file(
+    path: String,
+    file_path: String,
+    session_epoch: String,
+) -> Result<WorkingFileCheck, AppError> {
+    report_result(
+        "check_conflict_working_file",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::check_conflict_working_file(path, file_path)
         })(),
     )
 }
@@ -2101,6 +2132,8 @@ mod contract_tests {
             AppErrorCode::ConflictChoiceNeeded,
             AppErrorCode::ConflictContentNotKept,
             AppErrorCode::FileLocked,
+            AppErrorCode::ConflictCaseCollision,
+            AppErrorCode::FileRunsAsProgram,
             AppErrorCode::IgnoreFileTooLarge,
             AppErrorCode::IgnoreFileNotText,
             AppErrorCode::StaleIgnoreFile,

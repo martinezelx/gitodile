@@ -77,6 +77,10 @@ async function renderScreen(
     keepSide: vi.fn(),
     markResolved: vi.fn(),
     resetFile: vi.fn(),
+    openFile: vi.fn(),
+    checkWorkingFile: vi.fn(),
+    revealFile: vi.fn(),
+    openProjectFolder: vi.fn(),
     ...mutations,
   });
   await controller.refresh(query);
@@ -266,6 +270,58 @@ describe("ConflictsScreen", () => {
     await user.click(screen.getByRole("button", { name: way }));
     if (code === "file_locked") expect(keepSide).toHaveBeenCalledTimes(2);
     else expect(readSession).toHaveBeenCalledTimes(2);
+  });
+
+  it("opens a file in its app without resolving it, and offers the folder for a type it won't open", async () => {
+    const user = userEvent.setup();
+    const file = conflict("a.txt", { allowedActions: ["keep-current", "open-in-editor", "mark-resolved"] });
+    const openFile = vi.fn<ConflictsPort["openFile"]>()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(appError("file_runs_as_program"))
+      .mockRejectedValueOnce(appError("conflict_action_unavailable"));
+    const revealFile = vi.fn<ConflictsPort["revealFile"]>().mockResolvedValue(undefined);
+    const { slot, readSession } = await renderScreen(session({}, [file]), undefined, { mutations: { openFile, revealFile } });
+
+    await user.click(screen.getByRole("button", { name: "Open in editor" }));
+    expect(openFile).toHaveBeenLastCalledWith({ ...query, filePath: "a.txt", stateToken: "token" });
+    expect(await screen.findByText("Opened in its app · GitOdile looks at it again when you save")).toBeTruthy();
+    // Opening is not a change to the project: no slot, no refresh.
+    expect(slot.onOperationStart).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Open in editor" }));
+    expect(await screen.findByText("GitOdile won't open this file")).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Show in folder" }));
+    expect(revealFile).toHaveBeenCalledWith({ ...query, filePath: "a.txt" });
+
+    // A file that no longer allows opening is read again, not "couldn't open".
+    await user.click(screen.getByRole("button", { name: "Open in editor" }));
+    await waitFor(() => expect(readSession).toHaveBeenCalledTimes(2));
+    expect(screen.queryByText("Couldn't open this file")).toBeNull();
+  });
+
+  it.each([
+    ["markers left", { kind: "found", blocks: 2 }, "Edited outside GitOdile · 2 overlapping parts are still marked in it"],
+    ["no markers", { kind: "none" }, "Edited outside GitOdile · no overlapping parts marked in it"],
+    ["UTF-16", { kind: "unknown", limit: "utf16" }, "Edited outside GitOdile · it's saved as UTF-16, so GitOdile can't look for marked parts"],
+  ] as const)("says what an edit outside GitOdile left: %s", async (_label, markers, text) => {
+    const file = conflict("a.txt", { state: "editedOutside", allowedActions: ["open-in-editor", "mark-resolved", "reset-file"] });
+    const checkWorkingFile = vi.fn<ConflictsPort["checkWorkingFile"]>().mockResolvedValue({ stateToken: "token", markers });
+    await renderScreen(session({}, [file]), undefined, { mutations: { checkWorkingFile } });
+
+    expect(await screen.findByText(text)).toBeTruthy();
+    expect(checkWorkingFile).toHaveBeenCalledTimes(1);
+  });
+
+  it("explains a folder in the way and offers to show it", async () => {
+    const user = userEvent.setup();
+    const file = conflict("a.txt", { facets: ["file-directory"], working: "directory" });
+    const revealFile = vi.fn<ConflictsPort["revealFile"]>().mockResolvedValue(undefined);
+    await renderScreen(session({}, [file]), undefined, { mutations: { revealFile } });
+
+    expect(screen.getByText("A folder is where this file goes")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Mark resolved" })).toBeNull();
+    await user.click(screen.getByRole("button", { name: "Show in folder" }));
+    expect(revealFile).toHaveBeenCalledWith({ ...query, filePath: "a.txt" });
   });
 
   it("holds the actions while another change to the project runs", async () => {

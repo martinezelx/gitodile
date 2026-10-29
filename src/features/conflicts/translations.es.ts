@@ -50,6 +50,7 @@ export const es: ConflictsTranslations = {
   conflictsFacetSubmodule: "submódulo",
   conflictsFacetTypeChange: "cambió de tipo",
   conflictsFacetFileDirectory: "una carpeta lo impide",
+  conflictsFacetCaseCollision: "otro archivo solo se diferencia en mayúsculas",
   conflictsSideChanged: (side) => `Lo que cambió «${side}»`,
   conflictsSideDeleted: (side) => `«${side}» borró este archivo.`,
   conflictsSideUnchanged: (side) => `«${side}» no cambió este archivo.`,
@@ -124,4 +125,33 @@ export const es: ConflictsTranslations = {
   conflictsAnnounceResolved: (path, remaining) =>
     `${path} está marcado como resuelto. ${remaining === 0 ? "Ya no queda ningún archivo solapado." : `${remaining === 1 ? "Queda 1 archivo solapado" : `Quedan ${remaining.toLocaleString()} archivos solapados`}.`}`,
   conflictsAnnounceReset: (path) => `${path} vuelve a estar como lo dejó la combinación.`,
+  conflictsOpenInEditor: "Abrir en el editor",
+  conflictsOpenedStatus: "Abierto en su aplicación · GitOdile lo vuelve a mirar cuando guardes",
+  conflictsAnnounceOpened: (path) => `Se ha abierto ${path}. Abrirlo no lo resuelve.`,
+  conflictsCheckingMarkers: "Editado fuera de GitOdile · revisándolo…",
+  conflictsMarkersLeft: (blocks) =>
+    `Editado fuera de GitOdile · ${blocks === 1 ? "aún tiene 1 parte solapada marcada" : `aún tiene ${blocks.toLocaleString()} partes solapadas marcadas`}`,
+  conflictsNoMarkersLeft: "Editado fuera de GitOdile · ya no tiene partes solapadas marcadas",
+  conflictsMarkersUnknown: (limit) =>
+    `Editado fuera de GitOdile · ${
+      limit === "utf16"
+        ? "está guardado en UTF-16, así que GitOdile no puede buscar partes marcadas"
+        : limit === "binary"
+          ? "no es texto, así que GitOdile no puede buscar partes marcadas"
+          : limit === "too-large"
+            ? "es demasiado grande para que GitOdile busque partes marcadas"
+            : "GitOdile no pudo leerlo para buscar partes marcadas"
+    }`,
+  conflictsShowInFolder: "Mostrar en la carpeta",
+  conflictsOpenProjectFolder: "Abrir la carpeta del proyecto",
+  conflictsRunsAsProgramTitle: "GitOdile no abrirá este archivo",
+  conflictsOpenFailedTitle: "No se pudo abrir este archivo",
+  conflictsOpenFailedBody: "Ninguna aplicación de este equipo lo abrió. Muéstralo en su carpeta y ábrelo con la aplicación que elijas.",
+  conflictsBlockFolderTitle: "Hay una carpeta donde va este archivo",
+  conflictsBlockFolderBody: "Git espera un archivo en este lugar, pero hay una carpeta, así que no se puede elegir nada sin reemplazarla. Mueve la carpeta o cámbiale el nombre tú mismo y vuelve a leer.",
+  conflictsBlockCaseTitle: "Dos archivos solo se diferencian en mayúsculas",
+  conflictsBlockCaseBody: (others) =>
+    `Este equipo no puede mantener separados este archivo y ${others}, así que GitOdile no escribirá ninguno. Cambia el nombre de uno de ellos con Git, en un equipo que distinga mayúsculas o en un terminal, y vuelve a leer.`,
+  conflictsBlockInexactTitle: "GitOdile no puede nombrar este archivo con exactitud",
+  conflictsBlockInexactBody: "Su nombre no es texto válido, así que GitOdile no lo cambiará. Resuélvelo con Git en un terminal, donde git status lo muestra, y vuelve a leer.",
 };

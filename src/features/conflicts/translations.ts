@@ -48,6 +48,7 @@ export interface ConflictsTranslations {
   conflictsFacetSubmodule: string;
   conflictsFacetTypeChange: string;
   conflictsFacetFileDirectory: string;
+  conflictsFacetCaseCollision: string;
   conflictsSideChanged: (side: string) => string;
   conflictsSideDeleted: (side: string) => string;
   conflictsSideUnchanged: (side: string) => string;
@@ -121,4 +122,22 @@ export interface ConflictsTranslations {
   conflictsAnnounceDeleted: (path: string) => string;
   conflictsAnnounceResolved: (path: string, remaining: number) => string;
   conflictsAnnounceReset: (path: string) => string;
+  conflictsOpenInEditor: string;
+  conflictsOpenedStatus: string;
+  conflictsAnnounceOpened: (path: string) => string;
+  conflictsCheckingMarkers: string;
+  conflictsMarkersLeft: (blocks: number) => string;
+  conflictsNoMarkersLeft: string;
+  conflictsMarkersUnknown: (limit: "binary" | "utf16" | "too-large" | "unreadable") => string;
+  conflictsShowInFolder: string;
+  conflictsOpenProjectFolder: string;
+  conflictsRunsAsProgramTitle: string;
+  conflictsOpenFailedTitle: string;
+  conflictsOpenFailedBody: string;
+  conflictsBlockFolderTitle: string;
+  conflictsBlockFolderBody: string;
+  conflictsBlockCaseTitle: string;
+  conflictsBlockCaseBody: (others: string) => string;
+  conflictsBlockInexactTitle: string;
+  conflictsBlockInexactBody: string;
 }
