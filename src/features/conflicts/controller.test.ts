@@ -81,11 +81,12 @@ describe("conflicts controller", () => {
     expect(read).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps the same session for the same token and drops answers for a closed project", async () => {
+  it("keeps the same session for the same token, keeps projects apart and drops answers for a closed one", async () => {
     let resolveLate!: (value: ConflictSession) => void;
     const read = vi.fn<ConflictsPort["readSession"]>()
       .mockResolvedValueOnce(session("one"))
       .mockResolvedValueOnce(session("one"))
+      .mockResolvedValueOnce(session("other"))
       .mockReturnValueOnce(new Promise((resolve) => { resolveLate = resolve; }));
     const controller = createConflictsController(port(read));
 
@@ -94,11 +95,22 @@ describe("conflicts controller", () => {
     await controller.refresh(query);
     expect(controller.getSnapshot(query).session).toBe(first);
 
+    // Another open project keeps its own session and place in the list
+    // through this one's mutation and close.
+    const other = { projectId: "/other", sessionEpoch: "epoch-2" };
+    await controller.refresh(other);
+    controller.rememberView(other, { selectedPath: "b.txt" });
+    controller.rememberView(query, { selectedPath: "a.txt" });
+    await controller.mutate(query, async () => session("mutated"));
+
     const late = controller.refresh(query);
     controller.close(query);
     resolveLate(session("two"));
     await late;
     expect(controller.getSnapshot(query).session).toBeUndefined();
+    expect(controller.viewMemory(query).selectedPath).toBeNull();
+    expect(controller.getSnapshot(other).session?.stateToken).toBe("other");
+    expect(controller.viewMemory(other).selectedPath).toBe("b.txt");
   });
 
   it("makes a mutation's session the cached one, over a read started before it", async () => {

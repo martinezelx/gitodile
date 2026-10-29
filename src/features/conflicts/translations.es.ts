@@ -22,6 +22,7 @@ export const es: ConflictsTranslations = {
   conflictsUnmergedBody:
     "No hay ninguna operación esperando, así que no hay nada que continuar: es lo que puede dejar recuperar cambios apartados. Arregla cada archivo en tu editor y márcalo como resuelto allí.",
   conflictsPartialList: (count) => `Solo se muestran los primeros ${count.toLocaleString("es")} archivos.`,
+  conflictsProgressPartial: (count) => `Se solapan más de ${count.toLocaleString("es")} archivos`,
   conflictsErrorTitle: "No se pudieron leer los cambios que se solapan",
   conflictsTryAgain: "Reintentar",
   conflictsNothingPausedTitle: "No hay nada en pausa",
@@ -42,6 +43,8 @@ export const es: ConflictsTranslations = {
   conflictsShapeDeletedByBoth: "Borrado en los dos lados",
   conflictsShapeOnlyOn: (side) => `Solo en «${side}»`,
   conflictsStateEditedOutside: "Editado desde entonces",
+  conflictsStateKept: (side) => `Te quedaste con «${side}»`,
+  conflictsStateDeleted: "Borrado aquí",
   conflictsStateStale: "Cambió desde que se leyó",
   conflictsStateUnsupported: "No se puede tratar aquí",
   conflictsStateResolved: "Marcado como resuelto",

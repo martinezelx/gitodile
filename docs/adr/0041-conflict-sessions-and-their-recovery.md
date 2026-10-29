@@ -257,7 +257,10 @@ replaced content would not fit refuses and changes nothing. It is removed with
 its record.
 
 A rename over a file another program holds open fails on Windows; the action
-reports `file_locked`, removes its temporary file and changes nothing.
+reports `file_locked`, removes its temporary file and changes nothing. A
+program that opened the file without sharing refuses even the read that
+copies it into the journal; that is `file_locked` too, before anything
+changes (found by the 037-7 audit).
 
 **Opening a file in the user's own application** (task 037-6-3) uses the
 system's default application for the file's type, never `GIT_EDITOR` or

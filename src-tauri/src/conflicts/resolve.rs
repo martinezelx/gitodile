@@ -13,11 +13,11 @@
 //! written beside its target and renamed over it.
 
 use super::{
-    describe_session, exact_working_path, fresh_session, is_object_id, is_regular_file_mode,
-    kept_side, read_blob_capped, read_session, scan_working_markers, stage_entries, stale,
-    unreadable, working_fingerprint, ConflictAction, ConflictFacet, ConflictFile, ConflictSession,
-    ConflictStage, KeptSide, MarkerScan, UnmergedPath, WorkingKind, MODE_EXECUTABLE, MODE_GITLINK,
-    MODE_SYMLINK,
+    describe_session, exact_working_path, file_in_use, fresh_session, is_object_id,
+    is_regular_file_mode, kept_side, read_blob_capped, read_session, scan_working_markers,
+    stage_entries, stale, unreadable, working_fingerprint, ConflictAction, ConflictFacet,
+    ConflictFile, ConflictSession, ConflictStage, KeptSide, MarkerScan, UnmergedPath, WorkingKind,
+    MODE_EXECUTABLE, MODE_GITLINK, MODE_SYMLINK,
 };
 use crate::application;
 use crate::changes::validate_repo_relative_path;
@@ -71,14 +71,8 @@ fn uncertain(message: &str) -> AppError {
 /// A working-tree write that failed. On Windows another program holding the
 /// file open is the usual reason, and the one the reader can fix.
 fn write_failed(error: &std::io::Error) -> AppError {
-    let locked = matches!(error.raw_os_error(), Some(32 | 33))
-        || (cfg!(windows) && error.kind() == ErrorKind::PermissionDenied);
-    if locked {
-        AppError::new(
-            AppErrorCode::FileLocked,
-            "Another program is using this file, so GitOdile couldn't change it.",
-        )
-        .with_remediation("Close the file in that program, then try again. Nothing was changed.")
+    if let Some(locked) = file_in_use(error) {
+        locked
     } else if error.kind() == ErrorKind::PermissionDenied {
         AppError::new(
             AppErrorCode::PermissionDenied,

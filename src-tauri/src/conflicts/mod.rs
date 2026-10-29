@@ -358,6 +358,21 @@ pub(crate) fn unreadable() -> AppError {
     .with_remediation("Check that the project and its Git metadata are readable, then try again.")
 }
 
+/// Another program holding a file open, the reason for a failed read or
+/// write the reader can fix. On Windows a program that opened the file
+/// without sharing refuses even the read that keeps a copy of it first.
+pub(crate) fn file_in_use(error: &std::io::Error) -> Option<AppError> {
+    let locked = matches!(error.raw_os_error(), Some(32 | 33))
+        || (cfg!(windows) && error.kind() == std::io::ErrorKind::PermissionDenied);
+    locked.then(|| {
+        AppError::new(
+            AppErrorCode::FileLocked,
+            "Another program is using this file, so GitOdile couldn't change it.",
+        )
+        .with_remediation("Close the file in that program, then try again. Nothing was changed.")
+    })
+}
+
 /// A name Git spells one way that the disk holds spelled another way: on a
 /// file system that ignores case, `Readme.md` would land on `README.md`,
 /// which is another path to Git.

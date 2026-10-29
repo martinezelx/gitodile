@@ -764,7 +764,8 @@ verifies its result and returns the fresh session. A side's content comes
 through `cat-file --filters` straight into a temporary file beside its
 target (`git_command::run_git_to_file`, so an LFS file is never held in
 memory) and is renamed over it; a Windows file held open by another program
-fails as `file_locked` with nothing changed.
+fails as `file_locked` with nothing changed, whether it refuses the rename or,
+opened without sharing, the journal's copy before it.
 
 `conflicts/mod.rs` also holds what neither mutates nor belongs to one action:
 the exact-path check every write and open goes through

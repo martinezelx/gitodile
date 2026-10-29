@@ -229,6 +229,9 @@ export function FinishMergeDialog({
 
   const failure = step.kind === "failed" ? step.error : null;
   const failureCode = errorCode(failure);
+  // Git may already have done it: the screen shows what it left, and no
+  // second attempt is offered on a plan that may no longer describe it.
+  const uncertain = failureCode === "merge_outcome_uncertain";
   return (
     <Dialog
       size="m"
@@ -324,22 +327,28 @@ export function FinishMergeDialog({
       )}
 
       <div className="dialog-actions">
-        <button className="secondary-button" type="button" onClick={onClose} disabled={isRunning}>{t.commonCancel}</button>
-        <button
-          className="primary-button"
-          type="button"
-          disabled={isRunning || !plan}
-          onClick={() => void confirm()}
-        >
-          {isRunning || !plan ? (
-            <>
-              <LoaderCircle aria-hidden="true" className="icon--spinning" />
-              {isRunning ? t.conflictsFinishRunning : t.saveVersionChecking}
-            </>
-          ) : (
-            t.conflictsFinishConfirm
-          )}
-        </button>
+        {uncertain ? (
+          <button className="primary-button" type="button" onClick={onClose}>{t.commonClose}</button>
+        ) : (
+          <>
+            <button className="secondary-button" type="button" onClick={onClose} disabled={isRunning}>{t.commonCancel}</button>
+            <button
+              className="primary-button"
+              type="button"
+              disabled={isRunning || !plan}
+              onClick={() => void confirm()}
+            >
+              {isRunning || !plan ? (
+                <>
+                  <LoaderCircle aria-hidden="true" className="icon--spinning" />
+                  {isRunning ? t.conflictsFinishRunning : t.saveVersionChecking}
+                </>
+              ) : (
+                t.conflictsFinishConfirm
+              )}
+            </button>
+          </>
+        )}
       </div>
     </Dialog>
   );
@@ -452,8 +461,12 @@ export function AbortMergeDialog({
         </details>
       )}
       <div className="dialog-actions">
-        <button className="secondary-button" type="button" onClick={onClose} disabled={isRunning}>{t.commonCancel}</button>
-        {planError !== null && !plan ? (
+        {failureCode === "merge_outcome_uncertain" ? (
+          <button className="primary-button" type="button" onClick={onClose}>{t.commonClose}</button>
+        ) : (
+          <button className="secondary-button" type="button" onClick={onClose} disabled={isRunning}>{t.commonCancel}</button>
+        )}
+        {failureCode === "merge_outcome_uncertain" ? null : planError !== null && !plan ? (
           <button className="primary-button" type="button" onClick={reread}>{t.conflictsTryAgain}</button>
         ) : (
           <button className="danger-button" type="button" disabled={isRunning || !plan} onClick={() => void confirm()}>

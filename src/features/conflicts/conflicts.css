@@ -7,12 +7,12 @@
 .conflicts-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 
 .conflicts-header {
-  display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); min-width: 0;
   padding: var(--space-3) var(--space-4);
   border-bottom: 1px solid var(--border-subtle);
 }
 .conflicts-header__back svg { width: var(--icon-control); height: var(--icon-control); }
-.conflicts-header__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.conflicts-header__text { flex: 1 1 18rem; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 .conflicts-header__title { margin: 0; font-size: var(--text-title); font-weight: var(--weight-strong); }
 .conflicts-header__summary {
   margin: 0; display: flex; flex-wrap: wrap; column-gap: var(--space-2);
@@ -21,7 +21,7 @@
 .conflicts-header__summary > span + span::before { content: "·"; margin-inline-end: var(--space-2); }
 /* Finish and stop at the end of the band: the session's own actions, apart
    from each file's bar. They wrap under the text rather than squeeze it. */
-.conflicts-header__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
+.conflicts-header__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-inline-start: auto; }
 /* A plan still being read: its facts' lines, faint, in their final place. */
 .conflicts-plan-placeholder { display: grid; gap: var(--space-2); }
 

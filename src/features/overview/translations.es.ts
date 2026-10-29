@@ -47,7 +47,7 @@ export const es: OverviewTranslations = {
   overviewJourneyNoteIdle: "Revisando tu proyecto…",
   overviewPublishAll: (count) => (count === 1 ? "Publicar todo" : `Publicar las ${count}`),
   overviewNextConflictsTitle: (count) =>
-    count === 1 ? "1 archivo tiene cambios superpuestos" : `${count} archivos tienen cambios superpuestos`,
+    count === 1 ? "1 archivo tiene cambios que se solapan" : `${count} archivos tienen cambios que se solapan`,
   overviewNextPausedTitle: "La combinación está en pausa",
   overviewNextPausedHint: "Ya no hay archivos solapados. Abre los cambios solapados para terminar la combinación o abandonarla.",
   overviewNextConflictsHint: "Elige qué se queda en cada parte. No se guarda nada hasta que termines.",
@@ -62,7 +62,7 @@ export const es: OverviewTranslations = {
   overviewNowLabel: "Ahora",
   overviewNowClean: "Nada sin guardar",
   overviewNowConflicts: (count) =>
-    count === 1 ? "1 archivo con cambios superpuestos" : `${count} archivos con cambios superpuestos`,
+    count === 1 ? "1 archivo con cambios que se solapan" : `${count} archivos con cambios que se solapan`,
   overviewTimelineLocalGroup: "En este ordenador",
   overviewTimelinePublished: "Publicado",
   overviewTimelineIncoming: (count) => (count === 1 ? "1 versión nueva" : `${count} versiones nuevas`),
@@ -142,7 +142,7 @@ export const es: OverviewTranslations = {
   overviewNextThenPublishWith: (count) =>
     count === 0 ? "publicarla" : count === 1 ? "publicarla junto a otra" : `publicarla junto a otras ${count}`,
   overviewDetailResolveTitle: "Lo que vas a decidir",
-  overviewDetailResolveSum: "con partes superpuestas",
+  overviewDetailResolveSum: "con partes que se solapan",
   overviewDetailBringTitle: "Lo que vas a traer",
   overviewDetailVersions: (count) => (count === 1 ? "1 versión" : `${count} versiones`),
   overviewDetailFrom: (remote) => `de ${remote}`,

@@ -16,8 +16,7 @@ The three-pane conflict editor is not part of this version; it is epic
 
 | Queue | Task | Outcome |
 | --- | --- | --- |
-| 01 | [037-7](037-7-conflict-workflow-audit.md) | Audit the conflict workflow |
-| 02 | [065-4](065-4-integrate-branches.md) | Integrate local branches and diverged project changes |
+| 01 | [065-4](065-4-integrate-branches.md) | Integrate local branches and diverged project changes |
 
 Done: [037-1](../done/037-1-conflict-domain-and-recovery.md), conflict truth,
 recovery, and how detected overlaps become sessions;
@@ -30,12 +29,15 @@ overlapping-changes screen;
 [037-6-3](../done/037-6-3-editor-and-hard-classes.md), the user's editor,
 reconciliation and the blocked classes;
 [037-5](../done/037-5-complete-or-abort-merge.md), finishing or abandoning
-the merge.
+the merge;
+[037-7](../done/037-7-conflict-workflow-audit.md), the independent audit of
+the whole workflow on Windows.
 
 Epics: [037 resolve overlapping changes](037-guided-conflict-resolution.md),
 with [037-6 resolve each file](037-6-resolve-files.md) split into three
-slices, all done; it stays open for the macOS and Linux runs its acceptance
-asks for, which the [037-7](037-7-conflict-workflow-audit.md) audit takes.
+slices, all done. The 037-7 audit passed
+every criterion on Windows; both epics stay open for the macOS and Linux runs
+and a real screen reader, the blocker it records.
 
 ## Exit condition
 

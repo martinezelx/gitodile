@@ -20,6 +20,7 @@ export interface ConflictsTranslations {
   conflictsUnsupportedBody: string;
   conflictsUnmergedBody: string;
   conflictsPartialList: (count: number) => string;
+  conflictsProgressPartial: (count: number) => string;
   conflictsErrorTitle: string;
   conflictsTryAgain: string;
   conflictsNothingPausedTitle: string;
@@ -40,6 +41,8 @@ export interface ConflictsTranslations {
   conflictsShapeDeletedByBoth: string;
   conflictsShapeOnlyOn: (side: string) => string;
   conflictsStateEditedOutside: string;
+  conflictsStateKept: (side: string) => string;
+  conflictsStateDeleted: string;
   conflictsStateStale: string;
   conflictsStateUnsupported: string;
   conflictsStateResolved: string;

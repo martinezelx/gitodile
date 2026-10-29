@@ -117,11 +117,24 @@ const STATE_KEYS = {
   markedResolved: "conflictsStateResolved",
 } as const;
 
+/** What the file holds now, in words. A side GitOdile wrote also reads as
+ * `editedOutside` (its bytes differ from the snapshot); naming the kept side
+ * keeps the row from saying the reader edited it. */
+function stateLabel(file: ConflictFile, names: Record<ConflictSideName, string>, t: Translations): string | null {
+  if (file.state === "unresolved") return null;
+  if (file.state === "editedOutside" && file.kept === "deleted") return t.conflictsStateDeleted;
+  if (file.state === "editedOutside" && (file.kept === "current" || file.kept === "incoming")) {
+    return t.conflictsStateKept(names[file.kept]);
+  }
+  return t[STATE_KEYS[file.state]];
+}
+
 /** One line under the file name: the overlap in plain words, then anything
  * that changes how it can be handled. Never colour alone. */
 function fileDescription(file: ConflictFile, names: Record<ConflictSideName, string>, t: Translations): string {
   const parts = [shapeLabel(file, names, t), ...file.facets.map((facet) => t[FACET_KEYS[facet]])];
-  if (file.state !== "unresolved") parts.push(t[STATE_KEYS[file.state]]);
+  const state = stateLabel(file, names, t);
+  if (state) parts.push(state);
   return parts.join(" · ");
 }
 
@@ -203,9 +216,13 @@ export function ConflictsScreen({
                 <span>{t.conflictsStep(session.operation.step.current, session.operation.step.total)}</span>
               )}
               <span>
-                {session.unresolvedCount > 0
-                  ? t.conflictsProgress(session.unresolvedCount, session.files.length)
-                  : t.conflictsProgressDone}
+                {/* A partial listing knows neither the total nor whether
+                    the files past it still overlap. */}
+                {!session.listingComplete
+                  ? t.conflictsProgressPartial(session.files.length)
+                  : session.unresolvedCount > 0
+                    ? t.conflictsProgress(session.unresolvedCount, session.files.length)
+                    : t.conflictsProgressDone}
               </span>
             </p>
           )}

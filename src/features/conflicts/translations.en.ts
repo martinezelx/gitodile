@@ -21,7 +21,8 @@ export const en: ConflictsTranslations = {
     "Nothing is lost by leaving it paused. Continue or cancel it with the tool that started it; the exact commands are in Technical details.",
   conflictsUnmergedBody:
     "No operation is waiting, so there is nothing to continue: this is what bringing back set-aside changes can leave. Fix each file in your editor, then mark it resolved there.",
-  conflictsPartialList: (count) => `Only the first ${count.toLocaleString()} files are listed.`,
+  conflictsPartialList: (count) => `Only the first ${count.toLocaleString("en")} files are listed.`,
+  conflictsProgressPartial: (count) => `More than ${count.toLocaleString("en")} files overlap`,
   conflictsErrorTitle: "Couldn't read the overlapping changes",
   conflictsTryAgain: "Try again",
   conflictsNothingPausedTitle: "Nothing is paused",
@@ -42,6 +43,8 @@ export const en: ConflictsTranslations = {
   conflictsShapeDeletedByBoth: "Deleted on both sides",
   conflictsShapeOnlyOn: (side) => `Only on “${side}”`,
   conflictsStateEditedOutside: "Edited since",
+  conflictsStateKept: (side) => `Kept “${side}”`,
+  conflictsStateDeleted: "Deleted here",
   conflictsStateStale: "Changed since it was read",
   conflictsStateUnsupported: "Can't be handled here",
   conflictsStateResolved: "Marked resolved",

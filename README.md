@@ -65,6 +65,14 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   links and images stay inactive. Change arrows navigate affected block groups.
   Oversized documents can show bounded changed fragments from the available diff,
   with a partial-preview notice and gaps; full text modes remain available.
+- Resolve a paused merge, whoever started it, on the **Overlapping changes**
+  screen (from Overview, Changes or the command palette): see what each branch
+  changed in every file, keep one whole side, delete, or open the file in its
+  own application, then mark it resolved or reset it to the original overlap.
+  Finish or stop the merge through a plan; a snapshot taken before the first
+  change keeps what each action replaces. A paused rebase, cherry-pick, revert
+  or stash pop left by another tool is explained read-only with the exact
+  commands to finish it there.
 - Discard one file or every unsaved change through a confirmed, state-checked
   flow that creates a persistent local recovery record and offers Undo. The
   confirmation can be turned off; the recovery record and Undo cannot.
@@ -188,8 +196,7 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   open, use recent closed projects, and go Back to the project screen you left.
 
 Not yet implemented: bringing in another local branch, the recovery
-center, guided conflict
-resolution, and setting changes aside. Windows/Linux release qualification also
+center, and setting changes aside. Windows/Linux release qualification also
 remains open. Windows Authenticode and macOS delivery are deliberately deferred
 until after `1.0.0`; see
 [ADR 0011](docs/adr/0011-defer-windows-authenticode-and-macos-delivery-until-after-1.0.md).

@@ -218,6 +218,9 @@ describe("ConflictsScreen", () => {
     expect(await screen.findByText("Kept “feature” · not marked resolved yet")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Keep “feature”" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByText("Kept “feature” in src/login.ts. It isn't marked resolved yet.")).toBeTruthy();
+    // The side GitOdile wrote differs from the snapshot, but the reader
+    // didn't edit it: the file's line names the kept side instead.
+    expect(screen.queryByText(/Edited since/)).toBeNull();
   });
 
   it("explains Mark resolved once, then asks about markers and the permission it needs", async () => {
@@ -430,5 +433,39 @@ describe("ConflictsScreen", () => {
     await user.click(within(dialog).getByRole("button", { name: "Stop combining" }));
     expect(abort).toHaveBeenLastCalledWith({ ...query, stateToken: "abort-token" });
     await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
+  });
+
+  // About 1 s per case: each renders the whole screen and reaches the
+  // outcome through the dialog's own plan, as the reader would.
+  it.each([
+    ["Finish combining…", "Finish combining", "planFinish", "finish"],
+    ["Stop combining…", "Stop combining?", "planAbort", "abort"],
+  ] as const)("offers no second attempt after %s ends uncertain", async (opener, dialogName, planKey, runKey) => {
+    const user = userEvent.setup();
+    const resolved = { ...session({}, [conflict("a.txt", { state: "markedResolved" })]), allowedActions: ["finish-merge", "abort-merge"] } satisfies ConflictSession;
+    const plans = {
+      planFinish: vi.fn().mockResolvedValue({
+        stateToken: "plan-token", sessionId: "session", current: { name: "main", commit: MAIN }, incoming: { name: "feature", commit: FEATURE },
+        resolvedFiles: 1, totalFiles: 1, files: [], unsavedFiles: 0, editedAfterResolving: 0, title: "Merge", description: null, signs: false, snapshot: null,
+      }),
+      planAbort: vi.fn().mockResolvedValue({
+        stateToken: "plan-token", sessionId: "session", origin: "external", restoration: "best-effort", current: { name: "main", commit: MAIN },
+        incoming: { name: "feature", commit: FEATURE }, files: 1, unresolvedFiles: 0, stagedFiles: 1, unsavedFiles: 0, snapshot: null,
+      }),
+    };
+    const run = vi.fn().mockRejectedValue(appError("merge_outcome_uncertain"));
+    const { slot } = await renderScreen(resolved, undefined, { mutations: { [planKey]: plans[planKey], [runKey]: run } });
+
+    await user.click(screen.getByRole("button", { name: opener }));
+    const dialog = screen.getByRole("dialog", { name: dialogName });
+    const confirm = await within(dialog).findByRole("button", { name: dialogName.replace("?", "") });
+    await waitFor(() => expect(confirm).toHaveProperty("disabled", false));
+    await user.click(confirm);
+    await waitFor(() => expect(within(dialog).queryByRole("button", { name: dialogName.replace("?", "") })).toBeNull());
+    // The title bar's Close and the one that takes the action's place.
+    expect(within(dialog).getAllByRole("button", { name: "Close" })).toHaveLength(2);
+    // The coordinated refresh reads what Git left; nothing repairs it.
+    expect(slot.onChanged).toHaveBeenCalledTimes(1);
+    expect(run).toHaveBeenCalledTimes(1);
   });
 });

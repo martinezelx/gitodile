@@ -72,14 +72,14 @@ is resolved only when the user marks it.
 
 # Acceptance criteria
 
-- [ ] Every conflict class in epic 037 has a tested whole-file path or a
+- [x] Every conflict class in epic 037 has a tested whole-file path or a
       deliberate limitation that cannot corrupt content, index, path or mode.
-- [ ] Side, delete and rename actions bind exact stage objects and paths, show
+- [x] Side, delete and rename actions bind exact stage objects and paths, show
       what they discard, and are resettable.
-- [ ] Choosing a side, marking resolved and resetting are separate, stale-safe,
+- [x] Choosing a side, marking resolved and resetting are separate, stale-safe,
       verified local mutations; reset restores exact stages, content and mode.
-- [ ] Opening an editor never implies resolution; remaining markers are flagged.
-- [ ] Restart, external edit, watcher burst, project switch, linked worktree,
+- [x] Opening an editor never implies resolution; remaining markers are flagged.
+- [x] Restart, external edit, watcher burst, project switch, linked worktree,
       lock, permission and interrupted outcomes keep their evidence.
 - [ ] Cross-platform symlink, casing, mode, path, encoding and submodule fixtures
       preserve unrelated content byte-for-byte.
@@ -135,3 +135,9 @@ and platform limitations.
 
 Record the fixture corpus, byte/mode/path assertions, desktop checks and
 focused command output.
+
+2026-10-29: each slice records its own; the
+[037-7](../done/037-7-conflict-workflow-audit.md) audit checked the whole on Windows.
+Two criteria stay open with epic 037's blocker: the cross-platform fixtures
+(real links, the executable bit and a case-sensitive disk need macOS or
+Linux) and a real screen reader.

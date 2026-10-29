@@ -73,7 +73,7 @@ product specification.
 | Create, switch, publish, and delete branches | Mostly delivered | Audit; publish uses the existing remote flow |
 | Fetch, fast-forward pull, and push | Delivered | Audit and harden |
 | Merge a local branch or diverged upstream | Missing | Required: task 065-4 (`0.5.0`) |
-| Resolve merge conflicts | Missing | Required at GitHub Desktop level: epic 037 (`0.5.0`); three-pane editor after `1.0.0` (epic 206) |
+| Resolve merge conflicts | Delivered on Windows; macOS and Linux unverified | GitHub Desktop level: epic 037 (`0.5.0`), open for the macOS/Linux and assistive-technology runs; three-pane editor after `1.0.0` (epic 206) |
 | Stash and restore unfinished work | Missing | Required: epic 064 (`0.6.0`) |
 | Undo/revert earlier work safely | Partial recovery plumbing only | Required: tasks 065-5 and 065-6 (`0.6.0`) |
 | Hosting-account sign-in | Delivered ahead of `1.0.0` | Not a gate; stays Free |

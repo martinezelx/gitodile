@@ -49,7 +49,7 @@ export const es: SharedTranslations = {
   errorPathNotChanged: "Ese archivo ya no tiene cambios sin guardar. Actualiza la lista.",
   errorPathEncodingUnsupported: "Un nombre de archivo del proyecto no se puede leer con seguridad. Renómbralo y actualiza.",
   errorNothingToSave: "Todavía no hay nada que guardar.",
-  errorUnresolvedConflicts: "Algunos archivos tienen cambios superpuestos. Resuélvelos antes de guardar.",
+  errorUnresolvedConflicts: "Algunos archivos tienen cambios que se solapan. Resuélvelos antes de guardar.",
   errorDetachedHead: "Este proyecto no está en una rama. Cambia a una antes de guardar.",
   errorGitOperationInProgress: "Hay otra operación de Git en curso. Termínala o cancélala y reintenta.",
   errorMissingIdentity: "Añade tu nombre y correo en Ajustes antes de guardar.",

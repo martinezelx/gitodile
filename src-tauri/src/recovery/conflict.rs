@@ -15,8 +15,8 @@
 use super::{now_ms, worktree_owner_id};
 use crate::changes::validate_repo_relative_path;
 use crate::conflicts::{
-    is_object_id, read_session, working_fingerprint, ConflictOrigin, PausedOperationKind,
-    WorkingKind,
+    file_in_use, is_object_id, read_session, working_fingerprint, ConflictOrigin,
+    PausedOperationKind, WorkingKind,
 };
 use crate::error::{AppError, AppErrorCode};
 use crate::git_command::{run_git, run_git_with_input_capped};
@@ -826,7 +826,8 @@ fn replaced_working(
     if !metadata.is_file() {
         return Ok(JournalWorking::Unreadable);
     }
-    let sha256 = file_sha256(&target).map_err(|_| journal_failed())?;
+    let sha256 =
+        file_sha256(&target).map_err(|error| file_in_use(&error).unwrap_or_else(journal_failed))?;
     let in_snapshot = snapshot.paths.iter().any(|item| {
         item.path == relative
             && matches!(&item.working, SnapshotWorking::File { sha256: kept, .. } if *kept == sha256)
@@ -864,7 +865,8 @@ fn replaced_working(
             ));
         }
         let _ = fs::remove_file(destination);
-        let copied = copy_file(&target, destination).map_err(|_| journal_failed())?;
+        let copied = copy_file(&target, destination)
+            .map_err(|error| file_in_use(&error).unwrap_or_else(journal_failed))?;
         if copied != sha256 {
             // The file changed while it was being copied.
             let _ = fs::remove_file(destination);

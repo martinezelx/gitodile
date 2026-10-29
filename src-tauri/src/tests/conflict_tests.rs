@@ -1401,3 +1401,107 @@ fn a_merge_gitodile_recorded_promises_and_proves_an_exact_return() {
         .success());
     let _ = fs::remove_dir_all(path);
 }
+
+// About 1 s alone on Windows: 5,100 paths are written into the index in one
+// command, and the session reads every one of them once.
+#[test]
+fn a_session_past_its_path_bound_says_it_is_partial() {
+    let names = (0..5_100)
+        .map(|index| format!("many/{index:05}.txt"))
+        .collect::<Vec<_>>();
+    let names = names.iter().map(String::as_str).collect::<Vec<_>>();
+    let path = synthetic_merge("conflict-many", &names);
+    let read = session(&path);
+    assert!(!read.listing_complete);
+    assert_eq!(read.files.len(), 5_000);
+    assert!(!read.allowed_actions.contains(&SessionAction::FinishMerge));
+    assert!(merge::plan_finish_merge(path.clone()).is_err());
+    let _ = fs::remove_dir_all(path);
+}
+
+/// Two actions sent with the same token, a file another program holds open,
+/// and a resolution made by another tool that a reset replaces: none of them
+/// may lose or cross work.
+#[test]
+fn concurrent_locked_and_external_changes_keep_their_evidence() {
+    let path = synthetic_merge("conflict-race", &["a.txt", "b.txt", "c.txt"]);
+    // Shorter than either side, so a side written over it changes the
+    // file's size, which the token covers even where file times are coarse.
+    for name in ["a.txt", "b.txt", "c.txt"] {
+        write_bytes(&path, name, b"w\n");
+    }
+    let first = session(&path);
+
+    let racers = [
+        ("a.txt", SideChoice::KeepCurrent),
+        ("b.txt", SideChoice::KeepIncoming),
+    ]
+    .map(|(name, choice)| {
+        let (path, first) = (path.clone(), first.clone());
+        std::thread::spawn(move || keep(&path, &first, name, choice).map(|_| name))
+    })
+    .map(|racer| racer.join().unwrap());
+    let won = racers.iter().filter(|result| result.is_ok()).count();
+    assert_eq!(
+        won, 1,
+        "the write lock and the token let one action through"
+    );
+    let lost = racers.into_iter().find_map(Result::err).unwrap();
+    assert_eq!(lost.code, AppErrorCode::StaleConflictSession);
+    let read_bytes = |name: &str| fs::read(Path::new(&path).join(name)).unwrap();
+    let changed = ["a.txt", "b.txt"]
+        .iter()
+        .filter(|name| read_bytes(name) != b"w\n")
+        .count();
+    assert_eq!(changed, 1, "the refused action wrote nothing");
+
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // An editor that lets others read the file, and one that shares
+        // nothing, which refuses even the copy kept before a change.
+        for share in [1, 0] {
+            let now = session(&path);
+            let held = fs::OpenOptions::new()
+                .read(true)
+                .share_mode(share)
+                .open(Path::new(&path).join("c.txt"))
+                .unwrap();
+            let locked = keep(&path, &now, "c.txt", SideChoice::KeepIncoming);
+            drop(held);
+            assert_eq!(code(locked), AppErrorCode::FileLocked, "share mode {share}");
+            assert_eq!(
+                read_bytes("c.txt"),
+                b"w
+"
+            );
+        }
+        let leftovers = fs::read_dir(&path)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_type().unwrap().is_file())
+            .count();
+        assert_eq!(leftovers, 3, "no temporary file is left beside it");
+    }
+
+    // Another tool resolves c.txt with content the snapshot never saw; a
+    // reset replaces that index entry, so the journal must pin its blob.
+    write_bytes(&path, "c.txt", b"resolved elsewhere\n");
+    git_ok(&path, &["add", "--", "c.txt"]);
+    let outside = git_ok(&path, &["rev-parse", ":0:c.txt"]);
+    let now = session(&path);
+    assert_eq!(file(&now, "c.txt").state, ConflictFileState::MarkedResolved);
+    let reset = reset(&path, &now, "c.txt").unwrap();
+    assert_eq!(file(&reset, "c.txt").state, ConflictFileState::Unresolved);
+    assert_eq!(index_of(&path, "c.txt").len(), 3);
+    let journal = read_conflict_journal(&Path::new(&path).join(".git"), &reset.session_id).unwrap();
+    let pinned = git_ok(
+        &path,
+        &["ls-tree", journal.pin_reference.as_deref().unwrap()],
+    );
+    assert!(
+        pinned.contains(&outside),
+        "the replaced resolution is pinned"
+    );
+    let _ = fs::remove_dir_all(path);
+}

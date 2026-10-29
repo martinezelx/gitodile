@@ -280,7 +280,7 @@ Every class gets a safe whole-file path or an explicit, honest limitation.
 3. [037-6](037-6-resolve-files.md): whole-side choices, open in editor, mark
    resolved, reset.
 4. [037-5](../done/037-5-complete-or-abort-merge.md): finish and abort plans.
-5. [037-7](037-7-conflict-workflow-audit.md): end-to-end audit.
+5. [037-7](../done/037-7-conflict-workflow-audit.md): end-to-end audit.
 
 Slices may land behind honest disabled affordances or a development flag. Do not
 ship a resolver that can change files but cannot reset, finish or abort.
@@ -303,53 +303,53 @@ ship a resolver that can change files but cannot reset, finish or abort.
 
 ## Product and navigation
 
-- [ ] Conflicts are reachable from Overview, the Changes tab, the search
+- [x] Conflicts are reachable from Overview, the Changes tab, the search
       palette and an app-started merge, with no navigation-rail entry.
-- [ ] Leaving the resolver never aborts, stages, discards or completes anything.
-- [ ] Simple mode uses plain language and real branch names; technical details
+- [x] Leaving the resolver never aborts, stages, discards or completes anything.
+- [x] Simple mode uses plain language and real branch names; technical details
       show the exact operation, refs, commits, stages and commands.
-- [ ] The screen follows the Friendly Sheet system in light and dark themes and
+- [x] The screen follows the Friendly Sheet system in light and dark themes and
       at wide and narrow sizes.
 
 ## Domain and recovery
 
-- [ ] A typed session distinguishes origin, roles, state, allowed actions,
+- [x] A typed session distinguishes origin, roles, state, allowed actions,
       recovery evidence, file states, epochs and stale tokens.
-- [ ] Index stages, not markers, are the source of truth; content is read lazily
+- [x] Index stages, not markers, are the source of truth; content is read lazily
       within explicit bounds.
-- [ ] Every conflict class in Scope has a tested whole-file path or an honest
+- [x] Every conflict class in Scope has a tested whole-file path or an honest
       limitation that cannot corrupt content, index, path or mode.
-- [ ] Opening, refreshing or revisiting the resolver never writes anything.
-- [ ] Paused rebase, cherry-pick, revert and marker-less unmerged states are
+- [x] Opening, refreshing or revisiting the resolver never writes anything.
+- [x] Paused rebase, cherry-pick, revert and marker-less unmerged states are
       detected, explained read-only with their files, and never offered an
       action GitOdile cannot complete safely.
-- [ ] A durable, documented snapshot exists before the first mutation and can
+- [x] A durable, documented snapshot exists before the first mutation and can
       restore a file's original stages and content.
-- [ ] External edits, restarts, watcher bursts, project switches, linked
+- [x] External edits, restarts, watcher bursts, project switches, linked
       worktrees and concurrent IPC calls cannot silently lose or cross state.
-- [ ] No conflict is resolved silently; bulk choices need consequences,
+- [x] No conflict is resolved silently; bulk choices need consequences,
       confirmation and recovery.
 
 ## Finish and abort
 
-- [ ] Finishing requires a fresh Rust check with no unmerged entries and a
+- [x] Finishing requires a fresh Rust check with no unmerged entries and a
       confirmed history-mutation plan.
-- [ ] Finishing runs hooks and signing normally, verifies the result and never
+- [x] Finishing runs hooks and signing normally, verifies the result and never
       publishes.
-- [ ] Hook, signing, identity, drift, lock and verification failures keep
+- [x] Hook, signing, identity, drift, lock and verification failures keep
       resolved work and allow a retry or recovery.
-- [ ] Abort has its own plan and never promises exact recovery without evidence.
-- [ ] Partial or uncertain outcomes keep recovery artifacts and report observed
+- [x] Abort has its own plan and never promises exact recovery without evidence.
+- [x] Partial or uncertain outcomes keep recovery artifacts and report observed
       state without automatic repair.
 
 ## Quality
 
 - [ ] Keyboard, focus, announcements, colour independence, both themes, reduced
       motion, text scaling, English and Spanish are audited.
-- [ ] The resolver is lazy and does not regress startup or screen switching.
+- [x] The resolver is lazy and does not regress startup or screen switching.
 - [ ] Windows desktop validation passes; macOS and Linux are covered where
       available, with concrete residual risks.
-- [ ] An independent end-to-end audit covers resolve, reset, resume, finish,
+- [x] An independent end-to-end audit covers resolve, reset, resume, finish,
       abort, recover and restart from a real conflicted repository.
 
 # Required tests
@@ -444,8 +444,30 @@ process counts, and platform deviations.
   `pausedOperation` so a merge whose files are all resolved is still found.
   ADR 0041 §9. Details in [037-5](../done/037-5-complete-or-abort-merge.md).
 
+- 037-7 (2026-10-29): the independent audit, on Windows. It fixed a file
+  held open without sharing reported as a failed copy instead of
+  `file_locked`, a second Finish or Stop offered after an uncertain outcome,
+  a kept file labelled "Edited since", a partial listing's count, the
+  header's narrow layout and two Spanish words for the same thing. Evidence
+  per criterion and the residual risks are in
+  [037-7](../done/037-7-conflict-workflow-audit.md).
+
 # Validation
 
 Each child records its focused checks. The epic closes only after every
 criterion and the independent end-to-end audit pass, with `pnpm run check`
 green.
+
+2026-10-29, after the 037-7 audit: every criterion above passed on Windows
+except two that stay open, and they are the epic's blocker:
+
+- **Platforms.** macOS and Linux were not run (real links, the executable
+  bit, case-sensitive disks, their WebViews).
+- **Assistive technology.** No real screen reader was run and forced colours
+  and reduced motion could not be switched on live in WebView2; the
+  semantics and the `forced-colors` rules were checked from the DOM and CSS.
+
+The app-started merge entry is proved as a contract until task 065-4 starts
+merges.
+
+`pnpm run check`: exit 0 (1,822 frontend tests; Rust 674 passed, 1 ignored).
