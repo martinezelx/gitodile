@@ -24,7 +24,11 @@ use crate::{
     clone::{
         self, CloneOperationRegistry, ClonePlan, CloneProgressPhase, CloneResult, CloneSourceAccess,
     },
-    conflicts::{self, ConflictSession, ConflictSide, ConflictStageContent},
+    conflicts::{
+        self,
+        resolve::{ExpectedStages, SideChoice},
+        ConflictSession, ConflictSide, ConflictStageContent,
+    },
     console::{
         self, ConsoleHost, ConsoleHostingResult, ConsoleModes, ConsolePlan, ConsoleQueryResult,
         ConsoleRunResult, ConsoleSettings,
@@ -853,6 +857,74 @@ pub(crate) fn read_conflict_side_diff(
                 base_object_id,
                 side_object_id,
             )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn resolve_conflict_side(
+    path: String,
+    file_path: String,
+    choice: SideChoice,
+    expected: ExpectedStages,
+    state_token: String,
+    session_epoch: String,
+) -> Result<Option<ConflictSession>, AppError> {
+    report_result(
+        "resolve_conflict_side",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::resolve::resolve_conflict_side(
+                path,
+                file_path,
+                choice,
+                expected,
+                state_token,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mark_conflict_resolved(
+    path: String,
+    file_path: String,
+    expected: ExpectedStages,
+    state_token: String,
+    allow_markers: bool,
+    executable: Option<bool>,
+    session_epoch: String,
+) -> Result<Option<ConflictSession>, AppError> {
+    report_result(
+        "mark_conflict_resolved",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::resolve::mark_conflict_resolved(
+                path,
+                file_path,
+                expected,
+                state_token,
+                allow_markers,
+                executable,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn reset_conflict_file(
+    path: String,
+    file_path: String,
+    state_token: String,
+    stages_only: bool,
+    session_epoch: String,
+) -> Result<Option<ConflictSession>, AppError> {
+    report_result(
+        "reset_conflict_file",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::resolve::reset_conflict_file(path, file_path, state_token, stages_only)
         })(),
     )
 }
@@ -2024,6 +2096,10 @@ mod contract_tests {
             AppErrorCode::RecoveryConflict,
             AppErrorCode::RecoveryFailed,
             AppErrorCode::StaleConflictSession,
+            AppErrorCode::ConflictActionUnavailable,
+            AppErrorCode::ConflictMarkersRemain,
+            AppErrorCode::ConflictChoiceNeeded,
+            AppErrorCode::FileLocked,
             AppErrorCode::IgnoreFileTooLarge,
             AppErrorCode::IgnoreFileNotText,
             AppErrorCode::StaleIgnoreFile,

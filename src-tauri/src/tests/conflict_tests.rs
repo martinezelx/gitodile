@@ -3,6 +3,7 @@
 //! question it can of it, because a Git process costs about 50 ms on Windows.
 
 use crate::changes::{DiffLineKind, FileDiff};
+use crate::conflicts::resolve::*;
 use crate::conflicts::*;
 use crate::error::{AppError, AppErrorCode};
 use crate::git_command::{git_command, in_test_frame};
@@ -476,6 +477,275 @@ fn the_first_snapshot_is_durable_pinned_and_drives_file_states() {
         .snapshot
         .as_ref()
         .is_some_and(|summary| summary.complete));
+    let _ = fs::remove_dir_all(path);
+}
+
+fn expected(file: &ConflictFile) -> ExpectedStages {
+    ExpectedStages {
+        base: file.base.clone(),
+        current: file.current.clone(),
+        incoming: file.incoming.clone(),
+    }
+}
+
+/// `(stage, mode, object)` of every index entry of one path.
+fn index_of(path: &str, name: &str) -> Vec<(u8, String, String)> {
+    let output = git(
+        path,
+        &["ls-files", "-s", "-z", "--", &format!(":(literal){name}")],
+    );
+    output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+        .map(|record| {
+            let text = String::from_utf8_lossy(record);
+            let (meta, _) = text.split_once('\t').unwrap();
+            let mut fields = meta.split(' ');
+            let mode = fields.next().unwrap().to_string();
+            let object = fields.next().unwrap().to_string();
+            (fields.next().unwrap().parse().unwrap(), mode, object)
+        })
+        .collect()
+}
+
+fn keep(
+    path: &str,
+    session: &ConflictSession,
+    name: &str,
+    choice: SideChoice,
+) -> Result<ConflictSession, AppError> {
+    resolve_conflict_side(
+        path.to_string(),
+        name.to_string(),
+        choice,
+        expected(file(session, name)),
+        session.state_token.clone(),
+    )
+    .map(Option::unwrap)
+}
+
+fn mark(
+    path: &str,
+    session: &ConflictSession,
+    name: &str,
+    allow_markers: bool,
+) -> Result<ConflictSession, AppError> {
+    mark_conflict_resolved(
+        path.to_string(),
+        name.to_string(),
+        expected(file(session, name)),
+        session.state_token.clone(),
+        allow_markers,
+        None,
+    )
+    .map(Option::unwrap)
+}
+
+fn reset(path: &str, session: &ConflictSession, name: &str) -> Result<ConflictSession, AppError> {
+    reset_conflict_file(
+        path.to_string(),
+        name.to_string(),
+        session.state_token.clone(),
+        false,
+    )
+    .map(Option::unwrap)
+}
+
+// About 10 s alone on Windows: one fixture walks every action through every
+// class it holds, and each action re-reads the session to prove it current.
+#[test]
+fn each_file_is_kept_marked_and_reset_exactly() {
+    let path = conflicted_merge("conflict-resolve");
+    let read_bytes = |name: &str| fs::read(Path::new(&path).join(name)).unwrap();
+    let untouched = ["new.txt", "bin.dat"].map(|name| (name, read_bytes(name)));
+    let first = session(&path);
+    let crlf = file(&first, "crlf.txt").clone();
+    let crlf_original = read_bytes("crlf.txt");
+
+    // Keeping a side writes it through Git's filters and leaves the overlap.
+    let kept = keep(&path, &first, "crlf.txt", SideChoice::KeepIncoming).unwrap();
+    assert_eq!(read_bytes("crlf.txt"), b"one\r\nfeature\r\n");
+    let now = file(&kept, "crlf.txt");
+    assert_eq!(
+        (now.kept, now.state),
+        (Some(KeptSide::Incoming), ConflictFileState::EditedOutside)
+    );
+    assert_eq!(index_of(&path, "crlf.txt").len(), 3, "still overlapping");
+    assert!(
+        kept.snapshot.is_some(),
+        "the first change took the snapshot"
+    );
+
+    // The token the screen read before that is stale now: nothing changes.
+    let content_before = read_bytes("content.txt");
+    assert_eq!(
+        keep(&path, &first, "content.txt", SideChoice::KeepCurrent)
+            .unwrap_err()
+            .code,
+        AppErrorCode::StaleConflictSession
+    );
+    assert_eq!(read_bytes("content.txt"), content_before);
+
+    // Marking it resolved stages exactly the kept stage.
+    let marked = mark(&path, &kept, "crlf.txt", false).unwrap();
+    let incoming = crlf.incoming.clone().unwrap();
+    assert_eq!(
+        index_of(&path, "crlf.txt"),
+        [(0, incoming.mode.clone(), incoming.object_id.clone())]
+    );
+    assert_eq!(
+        file(&marked, "crlf.txt").state,
+        ConflictFileState::MarkedResolved
+    );
+
+    // The executable side keeps its mode in the index, whatever the file
+    // system can say about it; a link stays a link in the index.
+    let mut current = marked;
+    for (name, choice) in [
+        ("mode.sh", SideChoice::KeepIncoming),
+        ("link", SideChoice::KeepIncoming),
+    ] {
+        let side = file(&current, name).incoming.clone().unwrap();
+        current = keep(&path, &current, name, choice).unwrap();
+        current = mark(&path, &current, name, false).unwrap();
+        assert_eq!(
+            index_of(&path, name),
+            [(0, side.mode, side.object_id)],
+            "{name}"
+        );
+    }
+
+    // A link has no text to edit: it needs a side before it can be marked.
+    assert!(!file(&first, "link")
+        .allowed_actions
+        .contains(&ConflictAction::MarkResolved));
+
+    // A submodule's side is chosen in the index alone, which resolves it.
+    current = keep(&path, &current, "sub", SideChoice::KeepCurrent).unwrap();
+    assert_eq!(
+        index_of(&path, "sub"),
+        [(0, "160000".to_string(), SUB_MAIN.to_string())]
+    );
+    assert_eq!(
+        file(&current, "sub").state,
+        ConflictFileState::MarkedResolved
+    );
+
+    // Delete, where a side deleted the path, then `git rm --cached`.
+    current = keep(&path, &current, "delete-modify.txt", SideChoice::Delete).unwrap();
+    assert!(!Path::new(&path).join("delete-modify.txt").exists());
+    current = mark(&path, &current, "delete-modify.txt", false).unwrap();
+    assert!(index_of(&path, "delete-modify.txt").is_empty());
+
+    // Markers the merge wrote refuse, changing nothing, until confirmed.
+    assert_eq!(
+        mark(&path, &current, "content.txt", false)
+            .unwrap_err()
+            .code,
+        AppErrorCode::ConflictMarkersRemain
+    );
+    assert_eq!(index_of(&path, "content.txt").len(), 3);
+    current = mark(&path, &current, "content.txt", true).unwrap();
+    assert_eq!(index_of(&path, "content.txt")[0].0, 0);
+
+    // An edit made after a choice is copied into the journal before the
+    // next choice replaces it.
+    let spaced = "spaced \u{f1}ame.txt";
+    keep(&path, &current, spaced, SideChoice::KeepCurrent).unwrap();
+    write_bytes(&path, spaced, b"my own edit\n");
+    current = session(&path);
+    assert_eq!(file(&current, spaced).kept, None, "edited since");
+    current = keep(&path, &current, spaced, SideChoice::KeepIncoming).unwrap();
+    assert_eq!(read_bytes(spaced), b"feature\n");
+    let git_dir = Path::new(&path).join(".git");
+    let journal = read_conflict_journal(&git_dir, &current.session_id).unwrap();
+    let copy = journal
+        .entries
+        .iter()
+        .find_map(|entry| match &entry.replaced_working {
+            JournalWorking::File {
+                stored: Some(stored),
+                ..
+            } if entry.path == spaced => Some(*stored),
+            _ => None,
+        })
+        .expect("the edit was kept");
+    let journal_file = conflict_snapshot_root(&git_dir)
+        .join(&current.session_id)
+        .join("journal/files")
+        .join(copy.to_string());
+    assert_eq!(fs::read(journal_file).unwrap(), b"my own edit\n");
+
+    // Reset brings back the exact stages and the bytes, and reads as
+    // untouched again.
+    current = reset(&path, &current, "crlf.txt").unwrap();
+    let stages = index_of(&path, "crlf.txt");
+    let original = [
+        (1, crlf.base.clone().unwrap()),
+        (2, crlf.current.clone().unwrap()),
+        (3, incoming),
+    ]
+    .map(|(stage, value)| (stage, value.mode, value.object_id))
+    .to_vec();
+    assert_eq!(stages, original);
+    assert_eq!(read_bytes("crlf.txt"), crlf_original);
+    let back = file(&current, "crlf.txt");
+    assert_eq!(
+        (back.state, back.kept),
+        (ConflictFileState::Unresolved, None)
+    );
+
+    // Resetting only the overlap leaves the file as the user left it.
+    let content_now = read_bytes("content.txt");
+    let content_stages = file(&current, "content.txt").clone();
+    current = reset_conflict_file(
+        path.clone(),
+        "content.txt".into(),
+        current.state_token.clone(),
+        true,
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        index_of(&path, "content.txt"),
+        [
+            (1, content_stages.base.unwrap()),
+            (2, content_stages.current.unwrap()),
+            (3, content_stages.incoming.unwrap()),
+        ]
+        .map(|(stage, value)| (stage, value.mode, value.object_id))
+        .to_vec()
+    );
+    assert_eq!(read_bytes("content.txt"), content_now);
+
+    // Locked by another program: reported, nothing changed.
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // Readable by others, as an editor holding a file usually leaves it,
+        // but neither writable nor replaceable.
+        const FILE_SHARE_READ: u32 = 1;
+        let holder = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(FILE_SHARE_READ)
+            .open(Path::new(&path).join("bin.dat"))
+            .unwrap();
+        let error = keep(&path, &current, "bin.dat", SideChoice::KeepIncoming).unwrap_err();
+        drop(holder);
+        assert_eq!(error.code, AppErrorCode::FileLocked);
+        assert_eq!(index_of(&path, "bin.dat").len(), 3);
+        let leftovers = fs::read_dir(&path)
+            .unwrap()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".gitodile-"))
+            .count();
+        assert_eq!(leftovers, 0, "the temporary file is removed");
+    }
+
+    for (name, bytes) in untouched {
+        assert_eq!(read_bytes(name), bytes, "{name} is left alone");
+    }
     let _ = fs::remove_dir_all(path);
 }
 

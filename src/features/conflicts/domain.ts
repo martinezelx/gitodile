@@ -37,6 +37,8 @@ export type ConflictFacet = "mode-change" | "symbolic-link" | "submodule" | "typ
 export type ConflictFileState = "unresolved" | "editedOutside" | "markedResolved" | "stale" | "unsupported";
 export type ConflictAction = "keep-current" | "keep-incoming" | "delete" | "open-in-editor" | "mark-resolved" | "reset-file";
 export type WorkingKind = "absent" | "file" | "symbolic-link" | "directory" | "other";
+/** The whole side an action wrote, while the file still holds exactly that. */
+export type KeptSide = "current" | "incoming" | "deleted";
 
 export type ConflictFile = {
   path: string;
@@ -49,6 +51,7 @@ export type ConflictFile = {
   incoming: ConflictStage | null;
   working: WorkingKind;
   state: ConflictFileState;
+  kept: KeptSide | null;
   allowedActions: ConflictAction[];
 };
 

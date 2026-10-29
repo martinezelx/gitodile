@@ -431,6 +431,11 @@ process counts, and platform deviations.
   operation; a third read, `read_conflict_side_diff`, draws each side against
   the base with the Changes diff renderer, both sides at once as two columns.
   Details in [037-3](../done/037-3-read-only-conflict-workspace.md).
+- 037-6-1 (2026-10-29): 037-6 split into three slices. The Rust half of
+  resolving a file: `resolve_conflict_side`, `mark_conflict_resolved` and
+  `reset_conflict_file` in `src-tauri/src/conflicts/resolve.rs`, and the
+  resolution journal beside the snapshot (ADR 0041 §8). Details in
+  [037-6-1](../done/037-6-1-resolution-core.md).
 
 # Validation
 

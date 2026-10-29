@@ -200,6 +200,61 @@ This amends ADR 0030's point 7 only for an explicit choice to resolve
 overlaps. A clean combine still uses `merge-tree` and `commit-tree`, with every
 failure before any change.
 
+### 8. Amendment (2026-10-29): resolving a file, and the journal
+
+Task 037-6 adds the per-file mutations. Each is a local mutation run under
+the write lock that revalidates the session epoch, the state token, the path's
+stages (mode and object ID per stage) and the action's permission, creates the
+snapshot when the session has none, and verifies its own result.
+
+- **Keep a side / delete** writes the working tree only; the index stays
+  unmerged. A regular file's content comes from
+  `git cat-file --filters --path=<path> <object>`, so line endings, `.gitattributes`
+  and LFS behave exactly as a checkout, straight into a temporary file beside
+  the target that is flushed and renamed over it. A symbolic link becomes a
+  link where `core.symlinks` allows it and a file holding its target where it
+  does not, as Git itself writes it. A submodule's side is set in the index
+  alone (`update-index --index-info` with mode `160000`), which also marks it
+  resolved; its folder is never switched. Delete removes a file or link, never
+  a folder.
+- **Mark resolved** stages the exact chosen stage (`update-index --index-info`)
+  when the working file is still what that choice wrote, because `git add`
+  would take the mode from stage 2 where `core.filemode` or `core.symlinks` is
+  off. Otherwise it runs `git add` (or `git rm --cached` when the path is gone,
+  never touching the disk) with literal pathspecs and checks the entry that
+  results. Conflict markers left in a text file refuse unless the user
+  confirms; a link, a kind change or an edited mode change needs the side or
+  the mode named first.
+- **Reset** applies the snapshot's stages to a copy of the index first, proves
+  them there with `ls-files -u`, then applies them through
+  `update-index --index-info`, which replaces the live index under Git's own
+  `index.lock`; the working content comes back from `files/<sequence>` after its
+  SHA-256 is checked. Missing evidence refuses, or resets the stages alone when
+  the user asks for that.
+
+The first snapshot stays the original, so what the user writes after it would
+be lost by a later action. Each record therefore gains a **journal**:
+
+```text
+<git-dir>/gitodile/conflicts/v1/<session-id>/journal/
+  journal.json          (schema 1, replaced by a rename on every append)
+  files/<sequence>
+refs/gitodile/recovery/v1/conflict/<owner>/<session-id>-journal  -> tree
+```
+
+Before an action replaces a working file whose bytes are neither the
+snapshot's nor what an earlier action wrote, the bytes are copied into the
+journal; index entries it replaces that the snapshot does not pin are pinned
+by the journal's tree. Each entry records the path, the action, the replaced
+evidence and what the action left on disk (kind, size, modification time,
+SHA-256), which is how a kept side is recognised until the file is edited
+again. The journal is bounded like the snapshot, at 512 MiB; an action whose
+replaced content would not fit refuses and changes nothing. It is removed with
+its record.
+
+A rename over a file another program holds open fails on Windows; the action
+reports `file_locked`, removes its temporary file and changes nothing.
+
 ## Consequences
 
 - One read path serves merges from GitOdile, a terminal, an editor or an agent,

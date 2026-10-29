@@ -16,17 +16,22 @@ The three-pane conflict editor is not part of this version; it is epic
 
 | Queue | Task | Outcome |
 | --- | --- | --- |
-| 01 | [037-6](037-6-resolve-files.md) | Resolve each file by side or in the user's editor |
-| 02 | [037-5](037-5-complete-or-abort-merge.md) | Finish or abort a merge |
-| 03 | [037-7](037-7-conflict-workflow-audit.md) | Audit the conflict workflow |
-| 04 | [065-4](065-4-integrate-branches.md) | Integrate local branches and diverged project changes |
+| 01 | [037-6-2](037-6-2-resolution-actions-ui.md) | The resolve actions on the overlapping-changes screen |
+| 02 | [037-6-3](037-6-3-editor-and-hard-classes.md) | The user's editor, reconciliation and the blocked classes |
+| 03 | [037-5](037-5-complete-or-abort-merge.md) | Finish or abort a merge |
+| 04 | [037-7](037-7-conflict-workflow-audit.md) | Audit the conflict workflow |
+| 05 | [065-4](065-4-integrate-branches.md) | Integrate local branches and diverged project changes |
 
 Done: [037-1](../done/037-1-conflict-domain-and-recovery.md), conflict truth,
 recovery, and how detected overlaps become sessions;
 [037-3](../done/037-3-read-only-conflict-workspace.md), the read-only
-overlapping-changes screen.
+overlapping-changes screen;
+[037-6-1](../done/037-6-1-resolution-core.md), the Rust commands that keep a
+side, mark a file resolved and reset it, with the resolution journal.
 
-Epic: [037 resolve overlapping changes](037-guided-conflict-resolution.md).
+Epics: [037 resolve overlapping changes](037-guided-conflict-resolution.md),
+with [037-6 resolve each file](037-6-resolve-files.md) split into three
+slices, the first done.
 
 ## Exit condition
 

@@ -28,6 +28,7 @@ function conflict(path: string, overrides: Partial<ConflictFile> = {}): Conflict
     incoming: { mode: "100644", objectId: FEATURE },
     working: "file",
     state: "unresolved",
+    kept: null,
     allowedActions: [],
     ...overrides,
   };

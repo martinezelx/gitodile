@@ -3,7 +3,7 @@ id: 037-6
 title: Resolve each overlapping file by side or in the user's editor
 status: active
 priority: high
-type: feature
+type: epic
 areas:
   - conflicts
   - frontend
@@ -12,7 +12,7 @@ areas:
 created: 2026-08-18
 completed:
 parent: "037"
-queue: "01"
+queue:
 ---
 
 # Scope change (2026-10-27)
@@ -104,6 +104,27 @@ Tasks 037-1 and 037-3.
 - An honest blocked state is better than forcing unsupported content through a
   generic path.
 - Choosing a side, marking resolved and finishing never imply one another.
+- 2026-10-29 (user): split into three slices, each closing with
+  `pnpm run check` green:
+  [037-6-1](../done/037-6-1-resolution-core.md) (Rust commands and the resolution
+  journal), [037-6-2](037-6-2-resolution-actions-ui.md) (the actions on the
+  screen) and [037-6-3](037-6-3-editor-and-hard-classes.md) (the user's
+  editor, reconciliation and the blocked classes, with the desktop pass).
+- 2026-10-29 (user), from the mockup review: the file's actions sit in a bar
+  under its header strip (Keep each side, Open in editor, a `⋯` menu with
+  Reset, Mark resolved as the primary); choosing a side asks in place, as
+  the forget row of Restore does, naming what the other side loses and
+  dimming its column; Reset is an `s` dialog in the `danger` tone whose safe
+  fact says the current version is kept.
+- 2026-10-29 (user): Open in editor uses the system's default application
+  for the file, never `GIT_EDITOR` (a shell command line), and refuses any
+  type the system would run instead of open, offering Show in folder.
+- 2026-10-29 (user): whatever an action replaces after the snapshot was taken
+  is copied into a resolution journal beside it first (an amendment to
+  ADR 0041), so no action loses an edit made in the user's editor.
+- 2026-10-29 (user): a submodule's side is chosen in the index only
+  (`update-index --cacheinfo 160000`), which also marks it resolved; its
+  folder is never switched.
 
 # Implementation notes
 

@@ -293,6 +293,64 @@ pub(crate) fn run_git_with_input_capped(
     })
 }
 
+/// [`run_git_with_input_capped`] against another index (`GIT_INDEX_FILE`),
+/// for `update-index --index-info` proved on a copy before the real one.
+pub(crate) fn run_git_with_env_and_input(
+    repo_path: &str,
+    args: &[&str],
+    envs: &[(&str, &str)],
+    input: &[u8],
+    limit: usize,
+) -> Result<CappedOutput, AppError> {
+    let mut policy = require_policy()?;
+    policy.stdout_cap = limit;
+    let cancellation = application::current_cancellation();
+    let subcommand = diagnostics::safe_git_subcommand(args.first().map(OsStr::new));
+    let started = Instant::now();
+    let result = git::run_with_env_and_input(
+        Some(Path::new(repo_path)),
+        prepare_transfer_args(Some(Path::new(repo_path)), &owned_args(args))?,
+        envs,
+        Some(input),
+        policy,
+        cancellation.as_ref(),
+    );
+    record_result(policy, subcommand, started, &result);
+    let output = result?;
+    Ok(CappedOutput {
+        status: output.status,
+        stdout: output.stdout,
+        limit_exceeded: output.stdout_truncated,
+    })
+}
+
+/// Runs Git with its standard output written into `stdout` instead of
+/// memory; the exit status and capped standard error come back.
+pub(crate) fn run_git_to_file(
+    repo_path: &str,
+    args: &[&str],
+    stdout: std::fs::File,
+) -> Result<Output, AppError> {
+    let policy = require_policy()?;
+    let cancellation = application::current_cancellation();
+    let subcommand = diagnostics::safe_git_subcommand(args.first().map(OsStr::new));
+    let started = Instant::now();
+    let result = git::run_to_file(
+        Some(Path::new(repo_path)),
+        prepare_transfer_args(Some(Path::new(repo_path)), &owned_args(args))?,
+        stdout,
+        policy,
+        cancellation.as_ref(),
+    );
+    record_result(policy, subcommand, started, &result);
+    let output = result?;
+    Ok(Output {
+        status: output.status,
+        stdout: Vec::new(),
+        stderr: output.stderr,
+    })
+}
+
 pub(crate) fn git_stdout(output: &Output) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_string()
 }

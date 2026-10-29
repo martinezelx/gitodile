@@ -314,7 +314,9 @@ src-tauri/src/
   status.rs
   changes.rs
   history.rs              # bounded read-only saved-version timeline/details
-  conflicts.rs            # read-only paused-operation sessions and stage reads
+  conflicts/              # paused-operation sessions
+    mod.rs                # read-only sessions, stage reads and side diffs
+    resolve.rs            # keep a side, mark resolved, reset one file
   recovery/               # three recovery owners that share a clock and owner ID
     mod.rs
     discard.rs            # working-tree discard snapshots and safe restore
@@ -746,6 +748,23 @@ Changes tab's typed `FileDiff`. All three are read-only and run under a shared
 read permit; `git_operation_in_progress` asks the same marker detection, so a
 refusal and the resolver never disagree.
 
+`conflicts/resolve.rs` owns the three per-file mutations of ADR 0041 §8,
+separate actions that never imply one another or finish the merge:
+`resolve_conflict_side` (keep the current or incoming side, or delete the
+path, in the working tree only; a submodule's side in the index),
+`mark_conflict_resolved` (the exact kept stage through
+`update-index --index-info`, otherwise `git add` or `git rm --cached` with
+literal pathspecs; markers left in a text file refuse unless confirmed) and
+`reset_conflict_file` (the snapshot's stages, proved on a copy of the index
+first, and its working bytes). Each runs under the write lock, revalidates the
+state token, the path's stages and the action's permission, creates the
+snapshot when there is none, records what it replaces in the journal first,
+verifies its result and returns the fresh session. A side's content comes
+through `cat-file --filters` straight into a temporary file beside its
+target (`git_command::run_git_to_file`, so an LFS file is never held in
+memory) and is renamed over it; a Windows file held open by another program
+fails as `file_locked` with nothing changed.
+
 The frontend owner is `src/features/conflicts/`: a lazy screen registered
 with no rail or fixed palette entry, reached from Overview, Changes, the
 palette and the refusing dialogs. Its controller caches one session read per
@@ -761,8 +780,12 @@ unmerged stage and each path's working content, published by a rename, with
 the stage blobs pinned by a tree under
 `refs/gitodile/recovery/v1/conflict/<owner>/<session-id>`. The first snapshot
 is the original and is never replaced; missing evidence is recorded as
-`unreadable` or `omitted`. The session read folds the snapshot back in, which
-is how a file becomes `markedResolved`, `editedOutside` or `stale`. The watcher
+`unreadable` or `omitted`. Its `journal/` keeps what each resolution action
+replaced that the snapshot does not hold, pinned by a sibling
+`<session-id>-journal` ref, and what each action left on disk. The session
+read folds the snapshot and the journal back in, which is how a file becomes
+`markedResolved`, `editedOutside` or `stale`, and how it knows which side was
+`kept`. The watcher
 also invalidates on `rebase-merge/` and `rebase-apply/`; GitOdile's own
 `gitodile/` folder never invalidates.
 

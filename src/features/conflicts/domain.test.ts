@@ -16,6 +16,7 @@ function file(overrides: Partial<ConflictFile>): ConflictFile {
     incoming: { mode: "100755", objectId: B },
     working: "file",
     state: "unresolved",
+    kept: null,
     allowedActions: [],
     ...overrides,
   };

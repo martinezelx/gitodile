@@ -1,10 +1,14 @@
 //! Conflict sessions: what is paused, which files overlap, and what each side
 //! holds (ADR 0041).
 //!
-//! Everything here is read-only. The index (`ls-files -u`) and Git's operation
-//! markers are the only truth; conflict markers in the working tree decide
-//! nothing. The durable snapshot taken before a session's first change is a
-//! recovery owner, [`crate::recovery`], which reads the session from here.
+//! Everything in this file is read-only. The index (`ls-files -u`) and Git's
+//! operation markers are the only truth; conflict markers in the working tree
+//! decide nothing. The durable snapshot taken before a session's first change
+//! is a recovery owner, [`crate::recovery`], which reads the session from
+//! here. The per-file mutations (keep a side, mark resolved, reset) live in
+//! [`resolve`], whose write helpers nothing else may call.
+
+pub(crate) mod resolve;
 
 use crate::application;
 use crate::changes::{
@@ -14,7 +18,8 @@ use crate::changes::{
 use crate::error::{AppError, AppErrorCode};
 use crate::git_command::{run_git, run_git_capped, run_git_with_input_capped};
 use crate::recovery::{
-    read_conflict_snapshot, ConflictSnapshotManifest, SnapshotPath, SnapshotWorking,
+    last_written, read_conflict_journal, read_conflict_snapshot, ConflictJournal,
+    ConflictSnapshotManifest, JournalAction, SnapshotPath, SnapshotWorking,
 };
 use crate::repository_access::RepositoryContext;
 use crate::status::ChangeCategory;
@@ -32,10 +37,10 @@ const MAX_UNMERGED_LISTING_BYTES: usize = 16 * 1024 * 1024;
 /// Git's own binary probe: a NUL byte in the first 8,000 bytes.
 const BINARY_PROBE_BYTES: usize = 8000;
 
-const MODE_SYMLINK: &str = "120000";
+pub(crate) const MODE_SYMLINK: &str = "120000";
 const MODE_REGULAR: &str = "100644";
-const MODE_EXECUTABLE: &str = "100755";
-const MODE_GITLINK: &str = "160000";
+pub(crate) const MODE_EXECUTABLE: &str = "100755";
+pub(crate) const MODE_GITLINK: &str = "160000";
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
@@ -193,7 +198,7 @@ pub(crate) enum SessionAction {
     AbortMerge,
 }
 
-#[derive(serde::Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
 #[serde(rename_all = "kebab-case")]
 pub(crate) enum WorkingKind {
     Absent,
@@ -201,6 +206,16 @@ pub(crate) enum WorkingKind {
     SymbolicLink,
     Directory,
     Other,
+}
+
+/// The whole-file choice an action wrote, while the path still holds exactly
+/// what it wrote.
+#[derive(serde::Serialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum KeptSide {
+    Current,
+    Incoming,
+    Deleted,
 }
 
 #[derive(serde::Serialize, Debug, PartialEq, Clone)]
@@ -217,6 +232,8 @@ pub(crate) struct ConflictFile {
     pub(crate) incoming: Option<ConflictStage>,
     pub(crate) working: WorkingKind,
     pub(crate) state: ConflictFileState,
+    /// The side the user kept, until the file is edited or reset.
+    pub(crate) kept: Option<KeptSide>,
     pub(crate) allowed_actions: Vec<ConflictAction>,
 }
 
@@ -312,9 +329,11 @@ pub(crate) struct SessionRead {
     pub(crate) listing: UnmergedListing,
     /// The session's published snapshot, read once per session read.
     pub(crate) snapshot: Option<ConflictSnapshotManifest>,
+    /// What resolution actions recorded since the snapshot.
+    pub(crate) journal: Option<ConflictJournal>,
 }
 
-fn stale() -> AppError {
+pub(crate) fn stale() -> AppError {
     AppError::new(
         AppErrorCode::StaleConflictSession,
         "The overlapping changes changed since GitOdile last read them.",
@@ -322,7 +341,7 @@ fn stale() -> AppError {
     .with_remediation("Review the overlapping files again, then retry.")
 }
 
-fn unreadable() -> AppError {
+pub(crate) fn unreadable() -> AppError {
     AppError::new(
         AppErrorCode::GitCommandFailed,
         "GitOdile couldn't read the overlapping changes.",
@@ -468,18 +487,24 @@ pub(crate) fn classify_facets(path: &UnmergedPath, working: WorkingKind) -> Vec<
 
 /// The whole-file choices each shape allows (epic 037 §3). Choosing a side
 /// that deleted the path is `Delete`, never a "keep" of nothing.
+///
+/// A folder in the way of a file gets no choice at all: every one of them
+/// would have to replace the folder. A link, a submodule or a change of kind
+/// has no text to edit, so it is marked resolved only once a side was kept.
 pub(crate) fn allowed_file_actions(
     path: &UnmergedPath,
     facets: &[ConflictFacet],
     working: WorkingKind,
     state: ConflictFileState,
     in_snapshot: bool,
+    kept: Option<KeptSide>,
 ) -> Vec<ConflictAction> {
     if state == ConflictFileState::Unsupported {
         return Vec::new();
     }
     let mut actions = Vec::new();
-    if state != ConflictFileState::MarkedResolved {
+    let blocked = facets.contains(&ConflictFacet::FileDirectory);
+    if state != ConflictFileState::MarkedResolved && !blocked {
         if path.current.is_some() {
             actions.push(ConflictAction::KeepCurrent);
         }
@@ -489,13 +514,19 @@ pub(crate) fn allowed_file_actions(
         if path.current.is_none() || path.incoming.is_none() {
             actions.push(ConflictAction::Delete);
         }
-        let editable = working == WorkingKind::File
-            && !facets.contains(&ConflictFacet::Submodule)
-            && !facets.contains(&ConflictFacet::FileDirectory);
-        if editable {
+        let not_text = [
+            ConflictFacet::Submodule,
+            ConflictFacet::SymbolicLink,
+            ConflictFacet::TypeChange,
+        ]
+        .iter()
+        .any(|facet| facets.contains(facet));
+        if working == WorkingKind::File && !not_text {
             actions.push(ConflictAction::OpenInEditor);
         }
-        actions.push(ConflictAction::MarkResolved);
+        if !not_text || kept.is_some() {
+            actions.push(ConflictAction::MarkResolved);
+        }
     }
     let changed_since_snapshot = matches!(
         state,
@@ -897,6 +928,7 @@ pub(crate) fn read_session(
         &evidence.operation.operation_heads,
     );
     let snapshot = read_conflict_snapshot(git_dir, &session_id);
+    let journal = read_conflict_journal(git_dir, &session_id);
     // Paths the snapshot holds that are no longer unmerged were resolved
     // since; their working state is part of what a reset would replace.
     let listed = listing
@@ -929,6 +961,7 @@ pub(crate) fn read_session(
         head,
         listing,
         snapshot,
+        journal,
     }))
 }
 
@@ -998,6 +1031,27 @@ fn snapshot_state(
     }
 }
 
+/// The side an action kept at `relative`, while the path still holds exactly
+/// what that action left there (the same facts the state token covers).
+pub(crate) fn kept_side(
+    journal: Option<&ConflictJournal>,
+    relative: &str,
+    fingerprint: WorkingFingerprint,
+) -> Option<KeptSide> {
+    let entry = last_written(journal?, relative)?;
+    let side = match entry.action {
+        JournalAction::KeepCurrent => KeptSide::Current,
+        JournalAction::KeepIncoming => KeptSide::Incoming,
+        JournalAction::Delete => KeptSide::Deleted,
+        JournalAction::MarkResolved | JournalAction::Reset => return None,
+    };
+    let left = entry.left.as_ref()?;
+    (left.kind == fingerprint.kind
+        && left.size == fingerprint.size
+        && left.modified_ns == fingerprint.modified_ns)
+        .then_some(side)
+}
+
 fn working_matches(working: &SnapshotWorking, kind: WorkingKind) -> bool {
     match working {
         SnapshotWorking::Absent => kind == WorkingKind::Absent,
@@ -1017,6 +1071,7 @@ pub(crate) fn describe_session(
 ) -> ConflictSession {
     let root = repository.worktree_root.backend_path();
     let snapshot = read.snapshot;
+    let journal = read.journal;
     let index = snapshot.as_ref().map(index_snapshot);
     let supported = read.operation.supported;
     let mut files = Vec::with_capacity(read.listing.paths.len());
@@ -1040,9 +1095,19 @@ pub(crate) fn describe_session(
         let in_snapshot = index
             .as_ref()
             .is_some_and(|index| index.paths.contains_key(relative.as_str()));
+        let kept = exact
+            .then(|| kept_side(journal.as_ref(), &relative, fingerprint))
+            .flatten();
         files.push(ConflictFile {
             allowed_actions: if supported {
-                allowed_file_actions(unmerged, &facets, fingerprint.kind, state, in_snapshot)
+                allowed_file_actions(
+                    unmerged,
+                    &facets,
+                    fingerprint.kind,
+                    state,
+                    in_snapshot,
+                    kept,
+                )
             } else {
                 Vec::new()
             },
@@ -1055,6 +1120,7 @@ pub(crate) fn describe_session(
             path: relative,
             path_is_exact: exact,
             state,
+            kept,
         });
     }
     let unresolved_count = files.len();
@@ -1075,9 +1141,10 @@ pub(crate) fn describe_session(
             let fingerprint = working_fingerprint(root, &relative);
             let facets = classify_facets(&stages, fingerprint.kind);
             let state = ConflictFileState::MarkedResolved;
+            let kept = kept_side(journal.as_ref(), &relative, fingerprint);
             files.push(ConflictFile {
                 allowed_actions: if supported {
-                    allowed_file_actions(&stages, &facets, fingerprint.kind, state, true)
+                    allowed_file_actions(&stages, &facets, fingerprint.kind, state, true, kept)
                 } else {
                     Vec::new()
                 },
@@ -1090,6 +1157,7 @@ pub(crate) fn describe_session(
                 path: relative,
                 path_is_exact: true,
                 state,
+                kept,
             });
         }
     }
@@ -1153,7 +1221,10 @@ pub(crate) fn line_endings(text: &[u8]) -> LineEndings {
 
 /// One blob's size and bytes through `cat-file --batch`, or its size alone
 /// when it is past the diff cap.
-fn read_blob_capped(path: &str, object_id: &str) -> Result<(u64, Option<Vec<u8>>), AppError> {
+pub(crate) fn read_blob_capped(
+    path: &str,
+    object_id: &str,
+) -> Result<(u64, Option<Vec<u8>>), AppError> {
     let request = format!("{object_id}\n");
     let output = run_git_with_input_capped(
         path,
@@ -1271,7 +1342,7 @@ pub(crate) enum ConflictSide {
     Incoming,
 }
 
-fn is_regular_file_mode(mode: &str) -> bool {
+pub(crate) fn is_regular_file_mode(mode: &str) -> bool {
     mode == MODE_REGULAR || mode == MODE_EXECUTABLE
 }
 
@@ -1548,48 +1619,53 @@ mod tests {
             current: stage("100644", B),
             incoming: None,
         };
+        use ConflictAction::*;
+        use ConflictFileState::*;
+        let actions = |facets: &[ConflictFacet],
+                       working: WorkingKind,
+                       state: ConflictFileState,
+                       in_snapshot: bool,
+                       kept: Option<KeptSide>| {
+            allowed_file_actions(&modify_delete, facets, working, state, in_snapshot, kept)
+        };
         assert_eq!(
-            allowed_file_actions(
-                &modify_delete,
-                &[],
-                WorkingKind::File,
-                ConflictFileState::Unresolved,
-                false
-            ),
-            [
-                ConflictAction::KeepCurrent,
-                ConflictAction::Delete,
-                ConflictAction::OpenInEditor,
-                ConflictAction::MarkResolved
-            ]
+            actions(&[], WorkingKind::File, Unresolved, false, None),
+            [KeepCurrent, Delete, OpenInEditor, MarkResolved]
         );
         assert_eq!(
-            allowed_file_actions(
-                &modify_delete,
-                &[],
-                WorkingKind::File,
-                ConflictFileState::MarkedResolved,
-                true
-            ),
-            [ConflictAction::ResetFile]
+            actions(&[], WorkingKind::File, MarkedResolved, true, None),
+            [ResetFile]
         );
-        let submodule = [ConflictFacet::Submodule];
-        assert!(!allowed_file_actions(
-            &modify_delete,
-            &submodule,
-            WorkingKind::Directory,
-            ConflictFileState::Unresolved,
-            false
-        )
-        .contains(&ConflictAction::OpenInEditor));
-        assert!(allowed_file_actions(
-            &modify_delete,
-            &[],
-            WorkingKind::File,
-            ConflictFileState::Unsupported,
-            true
-        )
-        .is_empty());
+        // A link or submodule has no text to edit, and is marked resolved
+        // only once a side was kept.
+        for facet in [ConflictFacet::Submodule, ConflictFacet::SymbolicLink] {
+            assert_eq!(
+                actions(&[facet], WorkingKind::File, Unresolved, false, None),
+                [KeepCurrent, Delete]
+            );
+            assert_eq!(
+                actions(
+                    &[facet],
+                    WorkingKind::File,
+                    EditedOutside,
+                    true,
+                    Some(KeptSide::Current)
+                ),
+                [KeepCurrent, Delete, MarkResolved, ResetFile]
+            );
+        }
+        // A folder in the way: no choice would leave the folder alone.
+        assert_eq!(
+            actions(
+                &[ConflictFacet::FileDirectory],
+                WorkingKind::Directory,
+                Unresolved,
+                true,
+                None
+            ),
+            [] as [ConflictAction; 0]
+        );
+        assert!(actions(&[], WorkingKind::File, Unsupported, true, None).is_empty());
     }
 
     #[test]

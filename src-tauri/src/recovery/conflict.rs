@@ -5,8 +5,12 @@
 //! every unmerged stage plus each path's working content, published by a
 //! rename, and a hidden ref in the common repository pinning the stage blobs
 //! so `gc` cannot prune an original side after it is resolved. The first
-//! snapshot of a session is the original and is never replaced. This slice
-//! creates and verifies snapshots; restoring from one belongs to task 037-6.
+//! snapshot of a session is the original and is never replaced.
+//!
+//! What the user changes after that is kept by the record's journal
+//! (ADR 0041 §8): before a resolution action replaces working bytes or index
+//! entries the snapshot does not already hold, they are copied or pinned
+//! here, and the entry then records what the action left on disk.
 
 use super::{now_ms, worktree_owner_id};
 use crate::changes::validate_repo_relative_path;
@@ -26,6 +30,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub(crate) const CONFLICT_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
 /// Working bytes one snapshot may copy; a path past it is `omitted`.
 pub(crate) const MAX_CONFLICT_SNAPSHOT_BYTES: u64 = 512 * 1024 * 1024;
+pub(crate) const CONFLICT_JOURNAL_SCHEMA_VERSION: u32 = 1;
 /// Ended sessions' snapshots kept per worktree, newest first.
 const MAX_ENDED_SNAPSHOTS: usize = 10;
 const ENDED_SNAPSHOT_RETENTION_MS: u128 = 30 * 24 * 60 * 60 * 1000;
@@ -334,14 +339,20 @@ fn trim(path: &str, root: &Path, live_session: &str) {
             continue;
         }
         if let Some(manifest) = read_manifest(&child.path()) {
-            ended.push((manifest.created_at_ms, child.path(), manifest.pin_reference));
+            let journal_pin =
+                read_journal_at(&child.path()).and_then(|journal| journal.pin_reference);
+            ended.push((
+                manifest.created_at_ms,
+                child.path(),
+                [manifest.pin_reference, journal_pin],
+            ));
         }
     }
     ended.sort_by_key(|item| std::cmp::Reverse(item.0));
-    for (index, (created_at_ms, folder, pin)) in ended.into_iter().enumerate() {
+    for (index, (created_at_ms, folder, pins)) in ended.into_iter().enumerate() {
         let expired = now.saturating_sub(created_at_ms) > ENDED_SNAPSHOT_RETENTION_MS;
         if index >= MAX_ENDED_SNAPSHOTS || expired {
-            if let Some(reference) = pin {
+            for reference in pins.into_iter().flatten() {
                 let _ = run_git(path, &["update-ref", "-d", &reference]);
             }
             let _ = fs::remove_dir_all(folder);
@@ -355,9 +366,7 @@ fn trim(path: &str, root: &Path, live_session: &str) {
 /// The caller holds the repository write lock — this is the first step of a
 /// mutation, never a read — and passes the state token its plan was made
 /// with. The token is revalidated before and after capture, so what is
-/// preserved is exactly what the plan described. Its first caller is the
-/// resolution workflow of task 037-6.
-#[cfg_attr(not(test), allow(dead_code))]
+/// preserved is exactly what the plan described.
 pub(crate) fn create_conflict_snapshot(
     path: &str,
     repository: &RepositoryContext,
@@ -391,7 +400,6 @@ pub(crate) fn create_conflict_snapshot_within(
     )
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
 fn create_snapshot(
     path: &str,
     repository: &RepositoryContext,
@@ -534,6 +542,380 @@ fn capture(
         entries,
         paths,
     })
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "kebab-case")]
+pub(crate) enum JournalAction {
+    KeepCurrent,
+    KeepIncoming,
+    Delete,
+    MarkResolved,
+    Reset,
+}
+
+/// What a path held on disk before an action replaced it.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub(crate) enum JournalWorking {
+    Absent,
+    /// `stored` names the copy under `journal/files/`. `None` when the bytes
+    /// were the snapshot's or what an earlier action wrote from a pinned
+    /// stage, both of which can be had again.
+    File {
+        stored: Option<usize>,
+        executable: bool,
+        sha256: String,
+        size: u64,
+    },
+    SymbolicLink {
+        target: String,
+    },
+    Directory,
+    Unreadable,
+}
+
+/// What a path holds on disk: enough to tell later whether it is still what
+/// an action left there.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct WorkingState {
+    pub(crate) kind: WorkingKind,
+    pub(crate) size: u64,
+    pub(crate) modified_ns: u128,
+    /// The file's bytes, or a link's target; `None` for anything else.
+    pub(crate) sha256: Option<String>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct JournalEntry {
+    pub(crate) sequence: usize,
+    pub(crate) path: String,
+    pub(crate) action: JournalAction,
+    pub(crate) at_ms: u128,
+    pub(crate) replaced_working: JournalWorking,
+    /// The path's index entries before the action, stage 0 included.
+    pub(crate) replaced_index: Vec<SnapshotStageEntry>,
+    /// What the action left on disk; `None` until it finished.
+    pub(crate) left: Option<WorkingState>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct ConflictJournal {
+    pub(crate) schema_version: u32,
+    pub(crate) session_id: String,
+    pub(crate) stored_bytes: u64,
+    pub(crate) pin_reference: Option<String>,
+    pub(crate) entries: Vec<JournalEntry>,
+}
+
+fn journal_dir(git_dir: &Path, session_id: &str) -> PathBuf {
+    conflict_snapshot_root(git_dir)
+        .join(session_id)
+        .join("journal")
+}
+
+fn read_journal_at(record: &Path) -> Option<ConflictJournal> {
+    let bytes = fs::read(record.join("journal").join("journal.json")).ok()?;
+    let journal: ConflictJournal = serde_json::from_slice(&bytes).ok()?;
+    (journal.schema_version == CONFLICT_JOURNAL_SCHEMA_VERSION).then_some(journal)
+}
+
+/// The session's resolution journal, if any action has written one.
+pub(crate) fn read_conflict_journal(git_dir: &Path, session_id: &str) -> Option<ConflictJournal> {
+    if !valid_session_id(session_id) {
+        return None;
+    }
+    read_journal_at(&conflict_snapshot_root(git_dir).join(session_id))
+        .filter(|journal| journal.session_id == session_id)
+}
+
+/// The snapshot's copy of a path's working bytes.
+pub(crate) fn conflict_snapshot_file(git_dir: &Path, session_id: &str, sequence: usize) -> PathBuf {
+    conflict_snapshot_root(git_dir)
+        .join(session_id)
+        .join("files")
+        .join(sequence.to_string())
+}
+
+fn journal_failed() -> AppError {
+    AppError::new(
+        AppErrorCode::RecoveryFailed,
+        "GitOdile couldn't keep a copy of this file before changing it.",
+    )
+    .with_remediation("Nothing was changed. Check disk space and permissions, then try again.")
+}
+
+/// Replaces `journal.json` through a rename, so a crash leaves the previous
+/// journal or the new one, never half of either.
+fn write_journal(directory: &Path, journal: &ConflictJournal) -> Result<(), AppError> {
+    let value = serde_json::to_vec_pretty(journal).map_err(|_| journal_failed())?;
+    let pending = directory.join(format!("journal.json{}", unique_pending_name()));
+    let written = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&pending)
+        .and_then(|mut file| {
+            file.write_all(&value)?;
+            file.sync_all()
+        })
+        .and_then(|_| fs::rename(&pending, directory.join("journal.json")));
+    if written.is_err() {
+        let _ = fs::remove_file(&pending);
+        return Err(journal_failed());
+    }
+    Ok(())
+}
+
+fn hex_digest(hasher: Sha256) -> String {
+    hasher
+        .finalize()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect()
+}
+
+pub(crate) fn file_sha256(path: &Path) -> std::io::Result<String> {
+    let mut input = File::open(path)?;
+    let mut hasher = Sha256::new();
+    let mut buffer = vec![0_u8; 64 * 1024];
+    loop {
+        let read = input.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..read]);
+    }
+    Ok(hex_digest(hasher))
+}
+
+/// What a path holds now. A link's hash is of its target, as Git stores it.
+pub(crate) fn working_state(root: &Path, relative: &str) -> WorkingState {
+    let fingerprint = working_fingerprint(root, relative);
+    let target = root.join(relative);
+    let sha256 = match fingerprint.kind {
+        WorkingKind::File => file_sha256(&target).ok(),
+        WorkingKind::SymbolicLink => fs::read_link(&target).ok().and_then(|link| {
+            link.to_str().map(|text| {
+                let mut hasher = Sha256::new();
+                hasher.update(text.replace('\\', "/").as_bytes());
+                hex_digest(hasher)
+            })
+        }),
+        _ => None,
+    };
+    WorkingState {
+        kind: fingerprint.kind,
+        size: fingerprint.size,
+        modified_ns: fingerprint.modified_ns,
+        sha256,
+    }
+}
+
+/// The last action that wrote `relative` (a side, a delete or a reset).
+pub(crate) fn last_written<'a>(
+    journal: &'a ConflictJournal,
+    relative: &str,
+) -> Option<&'a JournalEntry> {
+    journal
+        .entries
+        .iter()
+        .rev()
+        .filter(|entry| entry.path == relative && entry.left.is_some())
+        .find(|entry| entry.action != JournalAction::MarkResolved)
+}
+
+/// Pins every blob the journal's index evidence names that the snapshot does
+/// not pin already, with one tree under the journal's own ref.
+fn pin_journal_objects(
+    path: &str,
+    repository: &RepositoryContext,
+    snapshot: &ConflictSnapshotManifest,
+    journal: &ConflictJournal,
+) -> Result<Option<String>, AppError> {
+    let pinned = snapshot
+        .entries
+        .iter()
+        .map(|entry| entry.object_id.as_str())
+        .collect::<std::collections::HashSet<_>>();
+    let mut blobs = journal
+        .entries
+        .iter()
+        .flat_map(|entry| entry.replaced_index.iter())
+        .filter(|entry| entry.mode != "160000" && !pinned.contains(entry.object_id.as_str()))
+        .map(|entry| entry.object_id.as_str())
+        .collect::<Vec<_>>();
+    blobs.sort_unstable();
+    blobs.dedup();
+    if blobs.is_empty() {
+        return Ok(journal.pin_reference.clone());
+    }
+    let mut input = Vec::new();
+    for (index, object_id) in blobs.iter().enumerate() {
+        input.extend_from_slice(format!("100644 blob {object_id}\tj{index:06}\0").as_bytes());
+    }
+    let output = run_git_with_input_capped(path, &["mktree", "-z"], &input, 1024)?;
+    let tree = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if !output.status.success() || !is_object_id(&tree) {
+        return Err(journal_failed());
+    }
+    let reference = format!(
+        "{}-journal",
+        pin_reference_name(repository, &snapshot.session_id)
+    );
+    let updated = run_git(path, &["update-ref", &reference, &tree])?;
+    if !updated.status.success() {
+        return Err(journal_failed());
+    }
+    Ok(Some(reference))
+}
+
+fn replaced_working(
+    target: Option<PathBuf>,
+    relative: &str,
+    snapshot: &ConflictSnapshotManifest,
+    journal: &mut ConflictJournal,
+    destination: &Path,
+    sequence: usize,
+) -> Result<JournalWorking, AppError> {
+    let Some(target) = target else {
+        return Ok(JournalWorking::Unreadable);
+    };
+    let metadata = match fs::symlink_metadata(&target) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(JournalWorking::Absent)
+        }
+        Err(_) => return Ok(JournalWorking::Unreadable),
+    };
+    if metadata.file_type().is_symlink() {
+        return Ok(
+            match fs::read_link(&target)
+                .ok()
+                .and_then(|link| link.to_str().map(|text| text.replace('\\', "/")))
+            {
+                Some(target) => JournalWorking::SymbolicLink { target },
+                None => JournalWorking::Unreadable,
+            },
+        );
+    }
+    if metadata.is_dir() {
+        return Ok(JournalWorking::Directory);
+    }
+    if !metadata.is_file() {
+        return Ok(JournalWorking::Unreadable);
+    }
+    let sha256 = file_sha256(&target).map_err(|_| journal_failed())?;
+    let in_snapshot = snapshot.paths.iter().any(|item| {
+        item.path == relative
+            && matches!(&item.working, SnapshotWorking::File { sha256: kept, .. } if *kept == sha256)
+    });
+    let written = last_written(journal, relative)
+        .and_then(|entry| entry.left.as_ref())
+        .is_some_and(|left| left.sha256.as_deref() == Some(sha256.as_str()));
+    let stored = if in_snapshot || written {
+        None
+    } else {
+        let size = metadata.len();
+        if journal.stored_bytes.saturating_add(size) > MAX_CONFLICT_SNAPSHOT_BYTES {
+            return Err(AppError::new(
+                AppErrorCode::RecoveryFailed,
+                "This file is too large for GitOdile to keep a copy before changing it.",
+            )
+            .with_remediation(
+                "Nothing was changed. Copy the file somewhere safe yourself, then try again.",
+            ));
+        }
+        let _ = fs::remove_file(destination);
+        let copied = copy_file(&target, destination).map_err(|_| journal_failed())?;
+        if copied != sha256 {
+            // The file changed while it was being copied.
+            let _ = fs::remove_file(destination);
+            return Err(stale());
+        }
+        journal.stored_bytes += size;
+        Some(sequence)
+    };
+    Ok(JournalWorking::File {
+        stored,
+        executable: is_executable(&metadata),
+        sha256,
+        size: metadata.len(),
+    })
+}
+
+/// Records what an action is about to replace at `relative`, before it
+/// replaces anything: working bytes neither the snapshot nor an earlier
+/// action holds are copied, index entries the snapshot does not pin are
+/// pinned. Returns the entry's sequence for [`finish_conflict_journal_entry`].
+///
+/// The caller holds the write lock and has created the session's snapshot.
+pub(crate) fn begin_conflict_journal_entry(
+    path: &str,
+    repository: &RepositoryContext,
+    snapshot: &ConflictSnapshotManifest,
+    relative: &str,
+    action: JournalAction,
+    replaced_index: Vec<SnapshotStageEntry>,
+) -> Result<usize, AppError> {
+    if repository_access::held_mode(repository.common_git_dir.match_key())
+        != Some(AccessMode::Write)
+    {
+        return Err(journal_failed());
+    }
+    let git_dir = repository.git_dir.backend_path();
+    let directory = journal_dir(git_dir, &snapshot.session_id);
+    fs::create_dir_all(directory.join("files")).map_err(|_| journal_failed())?;
+    let mut journal =
+        read_conflict_journal(git_dir, &snapshot.session_id).unwrap_or(ConflictJournal {
+            schema_version: CONFLICT_JOURNAL_SCHEMA_VERSION,
+            session_id: snapshot.session_id.clone(),
+            stored_bytes: 0,
+            pin_reference: None,
+            entries: Vec::new(),
+        });
+    let sequence = journal.entries.last().map_or(0, |entry| entry.sequence + 1);
+    let root = repository.worktree_root.backend_path();
+    let working = replaced_working(
+        contained_target(root, relative),
+        relative,
+        snapshot,
+        &mut journal,
+        &directory.join("files").join(sequence.to_string()),
+        sequence,
+    )?;
+    journal.entries.push(JournalEntry {
+        sequence,
+        path: relative.to_string(),
+        action,
+        at_ms: now_ms(),
+        replaced_working: working,
+        replaced_index,
+        left: None,
+    });
+    journal.pin_reference = pin_journal_objects(path, repository, snapshot, &journal)?;
+    write_journal(&directory, &journal)?;
+    Ok(sequence)
+}
+
+/// Records what the action of entry `sequence` left on disk.
+pub(crate) fn finish_conflict_journal_entry(
+    repository: &RepositoryContext,
+    session_id: &str,
+    sequence: usize,
+    left: WorkingState,
+) -> Result<(), AppError> {
+    let git_dir = repository.git_dir.backend_path();
+    let mut journal = read_conflict_journal(git_dir, session_id).ok_or_else(journal_failed)?;
+    let entry = journal
+        .entries
+        .iter_mut()
+        .find(|entry| entry.sequence == sequence)
+        .ok_or_else(journal_failed)?;
+    entry.left = Some(left);
+    write_journal(&journal_dir(git_dir, session_id), &journal)
 }
 
 #[cfg(test)]
