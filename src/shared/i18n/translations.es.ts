@@ -110,6 +110,8 @@ export const es: SharedTranslations = {
   errorConflictActionUnavailable: "Este archivo no permite eso ahora. Vuelve a leer los cambios solapados.",
   errorConflictMarkersRemain: "Este archivo aún tiene partes solapadas marcadas. Quítalas o márcalo como resuelto de todos modos.",
   errorConflictChoiceNeeded: "Elige primero qué lado conservar en este archivo.",
+  errorMergeAbortRefused: "Git no quiso abandonar la combinación, así que no se ha cambiado nada. Puede que un archivo que trajo la combinación tenga ediciones sin guardar que Git no sobrescribe: guárdalas o apártalas y vuelve a intentarlo.",
+  errorMergeOutcomeUncertain: "GitOdile no pudo confirmar cómo terminó esto. Vuelve a leer los cambios solapados antes de seguir; la copia que guardó GitOdile sigue en el proyecto.",
   errorConflictContentNotKept: "GitOdile no pudo guardar el contenido original de este archivo. No se ha cambiado nada; aún puedes recuperar solo el solapamiento.",
   errorFileLocked: "Otro programa está usando este archivo. Ciérralo allí y vuelve a intentarlo. No se ha cambiado nada.",
   errorConflictCaseCollision: "El nombre de este archivo solo se diferencia en mayúsculas de otro archivo del disco, y este equipo no puede mantenerlos separados. Cambia el nombre del otro archivo o quítalo y vuelve a leer los cambios que se solapan.",

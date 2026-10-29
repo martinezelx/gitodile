@@ -279,7 +279,7 @@ Every class gets a safe whole-file path or an explicit, honest limitation.
    per-side read-only view, and the read-only view of other paused operations.
 3. [037-6](037-6-resolve-files.md): whole-side choices, open in editor, mark
    resolved, reset.
-4. [037-5](037-5-complete-or-abort-merge.md): finish and abort plans.
+4. [037-5](../done/037-5-complete-or-abort-merge.md): finish and abort plans.
 5. [037-7](037-7-conflict-workflow-audit.md): end-to-end audit.
 
 Slices may land behind honest disabled affordances or a development flag. Do not
@@ -436,6 +436,13 @@ process counts, and platform deviations.
   `reset_conflict_file` in `src-tauri/src/conflicts/resolve.rs`, and the
   resolution journal beside the snapshot (ADR 0041 §8). Details in
   [037-6-1](../done/037-6-1-resolution-core.md).
+
+- 037-5 (2026-10-29): finishing and abandoning the merge,
+  `src-tauri/src/conflicts/merge.rs` (`plan_finish_merge`, `finish_merge`,
+  `plan_abort_merge`, `abort_merge`), the session header's actions and two
+  dialogs in `src/features/conflicts/MergeDialogs.tsx`, and the status's
+  `pausedOperation` so a merge whose files are all resolved is still found.
+  ADR 0041 §9. Details in [037-5](../done/037-5-complete-or-abort-merge.md).
 
 # Validation
 

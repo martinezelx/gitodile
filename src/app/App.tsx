@@ -3242,6 +3242,8 @@ export function App(): React.JSX.Element {
                           onBack={goBack}
                           onGoToOverview={() => navigateToView("overview")}
                           isProjectBusy={isActiveOperationRunning}
+                          runHooks={runGitHooks}
+                          onPublish={() => openPublishDialog()}
                           onOperationStart={() => startLocalOperation(project.path, "resolve")}
                           onOperationFinish={() => finishSessionOperation(project.path)}
                           onOperationPhaseChange={(phase) => setBranchOperationPhase(project.path, phase)}

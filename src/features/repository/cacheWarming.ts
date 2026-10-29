@@ -72,22 +72,24 @@ export function useProjectCacheWarming({
     );
   }, [hasCompletedSessionRestore, mapSyncError, projectPath, runtime, session?.epoch, syncController]);
 
-  // A paused operation shows up first as overlapping files in the status, so
-  // the session is read after each status snapshot that has some, and once
-  // more after one that no longer does (to see the session end). A project
-  // with neither costs no Git process.
-  const conflictedCount = session?.workingTree?.counts.conflicted ?? null;
+  // A paused operation shows up in the status as overlapping files or as
+  // Git's operation markers (a merge whose files are all resolved has only
+  // the markers), so the session is read after each status snapshot that has
+  // either, and once more after one that no longer does (to see the session
+  // end). A project with neither costs no Git process.
+  const workingTree = session?.workingTree;
+  const isPaused = workingTree ? workingTree.counts.conflicted > 0 || workingTree.pausedOperation === true : null;
   useEffect(() => {
-    if (!hasCompletedSessionRestore || !projectPath || !session?.epoch || conflictedCount === null) {
+    if (!hasCompletedSessionRestore || !projectPath || !session?.epoch || isPaused === null) {
       return undefined;
     }
     return conflictsController.scheduleWarm(
       runtime,
       { projectId: projectPath, sessionEpoch: session.epoch },
-      conflictedCount,
+      isPaused,
     );
   }, [
-    conflictedCount,
+    isPaused,
     conflictsController,
     hasCompletedSessionRestore,
     projectPath,

@@ -48,6 +48,8 @@ export const en: OverviewTranslations = {
   overviewPublishAll: (count) => (count === 1 ? "Publish all" : `Publish all ${count}`),
   overviewNextConflictsTitle: (count) =>
     count === 1 ? "1 file has overlapping changes" : `${count} files have overlapping changes`,
+  overviewNextPausedTitle: "Combining is paused",
+  overviewNextPausedHint: "No file overlaps any more. Open the overlapping changes to finish combining or stop it.",
   overviewNextConflictsHint: "Choose what stays in each part. Nothing is saved until you finish.",
   overviewNextSaveTitle: (count) => (count === 1 ? "Save your change" : `Save your ${count} changes`),
   overviewNextPublishTitle: (count, remote) => {

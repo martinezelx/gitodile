@@ -119,13 +119,13 @@ export function createConflictsController(port: ConflictsPort) {
     return promise;
   };
 
-  /** The read a repository change calls for. A project with no overlapping
-   * file and no session on record has nothing paused to look at, so it costs
-   * no Git process; one with either is read again, which is also how a
-   * session that just ended is noticed. */
-  const refreshIfRelevant = (query: ConflictsQuery, conflictedCount: number): void => {
+  /** The read a repository change calls for. A project whose status shows
+   * nothing paused and that has no session on record has nothing to look at,
+   * so it costs no Git process; one with either is read again, which is also
+   * how a session that just ended is noticed. */
+  const refreshIfRelevant = (query: ConflictsQuery, isPaused: boolean): void => {
     const entry = entryFor(query);
-    if (conflictedCount > 0 || entry.state.session) {
+    if (isPaused || entry.state.session) {
       void refresh(query);
     } else if (entry.state.session === undefined) {
       publish(entry, { ...entry.state, session: null });
@@ -152,6 +152,25 @@ export function createConflictsController(port: ConflictsPort) {
       generation: entry.state.generation + 1,
     });
     return session;
+  };
+
+  /** Runs finishing or abandoning the merge. Rust verified that the merge
+   * ended before it answered, so nothing is paused any more: that is the
+   * cached answer until the coordinated refresh reads it again. A failure
+   * leaves the session as it was. */
+  const end = async <T>(query: ConflictsQuery, run: (port: ConflictsPort) => Promise<T>): Promise<T> => {
+    const entry = entryFor(query);
+    const result = await run(port);
+    if (entries.get(keyOf(query)) !== entry) return result;
+    entry.inFlight = null;
+    publish(entry, {
+      ...entry.state,
+      session: null,
+      error: null,
+      isLoading: false,
+      generation: entry.state.generation + 1,
+    });
+    return result;
   };
 
   const readSideDiff = (query: ConflictSideDiffQuery): Promise<FileDiff> => {
@@ -210,6 +229,7 @@ export function createConflictsController(port: ConflictsPort) {
     },
     refresh,
     mutate,
+    end,
     readSideDiff,
     checkWorkingFile,
     /** The resolved diff when it is already held, so the detail renders on
@@ -220,11 +240,11 @@ export function createConflictsController(port: ConflictsPort) {
     /** Idle-deferred, like every speculative read: the status snapshot this
      * follows has just landed, and the overlap read must not compete with
      * the frame that draws it. */
-    scheduleWarm(runtime: ProjectRuntime, query: ConflictsQuery, conflictedCount: number): () => void {
+    scheduleWarm(runtime: ProjectRuntime, query: ConflictsQuery, isPaused: boolean): () => void {
       return runtime.scheduleCacheWarm({
         key: `conflicts:${query.sessionEpoch}`,
         reason: "repository-invalidation",
-        run: async () => refreshIfRelevant(query, conflictedCount),
+        run: async () => refreshIfRelevant(query, isPaused),
       });
     },
     viewMemory(query: ConflictsQuery): ConflictsViewMemory {

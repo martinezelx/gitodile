@@ -194,9 +194,11 @@ itself:
   pre-merge state is known.
 - Once the merge has paused, the session is the same as one started elsewhere:
   the user's editor and other tools see an ordinary merge, `git merge --abort`
-  means what it always means, and finishing runs the merge's own commit hooks
-  (`pre-merge-commit`, `prepare-commit-msg`, `commit-msg`) through Git, honours
-  signing, and is never bypassed unless hooks are off in Settings.
+  means what it always means, and finishing runs the commit hooks Git runs
+  when a paused merge is concluded (`pre-commit`, `prepare-commit-msg`,
+  `commit-msg`, `post-commit`; `pre-merge-commit` belongs to `git merge` itself
+  and does not run then), honours signing, and is never bypassed unless hooks
+  are off in Settings. (Corrected by the amendment in §9.)
 
 This amends ADR 0030's point 7 only for an explicit choice to resolve
 overlaps. A clean combine still uses `merge-tree` and `commit-tree`, with every
@@ -291,6 +293,50 @@ also proves the name on disk is spelled exactly as Git spells it
 (`conflict_case_collision`). Paths that differ in a folder's case, or only in
 Unicode normalization, are caught by that write-time check rather than the
 facet.
+
+### 9. Amendment (2026-10-29): finishing and abandoning the merge
+
+Task 037-5 adds the two session-level actions. Each has its own read-only
+plan with a token, separate from leaving the screen, saving a version and
+marking a file resolved, and neither publishes.
+
+- **Finish** (`plan_finish_merge`, `finish_merge`, a history mutation) is
+  allowed only when the session's listing is complete and nothing is
+  unmerged. Its token adds `HEAD` and `git diff-index --cached --raw -z
+  --no-renames HEAD` to the session token, so any change to what would be
+  saved moves it. It runs `git commit -m <message>`, so Git takes the parents
+  from `MERGE_HEAD`, runs the hooks of §7 and honours `commit.gpgSign`;
+  `--no-verify` is passed only when hooks are off in Settings. The message
+  starts from `MERGE_MSG` with its comment lines dropped. Nothing touches the
+  index before the commit, so a hook, signing or identity failure leaves every
+  resolution staged and the merge paused, and a retry is a new plan. The plan
+  counts unsaved files with `git diff --name-only` (content, not file times)
+  and names resolved files edited after they were marked, whose edits the
+  version leaves out.
+- **Abandon** (`plan_abort_merge`, `abort_merge`, destructive) promises an
+  **exact** return only when the session's origin is `gitodile` and its
+  snapshot is complete; every other merge is **best effort**, and the plan says
+  that Git keeps the unsaved changes it can and refuses rather than overwrite
+  one. Before Git runs, GitOdile takes the snapshot if there is none, records
+  each unmerged path's stages and unsaved bytes in the journal as `abandon`
+  entries, and keeps the rest of the index (built on a copy with the unmerged
+  paths removed, then `write-tree`) under
+  `refs/gitodile/recovery/v1/conflict/<owner>/<session-id>-abandoned`, recorded
+  in the journal as `abandonedIndex` and trimmed with the record. It then
+  refreshes the index's file times (`update-index -q --refresh`: an entry Mark
+  resolved staged through `--index-info` has none, and Git's reset would take
+  its untouched file for an edit) and runs `git merge --abort`.
+- **Verification ignores Git's exit status.** Finishing is done when `HEAD`'s
+  parents are the paused `HEAD` and the merge head, `MERGE_HEAD` is gone,
+  nothing is unmerged and the index is `HEAD`'s tree; it changed nothing when
+  `HEAD` and `MERGE_HEAD` are as they were, and the commit's failure is
+  classified as Save version's is. Abandoning is done when `HEAD` never moved,
+  `MERGE_HEAD` is gone and nothing is unmerged (and, for an exact return, the
+  index is `HEAD`'s tree); a refusal that left the session token unchanged is
+  `merge_abort_refused`. Anything else is `merge_outcome_uncertain`, reported
+  with the observed `HEAD`, parents and markers, never repaired, and every
+  snapshot, journal and ref is kept. A restart reads whatever Git left like
+  any other state.
 
 ## Consequences
 

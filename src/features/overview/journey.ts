@@ -96,7 +96,7 @@ export function deriveJourney({
       : workingTreeError
         ? { state: "error", total: 0, conflicted: 0 }
         : { state: "loading", total: 0, conflicted: 0 }
-    : workingTree.counts.conflicted > 0
+    : workingTree.counts.conflicted > 0 || workingTree.pausedOperation === true
       ? { state: "conflicts", total: workingTree.counts.total, conflicted: workingTree.counts.conflicted }
       : workingTree.counts.total > 0
         ? { state: "dirty", total: workingTree.counts.total, conflicted: 0 }

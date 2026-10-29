@@ -6,8 +6,10 @@ import {
   fileBlock,
   keptChoice,
   needsMarkerCheck,
+  sessionActions,
   sideLimitation,
   type ConflictFile,
+  type ConflictSession,
 } from "./domain";
 
 const A = "1".repeat(40);
@@ -98,5 +100,38 @@ describe("file actions", () => {
     expect(keptChoice(file({ kept: "incoming" }))).toBe("keep-incoming");
     expect(keptChoice(file({ kept: "deleted" }))).toBe("delete");
     expect(keptChoice(file({}))).toBeNull();
+  });
+});
+
+describe("sessionActions", () => {
+  const paused = (overrides: Partial<ConflictSession>, supported = true): ConflictSession => ({
+    sessionId: "s",
+    stateToken: "t",
+    origin: "external",
+    operation: {
+      kind: supported ? "merge" : "rebase",
+      supported,
+      unsupportedReason: supported ? null : "not-a-merge",
+      step: null,
+      current: { name: "main", commit: A },
+      incoming: { name: "feature", commit: B },
+      operationHeads: [B],
+      continueCommand: null,
+      abortCommand: null,
+    },
+    files: [],
+    unresolvedCount: 0,
+    listingComplete: true,
+    snapshot: null,
+    allowedActions: [],
+    ...overrides,
+  });
+
+  it.each([
+    ["a resolved merge", paused({ allowedActions: ["finish-merge", "abort-merge"] }), { finish: "allowed", abort: true }],
+    ["files still overlapping", paused({ allowedActions: ["abort-merge"] }), { finish: "files-left", abort: true }],
+    ["an operation GitOdile can't end", paused({}, false), { finish: "hidden", abort: false }],
+  ] as const)("offers the header actions Rust allows for %s", (_label, value, expected) => {
+    expect(sessionActions(value)).toEqual(expected);
   });
 });

@@ -339,12 +339,16 @@ fn trim(path: &str, root: &Path, live_session: &str) {
             continue;
         }
         if let Some(manifest) = read_manifest(&child.path()) {
-            let journal_pin =
-                read_journal_at(&child.path()).and_then(|journal| journal.pin_reference);
+            let journal = read_journal_at(&child.path());
+            let abandoned = journal
+                .as_ref()
+                .and_then(|journal| journal.abandoned_index.as_ref())
+                .map(|pinned| pinned.reference.clone());
+            let journal_pin = journal.and_then(|journal| journal.pin_reference);
             ended.push((
                 manifest.created_at_ms,
                 child.path(),
-                [manifest.pin_reference, journal_pin],
+                [manifest.pin_reference, journal_pin, abandoned],
             ));
         }
     }
@@ -552,6 +556,8 @@ pub(crate) enum JournalAction {
     Delete,
     MarkResolved,
     Reset,
+    /// What the merge's own abort was about to replace (task 037-5).
+    Abandon,
 }
 
 /// What a path held on disk before an action replaced it.
@@ -609,6 +615,19 @@ pub(crate) struct ConflictJournal {
     pub(crate) stored_bytes: u64,
     pub(crate) pin_reference: Option<String>,
     pub(crate) entries: Vec<JournalEntry>,
+    /// The index as it stood before the merge was abandoned, its unmerged
+    /// paths left out: every file already marked resolved, and what the
+    /// merge brought in cleanly.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) abandoned_index: Option<PinnedTree>,
+}
+
+/// A tree kept reachable by a hidden ref of its own.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct PinnedTree {
+    pub(crate) reference: String,
+    pub(crate) tree: String,
 }
 
 fn journal_dir(git_dir: &Path, session_id: &str) -> PathBuf {
@@ -815,8 +834,24 @@ fn replaced_working(
     let written = last_written(journal, relative)
         .and_then(|entry| entry.left.as_ref())
         .is_some_and(|left| left.sha256.as_deref() == Some(sha256.as_str()));
+    // The same bytes copied by an earlier entry (an abandon Git refused, then
+    // tried again) are not copied twice.
+    let held = journal
+        .entries
+        .iter()
+        .rev()
+        .find_map(|entry| match &entry.replaced_working {
+            JournalWorking::File {
+                stored: Some(sequence),
+                sha256: kept,
+                ..
+            } if entry.path == relative && *kept == sha256 => Some(*sequence),
+            _ => None,
+        });
     let stored = if in_snapshot || written {
         None
+    } else if held.is_some() {
+        held
     } else {
         let size = metadata.len();
         if journal.stored_bytes.saturating_add(size) > MAX_CONFLICT_SNAPSHOT_BYTES {
@@ -875,6 +910,7 @@ pub(crate) fn begin_conflict_journal_entry(
             stored_bytes: 0,
             pin_reference: None,
             entries: Vec::new(),
+            abandoned_index: None,
         });
     let sequence = journal.entries.last().map_or(0, |entry| entry.sequence + 1);
     let root = repository.worktree_root.backend_path();
@@ -916,6 +952,77 @@ pub(crate) fn finish_conflict_journal_entry(
         .ok_or_else(journal_failed)?;
     entry.left = Some(left);
     write_journal(&journal_dir(git_dir, session_id), &journal)
+}
+
+/// Records what abandoning the merge is about to replace, before Git
+/// replaces anything: for each still-unmerged path its stages and the working
+/// bytes neither the snapshot nor an earlier action holds, and the rest of the
+/// index (`staged_tree`, built from a copy of it) under its own ref. One
+/// journal write and one pin for the lot, however many paths there are.
+///
+/// The caller holds the write lock and has created the session's snapshot.
+pub(crate) fn record_conflict_abandon(
+    path: &str,
+    repository: &RepositoryContext,
+    snapshot: &ConflictSnapshotManifest,
+    unmerged: Vec<(String, Vec<SnapshotStageEntry>)>,
+    staged_tree: &str,
+) -> Result<ConflictJournal, AppError> {
+    if repository_access::held_mode(repository.common_git_dir.match_key())
+        != Some(AccessMode::Write)
+        || !is_object_id(staged_tree)
+    {
+        return Err(journal_failed());
+    }
+    let git_dir = repository.git_dir.backend_path();
+    let directory = journal_dir(git_dir, &snapshot.session_id);
+    fs::create_dir_all(directory.join("files")).map_err(|_| journal_failed())?;
+    let mut journal =
+        read_conflict_journal(git_dir, &snapshot.session_id).unwrap_or(ConflictJournal {
+            schema_version: CONFLICT_JOURNAL_SCHEMA_VERSION,
+            session_id: snapshot.session_id.clone(),
+            stored_bytes: 0,
+            pin_reference: None,
+            entries: Vec::new(),
+            abandoned_index: None,
+        });
+    let root = repository.worktree_root.backend_path();
+    let at_ms = now_ms();
+    for (relative, replaced_index) in unmerged {
+        let sequence = journal.entries.last().map_or(0, |entry| entry.sequence + 1);
+        let working = replaced_working(
+            contained_target(root, &relative),
+            &relative,
+            snapshot,
+            &mut journal,
+            &directory.join("files").join(sequence.to_string()),
+            sequence,
+        )?;
+        journal.entries.push(JournalEntry {
+            sequence,
+            path: relative,
+            action: JournalAction::Abandon,
+            at_ms,
+            replaced_working: working,
+            replaced_index,
+            left: None,
+        });
+    }
+    journal.pin_reference = pin_journal_objects(path, repository, snapshot, &journal)?;
+    let reference = format!(
+        "{}-abandoned",
+        pin_reference_name(repository, &snapshot.session_id)
+    );
+    let updated = run_git(path, &["update-ref", &reference, staged_tree])?;
+    if !updated.status.success() {
+        return Err(journal_failed());
+    }
+    journal.abandoned_index = Some(PinnedTree {
+        reference,
+        tree: staged_tree.to_string(),
+    });
+    write_journal(&directory, &journal)?;
+    Ok(journal)
 }
 
 #[cfg(test)]

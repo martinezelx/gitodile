@@ -13,10 +13,11 @@
 //! written beside its target and renamed over it.
 
 use super::{
-    describe_session, exact_working_path, is_object_id, is_regular_file_mode, kept_side,
-    read_blob_capped, read_session, scan_working_markers, stale, unreadable, working_fingerprint,
-    ConflictAction, ConflictFacet, ConflictFile, ConflictSession, ConflictStage, KeptSide,
-    MarkerScan, UnmergedPath, WorkingKind, MODE_EXECUTABLE, MODE_GITLINK, MODE_SYMLINK,
+    describe_session, exact_working_path, fresh_session, is_object_id, is_regular_file_mode,
+    kept_side, read_blob_capped, read_session, scan_working_markers, stage_entries, stale,
+    unreadable, working_fingerprint, ConflictAction, ConflictFacet, ConflictFile, ConflictSession,
+    ConflictStage, KeptSide, MarkerScan, UnmergedPath, WorkingKind, MODE_EXECUTABLE, MODE_GITLINK,
+    MODE_SYMLINK,
 };
 use crate::application;
 use crate::changes::validate_repo_relative_path;
@@ -160,31 +161,6 @@ fn prepare(
         unmerged,
         snapshot,
     })
-}
-
-fn fresh_session(
-    path: &str,
-    repository: &RepositoryContext,
-) -> Result<Option<ConflictSession>, AppError> {
-    Ok(read_session(path, repository)?.map(|read| describe_session(repository, read)))
-}
-
-fn stage_entries(relative: &str, unmerged: &UnmergedPath) -> Vec<SnapshotStageEntry> {
-    [
-        (1, &unmerged.base),
-        (2, &unmerged.current),
-        (3, &unmerged.incoming),
-    ]
-    .into_iter()
-    .filter_map(|(stage, value)| {
-        value.as_ref().map(|value| SnapshotStageEntry {
-            path: relative.to_string(),
-            stage,
-            mode: value.mode.clone(),
-            object_id: value.object_id.clone(),
-        })
-    })
-    .collect()
 }
 
 /// Every index entry of one path, stage 0 included.

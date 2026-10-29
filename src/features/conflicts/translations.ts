@@ -140,4 +140,28 @@ export interface ConflictsTranslations {
   conflictsBlockCaseBody: (others: string) => string;
   conflictsBlockInexactTitle: string;
   conflictsBlockInexactBody: string;
+  conflictsFinish: string;
+  conflictsFinishFilesLeft: string;
+  conflictsAbort: string;
+  conflictsFinishTitle: string;
+  conflictsFinishSubtitle: (incoming: string, current: string) => string;
+  conflictsFinishFactSaves: (current: string, files: number, resolved: number) => string;
+  conflictsFinishFactChecks: (hooks: boolean, signs: boolean) => string;
+  conflictsFinishFactSafe: (unsaved: number) => string;
+  conflictsFinishEditedAfterResolving: (files: number) => string;
+  conflictsFinishConfirm: string;
+  conflictsFinishRunning: string;
+  conflictsFinishBlockedTitle: string;
+  conflictsFinishDoneTitle: string;
+  conflictsFinishDoneBody: (title: string, branch: string) => string;
+  conflictsPlanReread: string;
+  conflictsAbortTitle: string;
+  conflictsAbortBody: (incoming: string, current: string) => string;
+  conflictsAbortBestEffort: string;
+  conflictsAbortFactFiles: (files: number) => string;
+  conflictsAbortFactUnsaved: (files: number, exact: boolean) => string;
+  conflictsAbortFactKept: string;
+  conflictsAbortConfirm: string;
+  conflictsAbortRunning: string;
+  conflictsAbortDone: (current: string) => string;
 }

@@ -17,4 +17,9 @@ export const conflictsPort: ConflictsPort = {
     invoke("check_conflict_working_file", { path, sessionEpoch, filePath }),
   revealFile: ({ projectId: path, sessionEpoch, filePath }) => invoke("reveal_project_file", { path, sessionEpoch, filePath }),
   openProjectFolder: ({ projectId: path, sessionEpoch }) => invoke("open_project_folder", { path, sessionEpoch }),
+  planFinish: ({ projectId: path, sessionEpoch }) => invoke("plan_finish_merge", { path, sessionEpoch }),
+  finish: ({ projectId: path, sessionEpoch, title, description, stateToken, runHooks }) =>
+    invoke("finish_merge", { path, sessionEpoch, title, description, stateToken, runHooks }),
+  planAbort: ({ projectId: path, sessionEpoch }) => invoke("plan_abort_merge", { path, sessionEpoch }),
+  abort: ({ projectId: path, sessionEpoch, stateToken }) => invoke("abort_merge", { path, sessionEpoch, stateToken }),
 };

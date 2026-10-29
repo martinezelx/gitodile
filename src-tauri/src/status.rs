@@ -78,6 +78,11 @@ pub(crate) struct WorkingTreeStatus {
     pub(crate) has_prepared_changes: bool,
     pub(crate) has_unprepared_changes: bool,
     pub(crate) upstream: UpstreamStatus,
+    /// True while Git's markers say a merge, rebase, cherry-pick, revert or
+    /// patch series is paused, even once no file overlaps any more: a merge
+    /// whose files are all resolved still has to be finished or abandoned.
+    /// Read from the marker files alone, with no Git process.
+    pub(crate) paused_operation: bool,
 }
 
 /// Enough to populate a file list without shipping a pathological status
@@ -387,7 +392,7 @@ fn read_status_snapshot(
     path: String,
     with_line_totals: bool,
 ) -> Result<WorkingTreeStatus, AppError> {
-    let (_repository, _access) =
+    let (repository, _access) =
         application::authorize_repository(&path, "read_working_tree_status", None).map_err(
             |error| match error.code {
                 AppErrorCode::PathUnusable if !Path::new(&path).exists() => AppError::new(
@@ -448,6 +453,8 @@ fn read_status_snapshot(
     };
     let mut status = status_from_records(records);
     status.line_totals = line_totals;
+    status.paused_operation =
+        crate::conflicts::paused_operation_marker(repository.git_dir.backend_path()).is_some();
     Ok(status)
 }
 

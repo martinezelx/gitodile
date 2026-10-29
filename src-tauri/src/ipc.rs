@@ -26,6 +26,7 @@ use crate::{
     },
     conflicts::{
         self,
+        merge::{AbortMergePlan, AbortMergeResult, FinishMergePlan, FinishMergeResult},
         resolve::{ExpectedStages, SideChoice},
         ConflictSession, ConflictSide, ConflictStageContent, WorkingFileCheck,
     },
@@ -956,6 +957,67 @@ pub(crate) fn check_conflict_working_file(
         (|| {
             validate_session(&path, &session_epoch)?;
             conflicts::check_conflict_working_file(path, file_path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn plan_finish_merge(
+    path: String,
+    session_epoch: String,
+) -> Result<FinishMergePlan, AppError> {
+    report_result(
+        "plan_finish_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::merge::plan_finish_merge(path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn finish_merge(
+    path: String,
+    title: String,
+    description: Option<String>,
+    state_token: String,
+    run_hooks: bool,
+    session_epoch: String,
+) -> Result<FinishMergeResult, AppError> {
+    report_result(
+        "finish_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::merge::finish_merge(path, title, description, state_token, run_hooks)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn plan_abort_merge(
+    path: String,
+    session_epoch: String,
+) -> Result<AbortMergePlan, AppError> {
+    report_result(
+        "plan_abort_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::merge::plan_abort_merge(path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn abort_merge(
+    path: String,
+    state_token: String,
+    session_epoch: String,
+) -> Result<AbortMergeResult, AppError> {
+    report_result(
+        "abort_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::merge::abort_merge(path, state_token)
         })(),
     )
 }
@@ -2134,6 +2196,8 @@ mod contract_tests {
             AppErrorCode::FileLocked,
             AppErrorCode::ConflictCaseCollision,
             AppErrorCode::FileRunsAsProgram,
+            AppErrorCode::MergeAbortRefused,
+            AppErrorCode::MergeOutcomeUncertain,
             AppErrorCode::IgnoreFileTooLarge,
             AppErrorCode::IgnoreFileNotText,
             AppErrorCode::StaleIgnoreFile,

@@ -10,6 +10,7 @@
 //! the user's own application and checking it for markers are here: neither
 //! writes, and both reach the file through the exact-path check writes use.
 
+pub(crate) mod merge;
 pub(crate) mod resolve;
 
 use crate::application;
@@ -22,7 +23,8 @@ use crate::error::{AppError, AppErrorCode};
 use crate::git_command::{run_git, run_git_capped, run_git_with_input_capped};
 use crate::recovery::{
     create_conflict_snapshot, last_written, read_conflict_journal, read_conflict_snapshot,
-    ConflictJournal, ConflictSnapshotManifest, JournalAction, SnapshotPath, SnapshotWorking,
+    ConflictJournal, ConflictSnapshotManifest, JournalAction, SnapshotPath, SnapshotStageEntry,
+    SnapshotWorking,
 };
 use crate::repository_access::RepositoryContext;
 use crate::status::ChangeCategory;
@@ -1364,7 +1366,7 @@ pub(crate) fn kept_side(
         JournalAction::KeepCurrent => KeptSide::Current,
         JournalAction::KeepIncoming => KeptSide::Incoming,
         JournalAction::Delete => KeptSide::Deleted,
-        JournalAction::MarkResolved | JournalAction::Reset => return None,
+        JournalAction::MarkResolved | JournalAction::Reset | JournalAction::Abandon => return None,
     };
     let left = entry.left.as_ref()?;
     (left.kind == fingerprint.kind
@@ -1538,6 +1540,33 @@ pub(crate) fn read_conflict_session(path: String) -> Result<Option<ConflictSessi
     let (repository, _access) =
         application::authorize_repository(&path, "read_conflict_session", None)?;
     Ok(read_session(&path, &repository)?.map(|read| describe_session(&repository, read)))
+}
+
+/// The session as it is now, after a change.
+pub(crate) fn fresh_session(
+    path: &str,
+    repository: &RepositoryContext,
+) -> Result<Option<ConflictSession>, AppError> {
+    Ok(read_session(path, repository)?.map(|read| describe_session(repository, read)))
+}
+
+/// One unmerged path's stages as index entries.
+pub(crate) fn stage_entries(relative: &str, unmerged: &UnmergedPath) -> Vec<SnapshotStageEntry> {
+    [
+        (1, &unmerged.base),
+        (2, &unmerged.current),
+        (3, &unmerged.incoming),
+    ]
+    .into_iter()
+    .filter_map(|(stage, value)| {
+        value.as_ref().map(|value| SnapshotStageEntry {
+            path: relative.to_string(),
+            stage,
+            mode: value.mode.clone(),
+            object_id: value.object_id.clone(),
+        })
+    })
+    .collect()
 }
 
 pub(crate) fn line_endings(text: &[u8]) -> LineEndings {

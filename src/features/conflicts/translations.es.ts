@@ -154,4 +154,37 @@ export const es: ConflictsTranslations = {
     `Este equipo no puede mantener separados este archivo y ${others}, así que GitOdile no escribirá ninguno. Cambia el nombre de uno de ellos con Git, en un equipo que distinga mayúsculas o en un terminal, y vuelve a leer.`,
   conflictsBlockInexactTitle: "GitOdile no puede nombrar este archivo con exactitud",
   conflictsBlockInexactBody: "Su nombre no es texto válido, así que GitOdile no lo cambiará. Resuélvelo con Git en un terminal, donde git status lo muestra, y vuelve a leer.",
+  conflictsFinish: "Terminar la combinación…",
+  conflictsFinishFilesLeft: "Marca todos los archivos como resueltos para terminar la combinación",
+  conflictsAbort: "Abandonar la combinación…",
+  conflictsFinishTitle: "Terminar la combinación",
+  conflictsFinishSubtitle: (incoming, current) => `«${incoming}» en «${current}»`,
+  conflictsFinishFactSaves: (current, files, resolved) =>
+    `Guarda una versión en «${current}» con ${files === 0 ? "ningún archivo cambiado" : `${files.toLocaleString()} ${files === 1 ? "archivo cambiado" : "archivos cambiados"}`}.${resolved > 0 ? ` Resolviste ${resolved === 1 ? "1 archivo solapado" : `${resolved.toLocaleString()} archivos solapados`}.` : ""}`,
+  conflictsFinishFactChecks: (hooks, signs) =>
+    `${hooks ? "Primero se ejecutan los hooks de Git del proyecto" : "Los hooks de Git están desactivados en Ajustes, así que no se ejecutan"}${signs ? ", y Git firma la versión" : ""}.`,
+  conflictsFinishFactSafe: (unsaved) =>
+    `No se publica nada.${unsaved > 0 ? ` Los cambios sin guardar de ${unsaved === 1 ? "1 archivo se quedan" : `${unsaved.toLocaleString()} archivos se quedan`} como están.` : ""}`,
+  conflictsFinishEditedAfterResolving: (files) =>
+    `${files === 1 ? "Un archivo resuelto se editó" : `${files.toLocaleString()} archivos resueltos se editaron`} después de marcarlo${files === 1 ? "" : "s"}. La versión guarda lo que marcaste; vuelve a marcarlo${files === 1 ? "" : "s"} para incluir las ediciones.`,
+  conflictsFinishConfirm: "Terminar la combinación",
+  conflictsFinishRunning: "Guardando la versión…",
+  conflictsFinishBlockedTitle: "Aún no se puede terminar",
+  conflictsFinishDoneTitle: "Combinación terminada",
+  conflictsFinishDoneBody: (title, branch) => `«${title}» está guardada en «${branch}». Solo está en este equipo hasta que la publiques.`,
+  conflictsPlanReread: "El proyecto ha cambiado, así que GitOdile lo ha vuelto a leer. Revisa lo que dice y vuelve a intentarlo.",
+  conflictsAbortTitle: "¿Abandonar la combinación?",
+  conflictsAbortBody: (incoming, current) => `«${current}» vuelve a como estaba antes de traer «${incoming}».`,
+  conflictsAbortBestEffort:
+    "Esto se empezó fuera de GitOdile, así que no puede saber qué había sin guardar antes. Git conserva los cambios sin guardar que puede y se niega antes que sobrescribir alguno.",
+  conflictsAbortFactFiles: (files) =>
+    files === 0
+      ? "Se deshace lo que trajo la combinación."
+      : `${files === 1 ? "El archivo solapado vuelve atrás" : `Los ${files.toLocaleString()} archivos solapados vuelven atrás`} y se deshace lo que elegiste en ${files === 1 ? "él" : "ellos"}.`,
+  conflictsAbortFactUnsaved: (files, exact) =>
+    `Los cambios sin guardar de ${files === 1 ? "otro archivo se quedan" : `otros ${files.toLocaleString()} archivos se quedan`} ${exact ? "exactamente " : ""}como están.`,
+  conflictsAbortFactKept: "Una copia de lo que tienen ahora los archivos se queda en los registros de recuperación del proyecto.",
+  conflictsAbortConfirm: "Abandonar la combinación",
+  conflictsAbortRunning: "Abandonando…",
+  conflictsAbortDone: (current) => `Combinación abandonada. «${current}» está como antes.`,
 };

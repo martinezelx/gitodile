@@ -51,6 +51,10 @@ function port(read: ConflictsPort["readSession"], overrides: Partial<ConflictsPo
     checkWorkingFile: vi.fn(),
     revealFile: vi.fn(),
     openProjectFolder: vi.fn(),
+    planFinish: vi.fn(),
+    finish: vi.fn(),
+    planAbort: vi.fn(),
+    abort: vi.fn(),
     ...overrides,
   };
 }
@@ -62,18 +66,18 @@ describe("conflicts controller", () => {
       .mockResolvedValueOnce(null);
     const controller = createConflictsController(port(read));
 
-    controller.scheduleWarm(runtime, query, 0);
+    controller.scheduleWarm(runtime, query, false);
     expect(read).not.toHaveBeenCalled();
     expect(controller.getSnapshot(query).session).toBeNull();
 
-    controller.scheduleWarm(runtime, query, 2);
+    controller.scheduleWarm(runtime, query, true);
     await vi.waitFor(() => expect(controller.getSnapshot(query).session?.stateToken).toBe("one"));
 
     // The status no longer lists an overlap, but a session is on record: one
     // more read is how the screen learns the merge ended.
-    controller.scheduleWarm(runtime, query, 0);
+    controller.scheduleWarm(runtime, query, false);
     await vi.waitFor(() => expect(controller.getSnapshot(query).session).toBeNull());
-    controller.scheduleWarm(runtime, query, 0);
+    controller.scheduleWarm(runtime, query, false);
     expect(read).toHaveBeenCalledTimes(2);
   });
 
@@ -143,5 +147,22 @@ describe("conflicts controller", () => {
     await controller.readSideDiff({ ...sideQuery, sideObjectId: "3".repeat(40) });
 
     expect(readSideDiff).toHaveBeenCalledTimes(2);
+  });
+  it("takes an ended merge as nothing paused, and leaves the session after a failure", async () => {
+    const read = vi.fn<ConflictsPort["readSession"]>().mockResolvedValue(session("one"));
+    const controller = createConflictsController(port(read));
+    await controller.refresh(query);
+
+    await expect(controller.end(query, () => Promise.reject(new Error("hook")))).rejects.toThrow("hook");
+    expect(controller.getSnapshot(query).session?.stateToken).toBe("one");
+
+    let release: () => void = () => undefined;
+    read.mockReturnValueOnce(new Promise((resolve) => { release = () => resolve(session("two")); }));
+    const pending = controller.refresh(query);
+    await controller.end(query, async () => "done");
+    release();
+    await pending;
+    // The read started before the merge ended can't bring the session back.
+    expect(controller.getSnapshot(query).session).toBeNull();
   });
 });

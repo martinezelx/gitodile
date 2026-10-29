@@ -19,6 +19,11 @@
   color: var(--text-secondary-color); font-size: var(--text-body);
 }
 .conflicts-header__summary > span + span::before { content: "·"; margin-inline-end: var(--space-2); }
+/* Finish and stop at the end of the band: the session's own actions, apart
+   from each file's bar. They wrap under the text rather than squeeze it. */
+.conflicts-header__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); }
+/* A plan still being read: its facts' lines, faint, in their final place. */
+.conflicts-plan-placeholder { display: grid; gap: var(--space-2); }
 
 /* An in-screen notice: a card inside the region, the recipe of the Changes
    notices. The tone is the glyph's colour and, for a failure, the edge. */

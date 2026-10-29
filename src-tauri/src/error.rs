@@ -125,6 +125,8 @@ pub(crate) enum AppErrorCode {
     FileLocked,
     ConflictCaseCollision,
     FileRunsAsProgram,
+    MergeAbortRefused,
+    MergeOutcomeUncertain,
     IgnoreFileTooLarge,
     IgnoreFileNotText,
     StaleIgnoreFile,

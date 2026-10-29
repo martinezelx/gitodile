@@ -23,6 +23,10 @@ export type WorkingTreeStatus = {
   hasPreparedChanges: boolean;
   hasUnpreparedChanges: boolean;
   upstream: { branch: string | null; upstream: string | null; ahead: number; behind: number };
+  /** Git's markers say an operation is paused, even with nothing left
+   * overlapping. Optional only so fixtures that predate it stay valid; Rust
+   * always sends it. */
+  pausedOperation?: boolean;
 };
 
 export type WorkingTreeSummary = {

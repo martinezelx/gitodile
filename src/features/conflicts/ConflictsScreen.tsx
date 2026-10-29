@@ -20,13 +20,16 @@ import {
   TextPlaceholder,
   autoHideScrollbarProps,
   copyTextToClipboard,
+  useToast,
 } from "../../shared/ui";
 import { FileResolution, type ResolutionSlot } from "./FileResolution";
 import { useActiveConflictsState } from "./hooks";
+import { AbortMergeDialog, FinishMergeDialog } from "./MergeDialogs";
 import type { ConflictsController, ConflictsViewMemory } from "./controller";
 import {
   filterConflictFiles,
   groupConflictFiles,
+  sessionActions,
   sideLimitation,
   sideName,
   type ConflictFile,
@@ -50,6 +53,10 @@ export type ConflictsScreenProps = {
   onGoToOverview: () => void;
   /** Another change to this project is running: the file actions wait. */
   isProjectBusy: boolean;
+  /** Whether the project's Git hooks run, from Settings. */
+  runHooks: boolean;
+  /** Opens Publish with its own plan, after a finished merge. */
+  onPublish: () => void;
 } & ResolutionSlot;
 
 /** The names a reader knows the two sides by. A rebase replays the reader's
@@ -130,9 +137,15 @@ export function ConflictsScreen({
   onBack,
   onGoToOverview,
   isProjectBusy,
+  runHooks,
+  onPublish,
   ...slot
 }: ConflictsScreenProps): React.JSX.Element {
   const { t } = useLanguage();
+  const showToast = useToast();
+  // The session the dialog was opened on: finishing ends it, and the dialog
+  // stays to say so after the screen has nothing paused to show.
+  const [ending, setEnding] = useState<{ action: "finish" | "abort"; session: ConflictSession } | null>(null);
   const query = useMemo(() => ({ projectId: projectPath, sessionEpoch }), [projectPath, sessionEpoch]);
   const state = useActiveConflictsState(controller, query);
   const [memory, setMemory] = useState<ConflictsViewMemory>(() => controller.viewMemory(query));
@@ -203,7 +216,46 @@ export function ConflictsScreen({
           busy={state.isLoading}
           onClick={refresh}
         />
+        {session && (
+          <SessionEndActions
+            session={session}
+            isProjectBusy={isProjectBusy}
+            onEnd={(action) => setEnding({ action, session })}
+            t={t}
+          />
+        )}
       </header>
+      {ending?.action === "finish" && (
+        <FinishMergeDialog
+          controller={controller}
+          query={query}
+          session={ending.session}
+          runHooks={runHooks}
+          slot={slot}
+          onClose={() => setEnding(null)}
+          onDone={() => {
+            setEnding(null);
+            onBack();
+          }}
+          onPublish={onPublish}
+          t={t}
+        />
+      )}
+      {ending?.action === "abort" && (
+        <AbortMergeDialog
+          controller={controller}
+          query={query}
+          session={ending.session}
+          slot={slot}
+          onClose={() => setEnding(null)}
+          onDone={(plan) => {
+            setEnding(null);
+            showToast({ message: t.conflictsAbortDone(sideName(plan.current) ?? t.conflictsCurrentFallback) });
+            onBack();
+          }}
+          t={t}
+        />
+      )}
 
       {state.error !== null ? (
         <section className="conflicts-notice conflicts-notice--danger" role="alert">
@@ -369,6 +421,48 @@ function SessionNotice({ session, t }: { session: ConflictSession; t: Translatio
         </details>
       </div>
     </section>
+  );
+}
+
+/** Finishing and abandoning the merge, at the end of the header: always
+ * two separate actions, and neither is leaving the screen. Finishing stays
+ * visible while files still overlap, disabled with the reason beside it. */
+function SessionEndActions({
+  session,
+  isProjectBusy,
+  onEnd,
+  t,
+}: {
+  session: ConflictSession;
+  isProjectBusy: boolean;
+  onEnd: (action: "finish" | "abort") => void;
+  t: Translations;
+}): React.JSX.Element | null {
+  const actions = sessionActions(session);
+  if (actions.finish === "hidden" && !actions.abort) return null;
+  return (
+    <div className="conflicts-header__actions">
+      {actions.abort && (
+        <button type="button" className="secondary-button" disabled={isProjectBusy} onClick={() => onEnd("abort")}>
+          {t.conflictsAbort}
+        </button>
+      )}
+      {actions.finish !== "hidden" && (
+        <button
+          type="button"
+          className="primary-button"
+          disabled={isProjectBusy || actions.finish !== "allowed"}
+          aria-describedby={actions.finish === "files-left" ? "conflicts-finish-reason" : undefined}
+          data-tooltip={actions.finish === "files-left" ? t.conflictsFinishFilesLeft : undefined}
+          onClick={() => onEnd("finish")}
+        >
+          {t.conflictsFinish}
+        </button>
+      )}
+      {actions.finish === "files-left" && (
+        <span id="conflicts-finish-reason" className="visually-hidden">{t.conflictsFinishFilesLeft}</span>
+      )}
+    </div>
   );
 }
 

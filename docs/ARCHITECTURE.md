@@ -783,8 +783,11 @@ The frontend owner is `src/features/conflicts/`: a lazy screen registered
 with no rail or fixed palette entry, reached from Overview, Changes, the
 palette and the refusing dialogs. Its controller caches one session read per
 project incarnation and the side diffs by the objects they compare. The
-session is read after a status snapshot that lists overlapping files (and once
-more after one that no longer does), and on every entry press; a project with
+session is read after a status snapshot that lists overlapping files or whose
+`pausedOperation` says Git's markers hold an operation open (a merge whose
+files are all resolved has only the markers; the flag is read from the marker
+files, with no Git process), once more after one that has neither, and on
+every entry press; a project with
 no overlap costs no Git process, and visibility never reads. The three
 mutations go through the controller's `mutate`, which makes the session Rust
 answers with the cached one and supersedes any read started before it; the
@@ -808,7 +811,21 @@ replaced that the snapshot does not hold, pinned by a sibling
 `<session-id>-journal` ref, and what each action left on disk. The session
 read folds the snapshot and the journal back in, which is how a file becomes
 `markedResolved`, `editedOutside` or `stale`, and how it knows which side was
-`kept`. The watcher
+`kept`.
+
+`conflicts/merge.rs` owns ending the session (ADR 0041 §9): `plan_finish_merge`
+and `finish_merge` conclude the paused merge with `git commit` (hooks unless
+they are off in Settings, signing as Git is set), and `plan_abort_merge` and
+`abort_merge` run `git merge --abort` after the journal has kept what it
+replaces and the rest of the index is pinned as an `-abandoned` tree. Each
+plan carries a token execution proves again; each outcome is judged from what
+Git left (`HEAD`, its parents, `MERGE_HEAD`, unmerged entries, the index
+against `HEAD`), not from its exit status, and an outcome that is neither done
+nor unchanged is `merge_outcome_uncertain` with nothing repaired. The screen's
+header offers both in the project's mutation slot; a success publishes "nothing
+paused" as the cached session, runs the one coordinated refresh and returns to
+the screen the reader came from, and Finish's result offers Publish without
+taking it. The watcher
 also invalidates on `rebase-merge/` and `rebase-apply/`; GitOdile's own
 `gitodile/` folder never invalidates.
 

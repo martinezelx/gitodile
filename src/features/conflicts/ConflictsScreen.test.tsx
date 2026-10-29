@@ -81,10 +81,16 @@ async function renderScreen(
     checkWorkingFile: vi.fn(),
     revealFile: vi.fn(),
     openProjectFolder: vi.fn(),
+    planFinish: vi.fn(),
+    finish: vi.fn(),
+    planAbort: vi.fn(),
+    abort: vi.fn(),
     ...mutations,
   });
   await controller.refresh(query);
   const onGoToOverview = vi.fn();
+  const onBack = vi.fn();
+  const onPublish = vi.fn();
   const slot = {
     onOperationStart: vi.fn(() => true),
     onOperationFinish: vi.fn(),
@@ -100,16 +106,18 @@ async function renderScreen(
             controller={controller}
             projectPath={query.projectId}
             sessionEpoch={query.sessionEpoch}
-            onBack={() => undefined}
+            onBack={onBack}
             onGoToOverview={onGoToOverview}
             isProjectBusy={isProjectBusy}
+            runHooks
+            onPublish={onPublish}
             {...slot}
           />
         </ScreenLifecycleProvider>
       </LanguageProvider>
     </StrictMode>,
   );
-  return { readSession, readSideDiff, onGoToOverview, slot };
+  return { readSession, readSideDiff, onGoToOverview, onBack, onPublish, slot };
 }
 
 const appError = (code: string) => ({ code, message: "English text", remediation: null });
@@ -146,9 +154,11 @@ describe("ConflictsScreen", () => {
     await screen.findByText("“feature” didn't change this file.");
     expect(readSideDiff).toHaveBeenCalledTimes(3);
 
-    // Arriving and reading never re-reads the session or offers a change.
+    // Arriving and reading never re-reads the session or offers a file a
+    // change it doesn't allow; finishing waits for every file.
     expect(readSession).toHaveBeenCalledTimes(1);
-    expect(screen.queryByRole("button", { name: /keep|abort|finish|resolve/i })).toBeNull();
+    expect(screen.queryByRole("button", { name: /keep|resolve/i })).toBeNull();
+    expect(screen.getByRole("button", { name: "Finish combining…" })).toHaveProperty("disabled", true);
   });
 
   it("explains an operation it cannot finish, with its exact commands and no action", async () => {
@@ -329,5 +339,96 @@ describe("ConflictsScreen", () => {
 
     expect(screen.getByText("Another change to this project is running. These actions wait for it.")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Mark resolved" })).toHaveProperty("disabled", true);
+  });
+  it("finishes a resolved merge through its plan, keeps a hook's refusal readable and never publishes", async () => {
+    const user = userEvent.setup();
+    const resolved = { ...session({}, [conflict("a.txt", { state: "markedResolved" })]), allowedActions: ["finish-merge", "abort-merge"] } satisfies ConflictSession;
+    const planFinish = vi.fn<ConflictsPort["planFinish"]>().mockResolvedValue({
+      stateToken: "plan-token",
+      sessionId: "session",
+      current: { name: "main", commit: MAIN },
+      incoming: { name: "feature", commit: FEATURE },
+      resolvedFiles: 1,
+      totalFiles: 2,
+      files: [],
+      unsavedFiles: 1,
+      editedAfterResolving: 1,
+      title: "Merge branch 'feature'",
+      description: null,
+      signs: false,
+      snapshot: null,
+    });
+    const finish = vi.fn<ConflictsPort["finish"]>()
+      .mockRejectedValueOnce({ ...appError("hook_rejected"), detail: "commit-msg: say why" })
+      .mockResolvedValueOnce({ commit: "c".repeat(40), shortCommit: "ccccccc", title: "Merge branch 'feature'", branch: "main" });
+    const { slot, onBack, onPublish } = await renderScreen(resolved, undefined, { mutations: { planFinish, finish } });
+
+    await user.click(screen.getByRole("button", { name: "Finish combining…" }));
+    const dialog = screen.getByRole("dialog", { name: "Finish combining" });
+    expect(await within(dialog).findByText("Saves one version on “main” with 2 changed files. You resolved 1 overlapping file.")).toBeTruthy();
+    expect(within(dialog).getByText("Nothing is published. Unsaved changes in 1 file stay as they are.")).toBeTruthy();
+    expect(within(dialog).getByRole("textbox", { name: "Version name" })).toHaveProperty("value", "Merge branch 'feature'");
+    expect(within(dialog).getByText(/A resolved file was edited after you marked it/)).toBeTruthy();
+
+    await user.click(within(dialog).getByRole("button", { name: "Finish combining" }));
+    expect(finish).toHaveBeenLastCalledWith({ ...query, title: "Merge branch 'feature'", description: null, stateToken: "plan-token", runHooks: true });
+    // The hook's own words are why it refused, so they show at once.
+    expect(await within(dialog).findByText("commit-msg: say why")).toBeTruthy();
+    expect(slot.onChanged).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "Finish combining" }));
+    const done = await screen.findByRole("dialog", { name: "Combining finished" });
+    expect(slot.onChanged).toHaveBeenCalledTimes(1);
+    expect(onPublish).not.toHaveBeenCalled();
+    await user.click(within(done).getByRole("button", { name: "Done" }));
+    expect(onBack).toHaveBeenCalledTimes(1);
+    expect(onPublish).not.toHaveBeenCalled();
+  });
+
+  it("keeps Finish visible but unavailable while a file still overlaps", async () => {
+    await renderScreen(session({}, [conflict("a.txt", { allowedActions: [...CHOICES] })]));
+
+    expect(screen.getByRole("button", { name: "Finish combining…" })).toHaveProperty("disabled", true);
+    expect(screen.getByRole("button", { name: "Stop combining…" })).toHaveProperty("disabled", false);
+  });
+
+  it("stops a merge started elsewhere without promising what Git can't bring back, and re-plans after a refusal", async () => {
+    const user = userEvent.setup();
+    const plan = {
+      stateToken: "abort-token",
+      sessionId: "session",
+      origin: "external",
+      restoration: "best-effort",
+      current: { name: "main", commit: MAIN },
+      incoming: { name: "feature", commit: FEATURE },
+      files: 2,
+      unresolvedFiles: 1,
+      stagedFiles: 2,
+      unsavedFiles: 1,
+      snapshot: null,
+    } as const;
+    const planAbort = vi.fn<ConflictsPort["planAbort"]>().mockResolvedValue(plan);
+    const abort = vi.fn<ConflictsPort["abort"]>()
+      .mockRejectedValueOnce(appError("merge_abort_refused"))
+      .mockResolvedValueOnce({ restoration: "best-effort", snapshotReference: null, abandonedReference: null });
+    const { onBack } = await renderScreen(session({}, [conflict("a.txt", { allowedActions: [...CHOICES] })]), undefined, {
+      mutations: { planAbort, abort },
+    });
+
+    await user.click(screen.getByRole("button", { name: "Stop combining…" }));
+    const dialog = screen.getByRole("dialog", { name: "Stop combining?" });
+    expect(await within(dialog).findByText(/This was started outside GitOdile/)).toBeTruthy();
+    expect(within(dialog).getByText("Unsaved changes in 1 other file stay as they are.")).toBeTruthy();
+
+    const planned = planAbort.mock.calls.length;
+    await user.click(within(dialog).getByRole("button", { name: "Stop combining" }));
+    expect(await within(dialog).findByText(/Git wouldn't stop combining/)).toBeTruthy();
+    // The refusal is answered with a fresh plan before anything is retried.
+    await waitFor(() => expect(planAbort.mock.calls.length).toBeGreaterThan(planned));
+    expect(onBack).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "Stop combining" }));
+    expect(abort).toHaveBeenLastCalledWith({ ...query, stateToken: "abort-token" });
+    await waitFor(() => expect(onBack).toHaveBeenCalledTimes(1));
   });
 });

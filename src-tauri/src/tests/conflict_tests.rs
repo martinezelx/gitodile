@@ -3,6 +3,7 @@
 //! question it can of it, because a Git process costs about 50 ms on Windows.
 
 use crate::changes::{DiffLineKind, FileDiff};
+use crate::conflicts::merge;
 use crate::conflicts::resolve::*;
 use crate::conflicts::*;
 use crate::error::{AppError, AppErrorCode};
@@ -10,7 +11,7 @@ use crate::git_command::{git_command, in_test_frame};
 use crate::recovery::*;
 use crate::repository::git_operation_in_progress;
 use crate::repository_access::{self, AccessMode, RepositoryContext};
-use crate::status::ChangeCategory;
+use crate::status::{read_working_tree_status, ChangeCategory};
 use crate::test_support::*;
 use std::fs;
 use std::path::Path;
@@ -1097,5 +1098,306 @@ fn a_working_file_is_checked_for_markers_and_blocked_classes_offer_nothing() {
             AppErrorCode::ConflictCaseCollision
         );
     }
+    let _ = fs::remove_dir_all(path);
+}
+
+/// A merge of `feature` into `main` paused on two text files, with one file
+/// the merge brings in cleanly and one unsaved edit it never touches.
+fn small_merge(label: &str) -> (String, String) {
+    let path = unique_temp_dir(label);
+    git_ok(&path, &["init", "-q", "-b", "main"]);
+    git_ok(&path, &["config", "core.autocrlf", "false"]);
+    for name in ["a.txt", "b.txt", "clean.txt", "notes.txt"] {
+        write_bytes(&path, name, b"base\n");
+    }
+    git_ok(&path, &["add", "."]);
+    git_ok(&path, &["commit", "-q", "-m", "base"]);
+    git_ok(&path, &["checkout", "-q", "-b", "feature"]);
+    for name in ["a.txt", "b.txt", "clean.txt"] {
+        write_bytes(&path, name, b"feature\n");
+    }
+    git_commit_all(&path, "feature");
+    git_ok(&path, &["checkout", "-q", "main"]);
+    for name in ["a.txt", "b.txt"] {
+        write_bytes(&path, name, b"main\n");
+    }
+    git_commit_all(&path, "main");
+    let head = git_ok(&path, &["rev-parse", "HEAD"]);
+    write_bytes(&path, "notes.txt", b"unsaved\n");
+    assert!(!git(&path, &["merge", "feature"]).status.success());
+    (path, head)
+}
+
+fn hook(path: &str, name: &str, body: &str) {
+    let hook = Path::new(path).join(".git/hooks").join(name);
+    fs::create_dir_all(hook.parent().unwrap()).unwrap();
+    fs::write(&hook, format!("#!/bin/sh\n{body}\n")).unwrap();
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+}
+
+fn finish(
+    path: &str,
+    identity: &str,
+    run_hooks: bool,
+    token: Option<&str>,
+) -> Result<merge::FinishMergeResult, AppError> {
+    let repository = context(path);
+    in_test_frame(|| {
+        let plan = merge::plan_finish_merge_with(path, &repository, Some(identity))?;
+        merge::finish_merge_with(
+            path,
+            &repository,
+            &plan.title,
+            None,
+            token.unwrap_or(&plan.state_token),
+            run_hooks,
+            Some(identity),
+        )
+    })
+}
+
+fn code<T: std::fmt::Debug>(result: Result<T, AppError>) -> AppErrorCode {
+    result.expect_err("expected a refusal").code
+}
+
+// About 6 s alone on Windows: one merge is refused, rejected by a hook, by
+// signing and for want of an identity before it is finished, and each
+// attempt re-plans as the dialog would.
+#[test]
+fn a_merge_is_finished_only_when_resolved_and_failures_keep_the_resolutions() {
+    let (path, before) = small_merge("conflict-finish");
+    let feature = git_ok(&path, &["rev-parse", "feature"]);
+    let identity = write_test_identity_config("conflict-finish");
+    assert_eq!(
+        code(finish(&path, &identity, true, None)),
+        AppErrorCode::UnresolvedConflicts
+    );
+
+    let first = session(&path);
+    assert_eq!(first.allowed_actions, [SessionAction::AbortMerge]);
+    let kept = keep(&path, &first, "a.txt", SideChoice::KeepCurrent).unwrap();
+    let kept = mark(&path, &kept, "a.txt", false).unwrap();
+    let kept = keep(&path, &kept, "b.txt", SideChoice::KeepIncoming).unwrap();
+    let resolved = mark(&path, &kept, "b.txt", false).unwrap();
+    assert_eq!(
+        resolved.allowed_actions,
+        [SessionAction::FinishMerge, SessionAction::AbortMerge]
+    );
+    // Nothing overlaps, yet the status still says the merge is open.
+    let status = read_working_tree_status(path.clone()).unwrap();
+    assert_eq!(status.counts.conflicted, 0);
+    assert!(status.paused_operation);
+
+    let repository = context(&path);
+    let plan = in_test_frame(|| merge::plan_finish_merge_with(&path, &repository, Some(&identity)))
+        .unwrap();
+    assert_eq!(plan.title, "Merge branch 'feature'");
+    assert_eq!(plan.resolved_files, 2);
+    assert_eq!(
+        plan.files
+            .iter()
+            .map(|file| file.path.as_str())
+            .collect::<Vec<_>>(),
+        ["b.txt", "clean.txt"]
+    );
+    assert_eq!(plan.unsaved_files, 1);
+    // Mark resolved staged both through `--index-info`, without file times;
+    // neither is an edit until its content differs.
+    assert_eq!(plan.edited_after_resolving, 0);
+    assert!(!plan.signs);
+    write_bytes(&path, "b.txt", b"edited after marking\n");
+    let edited =
+        in_test_frame(|| merge::plan_finish_merge_with(&path, &repository, Some(&identity)))
+            .unwrap();
+    assert_eq!(edited.edited_after_resolving, 1);
+    write_bytes(&path, "b.txt", b"feature\n");
+    let missing = empty_identity_override("conflict-finish");
+    assert_eq!(
+        code(in_test_frame(|| merge::plan_finish_merge_with(
+            &path,
+            &repository,
+            Some(&missing)
+        ))),
+        AppErrorCode::MissingIdentity
+    );
+    assert_eq!(
+        code(finish(&path, &identity, true, Some("not-the-plan"))),
+        AppErrorCode::StaleConflictSession
+    );
+
+    let staged = || (index_of(&path, "a.txt"), index_of(&path, "b.txt"));
+    let resolutions = staged();
+    hook(&path, "commit-msg", "echo 'say why' >&2\nexit 1");
+    assert_eq!(
+        code(finish(&path, &identity, true, None)),
+        AppErrorCode::HookRejected
+    );
+    git_ok(&path, &["config", "commit.gpgSign", "true"]);
+    git_ok(&path, &["config", "gpg.program", "gitodile-no-such-gpg"]);
+    // Hooks off in Settings: the hook is skipped, signing still applies.
+    assert_eq!(
+        code(finish(&path, &identity, false, None)),
+        AppErrorCode::SigningFailed
+    );
+    git_ok(&path, &["config", "--unset", "commit.gpgSign"]);
+    assert!(Path::new(&path).join(".git/MERGE_HEAD").is_file());
+    assert_eq!(staged(), resolutions);
+    assert_eq!(git_ok(&path, &["rev-parse", "HEAD"]), before);
+
+    hook(&path, "commit-msg", "touch .git/commit-msg-ran");
+    let saved = finish(&path, &identity, true, None).unwrap();
+    assert!(Path::new(&path).join(".git/commit-msg-ran").is_file());
+    assert_eq!(
+        git_ok(&path, &["rev-list", "--parents", "-n", "1", "HEAD"]),
+        format!("{} {before} {feature}", saved.commit)
+    );
+    assert_eq!(saved.branch.as_deref(), Some("main"));
+    assert!(!Path::new(&path).join(".git/MERGE_HEAD").exists());
+    assert_eq!(
+        fs::read(Path::new(&path).join("notes.txt")).unwrap(),
+        b"unsaved\n"
+    );
+    assert_eq!(git_ok(&path, &["show", "HEAD:b.txt"]), "feature");
+    assert!(read_conflict_session(path.clone()).unwrap().is_none());
+    assert!(
+        !read_working_tree_status(path.clone())
+            .unwrap()
+            .paused_operation
+    );
+    // The ended session's snapshot stays for recovery.
+    assert!(conflict_snapshot_root(&Path::new(&path).join(".git"))
+        .join(&first.session_id)
+        .join("manifest.json")
+        .is_file());
+    let _ = fs::remove_dir_all(path);
+}
+
+#[test]
+fn an_external_merge_is_abandoned_only_after_its_resolutions_are_kept() {
+    let (path, before) = small_merge("conflict-abort");
+    let first = session(&path);
+    let kept = keep(&path, &first, "a.txt", SideChoice::KeepIncoming).unwrap();
+    mark(&path, &kept, "a.txt", false).unwrap();
+    let resolved_blob = index_of(&path, "a.txt")[0].2.clone();
+    write_bytes(&path, "b.txt", b"mine\n");
+
+    let plan = merge::plan_abort_merge(path.clone()).unwrap();
+    assert_eq!(plan.origin, ConflictOrigin::External);
+    assert_eq!(plan.restoration, merge::Restoration::BestEffort);
+    assert_eq!((plan.files, plan.unresolved_files), (2, 1));
+    assert_eq!((plan.staged_files, plan.unsaved_files), (2, 1));
+    assert_eq!(
+        code(merge::abort_merge(path.clone(), "not-the-plan".into())),
+        AppErrorCode::StaleConflictSession
+    );
+
+    // An edit to a file the merge brought in cleanly: Git won't overwrite it.
+    write_bytes(&path, "clean.txt", b"edited\n");
+    let plan = merge::plan_abort_merge(path.clone()).unwrap();
+    assert_eq!(
+        code(merge::abort_merge(path.clone(), plan.state_token)),
+        AppErrorCode::MergeAbortRefused
+    );
+    assert!(Path::new(&path).join(".git/MERGE_HEAD").is_file());
+    assert_eq!(
+        fs::read(Path::new(&path).join("clean.txt")).unwrap(),
+        b"edited\n"
+    );
+    git_ok(&path, &["checkout", "--", "clean.txt"]);
+
+    let plan = merge::plan_abort_merge(path.clone()).unwrap();
+    let result = merge::abort_merge(path.clone(), plan.state_token).unwrap();
+    assert_eq!(result.restoration, merge::Restoration::BestEffort);
+    // Two attempts, one copy of the hand edit.
+    let copies = fs::read_dir(
+        conflict_snapshot_root(&Path::new(&path).join(".git"))
+            .join(&first.session_id)
+            .join("journal/files"),
+    )
+    .unwrap()
+    .count();
+    assert_eq!(copies, 1);
+    assert!(!Path::new(&path).join(".git/MERGE_HEAD").exists());
+    assert_eq!(git_ok(&path, &["rev-parse", "HEAD"]), before);
+    assert_eq!(fs::read(Path::new(&path).join("a.txt")).unwrap(), b"main\n");
+    assert_eq!(
+        fs::read(Path::new(&path).join("notes.txt")).unwrap(),
+        b"unsaved\n"
+    );
+    assert!(read_conflict_session(path.clone()).unwrap().is_none());
+
+    // What the abort replaced is kept: the resolved file in the abandoned
+    // index's tree, the hand edit in the journal.
+    let git_dir = Path::new(&path).join(".git");
+    let journal = read_conflict_journal(&git_dir, &first.session_id).unwrap();
+    let abandoned = journal.abandoned_index.unwrap();
+    assert_eq!(
+        result.abandoned_reference.as_deref(),
+        Some(abandoned.reference.as_str())
+    );
+    assert_eq!(
+        git_ok(&path, &["rev-parse", &abandoned.reference]),
+        abandoned.tree
+    );
+    assert_eq!(
+        git_ok(&path, &["rev-parse", &format!("{}:a.txt", abandoned.tree)]),
+        resolved_blob
+    );
+    let entry = journal
+        .entries
+        .iter()
+        .find(|entry| entry.path == "b.txt" && entry.action == JournalAction::Abandon)
+        .unwrap();
+    assert_eq!(entry.replaced_index.len(), 3);
+    let JournalWorking::File {
+        stored: Some(stored),
+        ..
+    } = entry.replaced_working
+    else {
+        panic!(
+            "the edit to b.txt was not copied: {:?}",
+            entry.replaced_working
+        );
+    };
+    let copy = conflict_snapshot_root(&git_dir)
+        .join(&first.session_id)
+        .join("journal/files")
+        .join(stored.to_string());
+    assert_eq!(fs::read(copy).unwrap(), b"mine\n");
+    let _ = fs::remove_dir_all(path);
+}
+
+#[test]
+fn a_merge_gitodile_recorded_promises_and_proves_an_exact_return() {
+    let (path, before) = small_merge("conflict-abort-exact");
+    let first = session(&path);
+    let repository = context(&path);
+    {
+        let _guard = repository_access::global()
+            .acquire(&repository, AccessMode::Write, None)
+            .unwrap();
+        in_test_frame(|| {
+            create_conflict_snapshot(
+                &path,
+                &repository,
+                &first.state_token,
+                ConflictOrigin::Gitodile,
+            )
+        })
+        .unwrap();
+    }
+    let plan = merge::plan_abort_merge(path.clone()).unwrap();
+    assert_eq!(plan.origin, ConflictOrigin::Gitodile);
+    assert_eq!(plan.restoration, merge::Restoration::Exact);
+    let result = merge::abort_merge(path.clone(), plan.state_token).unwrap();
+    assert_eq!(result.restoration, merge::Restoration::Exact);
+    assert_eq!(git_ok(&path, &["rev-parse", "HEAD"]), before);
+    assert!(git(&path, &["diff-index", "--cached", "--quiet", "HEAD"])
+        .status
+        .success());
     let _ = fs::remove_dir_all(path);
 }

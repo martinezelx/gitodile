@@ -1,3 +1,5 @@
+import type { SaveVersionFile } from "../save-version";
+
 /* The conflict session as `read_conflict_session` reports it (ADR 0041). Rust
    owns every rule here — which operation is paused, its roles, each file's
    shape and state, what is allowed — and the screen only explains it. */
@@ -74,6 +76,64 @@ export type ConflictSession = {
 };
 
 export type ConflictSideName = "current" | "incoming";
+
+/** What finishing would save, as `plan_finish_merge` reads it (task 037-5). */
+export type FinishMergePlan = {
+  stateToken: string;
+  sessionId: string;
+  current: SideLabel;
+  incoming: SideLabel;
+  resolvedFiles: number;
+  totalFiles: number;
+  files: SaveVersionFile[];
+  unsavedFiles: number;
+  /** Resolved files edited after they were marked: their edits stay out. */
+  editedAfterResolving: number;
+  title: string;
+  description: string | null;
+  signs: boolean;
+  snapshot: ConflictSession["snapshot"];
+};
+
+export type FinishMergeResult = { commit: string; shortCommit: string; title: string; branch: string | null };
+
+/** `exact` only for a merge GitOdile started on a state it recorded; one
+ * started elsewhere never promises its earlier unsaved changes back. */
+export type Restoration = "exact" | "best-effort";
+
+export type AbortMergePlan = {
+  stateToken: string;
+  sessionId: string;
+  origin: ConflictOrigin;
+  restoration: Restoration;
+  current: SideLabel;
+  incoming: SideLabel;
+  files: number;
+  unresolvedFiles: number;
+  stagedFiles: number;
+  unsavedFiles: number;
+  snapshot: ConflictSession["snapshot"];
+};
+
+export type AbortMergeResult = {
+  restoration: Restoration;
+  snapshotReference: string | null;
+  abandonedReference: string | null;
+};
+
+/** What the header offers for the session as a whole. Finishing is shown for
+ * every merge GitOdile resolves, and enabled only once Rust allows it; a
+ * partial listing never finishes, whatever its count says. */
+export function sessionActions(session: ConflictSession): {
+  finish: "allowed" | "files-left" | "hidden";
+  abort: boolean;
+} {
+  const supported = session.operation.kind === "merge" && session.operation.supported;
+  return {
+    finish: !supported ? "hidden" : session.allowedActions.includes("finish-merge") ? "allowed" : "files-left",
+    abort: supported && session.allowedActions.includes("abort-merge"),
+  };
+}
 
 /** Why a side has no diff to draw, decided from the session alone so the
  * screen never asks Rust a question it cannot answer. `null` means the side

@@ -3748,6 +3748,28 @@ cannot spell — gets one `warning` notice in the same place saying what to do
 instead, with the step GitOdile can take toward it (Show in folder, or Open
 project folder for a name it cannot spell) and Read again.
 
+**Finishing and stopping are the session's actions**, at the end of the header
+band after Refresh: Stop combining… as a `secondary-button`, Finish
+combining… last as the solid primary. Finish stays visible while files still
+overlap, disabled with the reason as its description and tooltip, and both
+hold while another change to the project runs. Neither is Back, which only
+leaves. Finish is the Save version dialog's sibling: `m` in the `local` tone
+with a merge glyph, the sides in the subtitle, three facts (the version it
+saves and how many files, whether hooks run and Git signs, then the safe fact
+that nothing is published and unsaved files stay), the version name and
+details prefilled from Git's prepared message, a failure banner that opens a
+hook's own output, and Technical details with the exact command. Its result
+offers Publish changes as the primary and Done beside it; Done and Publish
+both return to the screen the reader came from, and nothing is published
+unless Publish is chosen and confirmed in its own dialog. Stop combining is a
+confirmation that removes work: `s` in the `danger` tone, the body naming
+which branch goes back, an `info` banner when the merge was started outside
+GitOdile (it can't promise unsaved changes from before come back), facts for
+what goes back and what stays, the safe fact that a copy is kept, and the
+`danger-button`. Its result is a toast, and the screen returns to where the
+reader came from. A moved project re-reads the plan in place and says so in an
+`info` banner.
+
 **Dropping a folder on the window** opens it. While a drag is over the window
 — and only then — a window-sized overlay names what a drop will do. It is
 feedback about a gesture, not chrome: it never takes the pointer (an overlay

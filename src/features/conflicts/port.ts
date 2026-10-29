@@ -1,5 +1,15 @@
 import type { FileDiff } from "../changes";
-import type { ConflictFile, ConflictSession, ConflictSideName, SideChoice, WorkingFileCheck } from "./domain";
+import type {
+  AbortMergePlan,
+  AbortMergeResult,
+  ConflictFile,
+  ConflictSession,
+  ConflictSideName,
+  FinishMergePlan,
+  FinishMergeResult,
+  SideChoice,
+  WorkingFileCheck,
+} from "./domain";
 
 export type ConflictsQuery = { projectId: string; sessionEpoch: string };
 
@@ -51,4 +61,17 @@ export interface ConflictsPort {
   /** Opens the project's folder, for a file whose name GitOdile cannot
    * spell exactly. */
   openProjectFolder(query: ConflictsQuery): Promise<void>;
+  /** What finishing the merge would save. Read-only; refuses while a file
+   * overlaps or Git has no identity. */
+  planFinish(query: ConflictsQuery): Promise<FinishMergePlan>;
+  /** Saves the merge version through `git commit`, with the project's hooks
+   * unless `runHooks` is off in Settings, and verifies it. Never publishes. */
+  finish(
+    query: ConflictsQuery & { title: string; description: string | null; stateToken: string; runHooks: boolean },
+  ): Promise<FinishMergeResult>;
+  /** What abandoning the merge would put back and what it cannot promise. */
+  planAbort(query: ConflictsQuery): Promise<AbortMergePlan>;
+  /** Keeps a copy of what the merge holds, then runs `git merge --abort`
+   * and verifies the result. */
+  abort(query: ConflictsQuery & { stateToken: string }): Promise<AbortMergeResult>;
 }

@@ -154,4 +154,37 @@ export const en: ConflictsTranslations = {
     `This computer can't keep this file and ${others} apart, so GitOdile won't write either. Rename one of them with Git, on a computer that tells capital letters apart or in a terminal, then read again.`,
   conflictsBlockInexactTitle: "GitOdile can't name this file exactly",
   conflictsBlockInexactBody: "Its name isn't valid text, so GitOdile won't change it. Resolve it with Git in a terminal, where git status lists it, then read again.",
+  conflictsFinish: "Finish combining…",
+  conflictsFinishFilesLeft: "Mark every file resolved to finish combining",
+  conflictsAbort: "Stop combining…",
+  conflictsFinishTitle: "Finish combining",
+  conflictsFinishSubtitle: (incoming, current) => `“${incoming}” into “${current}”`,
+  conflictsFinishFactSaves: (current, files, resolved) =>
+    `Saves one version on “${current}” with ${files === 0 ? "no changed files" : `${files.toLocaleString()} changed ${files === 1 ? "file" : "files"}`}.${resolved > 0 ? ` You resolved ${resolved.toLocaleString()} overlapping ${resolved === 1 ? "file" : "files"}.` : ""}`,
+  conflictsFinishFactChecks: (hooks, signs) =>
+    `${hooks ? "The project's Git hooks run first" : "Git hooks are off in Settings, so they don't run"}${signs ? ", and Git signs the version" : ""}.`,
+  conflictsFinishFactSafe: (unsaved) =>
+    `Nothing is published.${unsaved > 0 ? ` Unsaved changes in ${unsaved.toLocaleString()} ${unsaved === 1 ? "file stay" : "files stay"} as they are.` : ""}`,
+  conflictsFinishEditedAfterResolving: (files) =>
+    `${files === 1 ? "A resolved file was" : `${files.toLocaleString()} resolved files were`} edited after you marked ${files === 1 ? "it" : "them"}. The version takes what you marked; mark ${files === 1 ? "it" : "them"} again to include the edits.`,
+  conflictsFinishConfirm: "Finish combining",
+  conflictsFinishRunning: "Saving the version…",
+  conflictsFinishBlockedTitle: "Can't finish yet",
+  conflictsFinishDoneTitle: "Combining finished",
+  conflictsFinishDoneBody: (title, branch) => `“${title}” is saved on “${branch}”. It's only on this computer until you publish it.`,
+  conflictsPlanReread: "The project changed, so GitOdile read it again. Check what it says, then try again.",
+  conflictsAbortTitle: "Stop combining?",
+  conflictsAbortBody: (incoming, current) => `“${current}” goes back to how it was before “${incoming}” was brought in.`,
+  conflictsAbortBestEffort:
+    "This was started outside GitOdile, so it can't know what was unsaved before. Git keeps the unsaved changes it can, and refuses rather than overwrite one.",
+  conflictsAbortFactFiles: (files) =>
+    files === 0
+      ? "What the merge brought in is undone."
+      : `${files === 1 ? "The overlapping file goes back" : `The ${files.toLocaleString()} overlapping files go back`}, and what you chose in ${files === 1 ? "it is" : "them is"} undone.`,
+  conflictsAbortFactUnsaved: (files, exact) =>
+    `Unsaved changes in ${files.toLocaleString()} other ${files === 1 ? "file stay" : "files stay"} ${exact ? "exactly " : ""}as they are.`,
+  conflictsAbortFactKept: "A copy of what the files hold now stays in the project's recovery records.",
+  conflictsAbortConfirm: "Stop combining",
+  conflictsAbortRunning: "Stopping…",
+  conflictsAbortDone: (current) => `Stopped combining. “${current}” is as it was before.`,
 };

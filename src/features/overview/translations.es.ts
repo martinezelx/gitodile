@@ -48,6 +48,8 @@ export const es: OverviewTranslations = {
   overviewPublishAll: (count) => (count === 1 ? "Publicar todo" : `Publicar las ${count}`),
   overviewNextConflictsTitle: (count) =>
     count === 1 ? "1 archivo tiene cambios superpuestos" : `${count} archivos tienen cambios superpuestos`,
+  overviewNextPausedTitle: "La combinación está en pausa",
+  overviewNextPausedHint: "Ya no hay archivos solapados. Abre los cambios solapados para terminar la combinación o abandonarla.",
   overviewNextConflictsHint: "Elige qué se queda en cada parte. No se guarda nada hasta que termines.",
   overviewNextSaveTitle: (count) => (count === 1 ? "Guarda tu cambio" : `Guarda tus ${count} cambios`),
   overviewNextPublishTitle: (count, remote) => {
