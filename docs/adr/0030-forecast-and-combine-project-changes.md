@@ -74,8 +74,16 @@ does not exist yet, so a real overlap must still be refused, but named.
 6. **Publish rides along.** When the remote has moved on, Publish opens the
    same dialog in a "get and publish" form: one confirmation gets, combines
    and then plans and pushes as Publish always does.
-7. **Refuse real overlaps by name.** A saved or unsaved overlap is reported
-   with the files and refused until task 037 can resolve it.
+7. **Name overlaps and require an explicit choice.** The ordinary clean
+   execution still refuses saved and unsaved overlaps by name. For a saved
+   overlap, `start_overlapping_merge` can explicitly start a real paused merge
+   from a branch or the configured upstream, using that workflow's reviewed
+   token and recovery reference (ADR 0041 §7 and §10, task 065-4-2). It disables
+   rerere for that invocation, rejects branch mergeOptions and staged changes,
+   preserves separate unsaved work, and records origin before Git runs.
+   Unsaved work on a path the merge touches still blocks; nothing silently
+   enters resolution, auto-stashes or publishes. The UI handoffs are tasks
+   065-4-3 and 065-4-4.
 
 ## Amendment (2026-10-29): bringing in another branch
 

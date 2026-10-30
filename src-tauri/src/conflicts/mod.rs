@@ -331,6 +331,7 @@ pub(crate) struct UnmergedListing {
 /// snapshot owner captures from exactly this, so what it preserves is what
 /// the state token describes.
 pub(crate) struct SessionRead {
+    pub(crate) start: Option<crate::recovery::MergeStartRecord>,
     pub(crate) session_id: String,
     pub(crate) state_token: String,
     pub(crate) operation: PausedOperation,
@@ -1204,6 +1205,7 @@ fn session_id(
     kind: PausedOperationKind,
     head: Option<&str>,
     operation_heads: &[String],
+    start_id: Option<&str>,
 ) -> String {
     let mut hasher = Sha256::new();
     hasher.update(repository.git_dir.match_key().as_bytes());
@@ -1214,6 +1216,10 @@ fn session_id(
     for head in operation_heads {
         hasher.update([0]);
         hasher.update(head.as_bytes());
+    }
+    if let Some(id) = start_id {
+        hasher.update([0]);
+        hasher.update(id.as_bytes());
     }
     let digest = hasher.finalize();
     format!("{}-{}", kind.as_str(), hex(&digest[..12]))
@@ -1259,14 +1265,27 @@ pub(crate) fn read_session(
         hasher.update((part.len() as u64).to_le_bytes());
         hasher.update(part);
     }
+    let start = (kind == PausedOperationKind::Merge)
+        .then(|| {
+            crate::recovery::read_merge_start(
+                repository,
+                head.as_deref().unwrap_or_default(),
+                &evidence.operation.operation_heads,
+            )
+        })
+        .flatten();
     let session_id = session_id(
         repository,
         kind,
         head.as_deref(),
         &evidence.operation.operation_heads,
+        start.as_ref().map(|record| record.id.as_str()),
     );
     let snapshot = read_conflict_snapshot(git_dir, &session_id);
     let journal = read_conflict_journal(git_dir, &session_id);
+    if let Some(record) = &start {
+        hasher.update(serde_json::to_vec(record).map_err(|_| unreadable())?);
+    }
     // Paths the snapshot holds that are no longer unmerged were resolved
     // since; their working state is part of what a reset would replace.
     let listed = listing
@@ -1293,6 +1312,7 @@ pub(crate) fn read_session(
     let state_token = hex(&hasher.finalize()[..16]);
 
     Ok(Some(SessionRead {
+        start,
         session_id,
         state_token,
         operation: evidence.operation,
@@ -1530,9 +1550,14 @@ pub(crate) fn describe_session(
         Vec::new()
     };
     ConflictSession {
-        origin: snapshot
-            .as_ref()
-            .map_or(ConflictOrigin::External, |manifest| manifest.origin),
+        origin: snapshot.as_ref().map_or(
+            if read.start.is_some() {
+                ConflictOrigin::Gitodile
+            } else {
+                ConflictOrigin::External
+            },
+            |manifest| manifest.origin,
+        ),
         snapshot: snapshot.as_ref().map(|manifest| ConflictSnapshotSummary {
             session_id: manifest.session_id.clone(),
             created_at_ms: manifest.created_at_ms,

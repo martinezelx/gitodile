@@ -11,14 +11,14 @@ areas:
 created: 2026-10-29
 completed:
 parent: "065-4"
-queue: "02"
+queue: "01"
 ---
 
 # Goal
 
 A medium **Bring in changes** dialog, modelled on Get project changes, that
 previews and runs the plan of [065-4-1](../done/065-4-1-bring-in-changes-core.md) and
-hands overlaps to [065-4-2](065-4-2-pause-on-overlaps.md) and the
+hands overlaps to [065-4-2](../done/065-4-2-pause-on-overlaps.md) and the
 overlapping-changes screen.
 
 # Scope
@@ -45,7 +45,7 @@ overlapping-changes screen.
 
 # Dependencies
 
-[065-4-1](../done/065-4-1-bring-in-changes-core.md), [065-4-2](065-4-2-pause-on-overlaps.md).
+[065-4-1](../done/065-4-1-bring-in-changes-core.md), [065-4-2](../done/065-4-2-pause-on-overlaps.md).
 
 # Implementation notes
 

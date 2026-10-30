@@ -11,14 +11,14 @@ areas:
 created: 2026-10-29
 completed:
 parent: "065-4"
-queue: "03"
+queue: "02"
 ---
 
 # Goal
 
 Get project changes and the Overview card stop being a dead end when the
 remote's versions overlap local saved work: they offer to resolve the overlap
-in GitOdile through [065-4-2](065-4-2-pause-on-overlaps.md).
+in GitOdile through [065-4-2](../done/065-4-2-pause-on-overlaps.md).
 
 # Scope
 
@@ -34,7 +34,7 @@ in GitOdile through [065-4-2](065-4-2-pause-on-overlaps.md).
 
 # Dependencies
 
-[065-4-2](065-4-2-pause-on-overlaps.md).
+[065-4-2](../done/065-4-2-pause-on-overlaps.md).
 
 # Implementation notes
 

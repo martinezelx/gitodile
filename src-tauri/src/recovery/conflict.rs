@@ -112,6 +112,399 @@ pub(crate) fn conflict_snapshot_root(git_dir: &Path) -> PathBuf {
     git_dir.join("gitodile").join("conflicts").join("v1")
 }
 
+/// Durable intent, published before history recovery and before Git runs.
+/// A record is evidence of origin only for its worktree and exact pair of heads.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MergeStartRecord {
+    pub(crate) schema_version: u32,
+    pub(crate) id: String,
+    pub(crate) owner_id: String,
+    pub(crate) created_at_ms: u128,
+    pub(crate) branch: String,
+    pub(crate) head: String,
+    pub(crate) incoming: String,
+    pub(crate) source_ref: String,
+    pub(crate) title: String,
+    pub(crate) state_token: String,
+    pub(crate) recovery_reference: String,
+    pub(crate) overlapping_paths: Vec<String>,
+    pub(crate) carried: Vec<MergeCarriedPath>,
+    /// Pending/uncertain evidence is never expired automatically.
+    pub(crate) outcome: MergeStartOutcome,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone, Copy)]
+#[serde(rename_all = "camelCase")]
+pub(crate) enum MergeStartOutcome {
+    Pending,
+    Paused,
+    Ended,
+    EndedUncertain,
+    Refused,
+    Uncertain,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MergeCarriedPath {
+    pub(crate) path: String,
+    pub(crate) kind: WorkingKind,
+    pub(crate) executable: bool,
+    pub(crate) sha256: Option<String>,
+}
+
+/// Hash directories without following links, so an ignored folder is not
+/// mistaken for unchanged merely because the folder itself still exists.
+/// Refuse before starting when evidence exceeds the conflict capture budget.
+fn merge_path_digest(
+    target: &Path,
+    remaining: &mut u64,
+    paths: &mut usize,
+    depth: usize,
+) -> std::io::Result<String> {
+    use std::io::{Error, ErrorKind};
+    *paths += 1;
+    if *paths > crate::conflicts::MAX_CONFLICT_FILES || depth > 128 {
+        return Err(Error::new(ErrorKind::InvalidData, "Too many carried paths"));
+    }
+    let metadata = fs::symlink_metadata(target)?;
+    let mut hasher = Sha256::new();
+    hasher.update([u8::from(is_executable(&metadata))]);
+    if metadata.file_type().is_symlink() {
+        hasher.update(b"link\0");
+        let link = fs::read_link(target)?;
+        let value = link
+            .to_str()
+            .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Unrepresentable link"))?;
+        hasher.update(value.as_bytes());
+    } else if metadata.is_dir() {
+        hasher.update(b"directory\0");
+        let available = crate::conflicts::MAX_CONFLICT_FILES.saturating_sub(*paths);
+        let mut entries = fs::read_dir(target)?
+            .take(available + 1)
+            .collect::<Result<Vec<_>, _>>()?;
+        if entries.len() > available {
+            return Err(Error::new(ErrorKind::InvalidData, "Too many carried paths"));
+        }
+        entries.sort_by_key(|entry| entry.file_name());
+        for entry in entries {
+            let name = entry.file_name();
+            let name = name
+                .to_str()
+                .ok_or_else(|| Error::new(ErrorKind::InvalidData, "Unrepresentable path"))?;
+            hasher.update((name.len() as u64).to_le_bytes());
+            hasher.update(name.as_bytes());
+            hasher
+                .update(merge_path_digest(&entry.path(), remaining, paths, depth + 1)?.as_bytes());
+        }
+    } else if metadata.is_file() {
+        hasher.update(b"file\0");
+        hash_merge_file(target, &mut hasher, remaining)?;
+    } else {
+        return Err(Error::new(
+            ErrorKind::InvalidData,
+            "Unsupported carried path",
+        ));
+    }
+    Ok(hex_digest(hasher))
+}
+
+/// Keep the streaming buffer out of recursive directory frames.
+fn hash_merge_file(target: &Path, hasher: &mut Sha256, remaining: &mut u64) -> std::io::Result<()> {
+    let mut file = File::open(target)?.take(remaining.saturating_add(1));
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file.read(&mut buffer)?;
+        if count == 0 {
+            return Ok(());
+        }
+        *remaining = remaining.checked_sub(count as u64).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "Carried work too large")
+        })?;
+        hasher.update(&buffer[..count]);
+    }
+}
+
+pub(crate) fn merge_carried_path(
+    root: &Path,
+    relative: &str,
+) -> Result<MergeCarriedPath, AppError> {
+    validate_repo_relative_path(relative)?;
+    let fingerprint = working_fingerprint(root, relative);
+    let target = contained_target(root, relative)
+        .ok_or_else(|| failed("A carried path leaves the project."))?;
+    let sha256 = match fingerprint.kind {
+        WorkingKind::File | WorkingKind::SymbolicLink | WorkingKind::Directory => Some(
+            merge_path_digest(&target, &mut { MAX_CONFLICT_SNAPSHOT_BYTES }, &mut 0, 0).map_err(
+                |_| {
+                    failed("GitOdile couldn't fully verify unsaved work within its capture limits.")
+                },
+            )?,
+        ),
+        WorkingKind::Absent => None,
+        _ => return Err(failed("GitOdile couldn't verify unsaved work.")),
+    };
+    Ok(MergeCarriedPath {
+        path: relative.to_string(),
+        kind: fingerprint.kind,
+        executable: fs::symlink_metadata(&target).is_ok_and(|metadata| is_executable(&metadata)),
+        sha256,
+    })
+}
+
+pub(crate) fn merge_carried_matches(root: &Path, record: &MergeStartRecord) -> bool {
+    record
+        .carried
+        .iter()
+        .all(|before| merge_carried_path(root, &before.path).is_ok_and(|after| after == *before))
+}
+
+fn merge_starts(git_dir: &Path) -> PathBuf {
+    conflict_snapshot_root(git_dir).join("starts")
+}
+
+fn read_merge_starts(git_dir: &Path) -> Vec<MergeStartRecord> {
+    fs::read_dir(merge_starts(git_dir))
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .path()
+                .extension()
+                .is_some_and(|extension| extension == "json")
+        })
+        .filter_map(|entry| {
+            // A bounded metadata read; never follow content named by a record.
+            let file = File::open(entry.path()).ok()?;
+            let mut bytes = Vec::new();
+            file.take(16 * 1024 * 1024).read_to_end(&mut bytes).ok()?;
+            let record: MergeStartRecord = serde_json::from_slice(&bytes).ok()?;
+            (record.schema_version == 1
+                && valid_session_id(&record.id)
+                && entry.file_name().to_str() == Some(&format!("{}.json", record.id))
+                && is_object_id(&record.head)
+                && is_object_id(&record.incoming))
+            .then_some(record)
+        })
+        .collect()
+}
+
+pub(crate) fn read_merge_start(
+    repository: &RepositoryContext,
+    head: &str,
+    heads: &[String],
+) -> Option<MergeStartRecord> {
+    if heads.len() != 1 {
+        return None;
+    }
+    read_merge_starts(repository.git_dir.backend_path())
+        .into_iter()
+        .filter(|record| {
+            record.owner_id == worktree_owner_id(repository)
+                && record.head == head
+                && record.incoming == heads[0]
+        })
+        .max_by_key(|record| record.created_at_ms)
+        .filter(|record| {
+            matches!(
+                record.outcome,
+                MergeStartOutcome::Pending
+                    | MergeStartOutcome::Paused
+                    | MergeStartOutcome::Uncertain
+            )
+        })
+}
+
+/// Called under the common-directory write permit, including for linked owners.
+pub(crate) fn merge_start_protects_history(common: &Path, reference: &str) -> bool {
+    let mut directories = vec![common.to_path_buf()];
+    match fs::read_dir(common.join("worktrees")) {
+        Ok(entries) => {
+            for entry in entries {
+                let Ok(entry) = entry else {
+                    return true;
+                };
+                directories.push(entry.path());
+            }
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return true,
+    }
+    directories.into_iter().any(|directory| {
+        let records = read_merge_starts(&directory);
+        // Unknown evidence is retained conservatively rather than letting a
+        // retention pass remove the only ref an unreadable record may name.
+        let mut count = 0;
+        match fs::read_dir(merge_starts(&directory)) {
+            Ok(entries) => {
+                for entry in entries {
+                    let Ok(entry) = entry else {
+                        return true;
+                    };
+                    if entry
+                        .path()
+                        .extension()
+                        .is_some_and(|extension| extension == "json")
+                    {
+                        count += 1;
+                    }
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return true,
+        }
+        if count != records.len() {
+            return true;
+        }
+        let merge_head = match fs::read_to_string(directory.join("MERGE_HEAD")) {
+            Ok(heads) => heads,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(_) => return true,
+        };
+        records.iter().any(|record| {
+            record.recovery_reference == reference
+                && match record.outcome {
+                    MergeStartOutcome::Pending
+                    | MergeStartOutcome::Uncertain
+                    | MergeStartOutcome::EndedUncertain => true,
+                    MergeStartOutcome::Paused => merge_head
+                        .lines()
+                        .any(|head| head.trim() == record.incoming),
+                    MergeStartOutcome::Refused | MergeStartOutcome::Ended => false,
+                }
+        })
+    })
+}
+
+pub(crate) fn new_merge_start(
+    repository: &RepositoryContext,
+    mut record: MergeStartRecord,
+) -> Result<MergeStartRecord, AppError> {
+    if repository_access::held_mode(repository.common_git_dir.match_key())
+        != Some(AccessMode::Write)
+    {
+        return Err(failed(
+            "GitOdile tried to record a merge without holding the project.",
+        ));
+    }
+    record.owner_id = worktree_owner_id(repository);
+    record.created_at_ms = now_ms();
+    let git_dir = repository.git_dir.backend_path();
+    let root = merge_starts(git_dir);
+    fs::create_dir_all(&root)
+        .map_err(|_| failed("GitOdile couldn't create the merge start folder."))?;
+    for entry in fs::read_dir(&root)
+        .into_iter()
+        .flatten()
+        .filter_map(Result::ok)
+    {
+        if pending_age_ms(&entry.file_name().to_string_lossy(), now_ms())
+            .is_some_and(|age| age > PENDING_ABANDONED_MS)
+        {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
+    // Ended, verified records follow the conflict owner's retention. An active
+    // pair or an uncertain attempt is never removed, even without a snapshot.
+    let live_head = match fs::read_to_string(git_dir.join("MERGE_HEAD")) {
+        Ok(heads) => heads,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(_) => {
+            return Err(failed(
+                "GitOdile couldn't inspect a possibly live merge start.",
+            ))
+        }
+    };
+    let starts = read_merge_starts(git_dir);
+    let mut ended = starts
+        .iter()
+        .filter(|item| {
+            // A newer end also retires older ambiguous starts for these heads.
+            // Keep that tombstone while the ambiguous evidence is retained.
+            let retires_ambiguous_start = matches!(
+                item.outcome,
+                MergeStartOutcome::Ended
+                    | MergeStartOutcome::EndedUncertain
+                    | MergeStartOutcome::Refused
+            ) && starts.iter().any(|older| {
+                older.created_at_ms < item.created_at_ms
+                    && older.head == item.head
+                    && older.incoming == item.incoming
+                    && matches!(
+                        older.outcome,
+                        MergeStartOutcome::Pending | MergeStartOutcome::Uncertain
+                    )
+            });
+            if retires_ambiguous_start {
+                return false;
+            }
+            matches!(
+                item.outcome,
+                MergeStartOutcome::Paused | MergeStartOutcome::Ended | MergeStartOutcome::Refused
+            ) && !live_head.lines().any(|head| head.trim() == item.incoming)
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    ended.sort_by_key(|item| std::cmp::Reverse(item.created_at_ms));
+    for (index, item) in ended.into_iter().enumerate() {
+        if index >= MAX_ENDED_SNAPSHOTS
+            || now_ms().saturating_sub(item.created_at_ms) > ENDED_SNAPSHOT_RETENTION_MS
+        {
+            let _ = fs::remove_file(root.join(format!("{}.json", item.id)));
+        }
+    }
+    write_merge_start(git_dir, &record, true)?;
+    Ok(record)
+}
+
+pub(crate) fn write_merge_start(
+    git_dir: &Path,
+    record: &MergeStartRecord,
+    create: bool,
+) -> Result<(), AppError> {
+    if !valid_session_id(&record.id) {
+        return Err(failed("Invalid merge start identity."));
+    }
+    let root = merge_starts(git_dir);
+    let target = root.join(format!("{}.json", record.id));
+    if create && target.exists() {
+        return Err(failed(
+            "That merge start already exists. Review the merge again.",
+        ));
+    }
+    let pending = root.join(unique_pending_name());
+    let bytes = serde_json::to_vec(record)
+        .map_err(|_| failed("GitOdile couldn't encode the merge start."))?;
+    if bytes.len() > 16 * 1024 * 1024 {
+        return Err(failed("The merge start exceeds its metadata limit."));
+    }
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&pending)
+        .map_err(|_| failed("GitOdile couldn't preserve the merge start."))?;
+    file.write_all(&bytes)
+        .and_then(|()| file.sync_all())
+        .map_err(|_| failed("GitOdile couldn't flush the merge start."))?;
+    drop(file);
+    if create {
+        // Publishing with a create-only hard link cannot overwrite another
+        // process's record after a check/rename race. Both paths share a folder.
+        fs::hard_link(&pending, &target)
+            .map_err(|_| failed("GitOdile couldn't publish the merge start."))?;
+        let _ = fs::remove_file(&pending);
+    } else {
+        fs::rename(&pending, &target)
+            .map_err(|_| failed("GitOdile couldn't publish the merge start."))?;
+    }
+    if fs::read(&target).ok().as_deref() != Some(bytes.as_slice()) {
+        return Err(failed("GitOdile couldn't verify the merge start."));
+    }
+    Ok(())
+}
+
 /// Session IDs are GitOdile's own (`<operation>-<hex>`); anything else in the
 /// folder is not a snapshot and is never read or removed.
 fn valid_session_id(value: &str) -> bool {
@@ -1045,5 +1438,139 @@ mod tests {
         assert_eq!(pending_age_ms("merge-abc", 5000), None);
         assert_eq!(pending_age_ms(".pending-notanumber", 5000), None);
         assert_ne!(unique_pending_name(), unique_pending_name());
+    }
+
+    #[test]
+    fn carried_directory_evidence_detects_nested_edits_and_enforces_its_bounds() {
+        let root = PathBuf::from(crate::test_support::unique_temp_dir(
+            "merge-carried-directory",
+        ));
+        fs::create_dir_all(root.join("ignored/nested")).unwrap();
+        fs::write(root.join("ignored/nested/work.txt"), b"before").unwrap();
+        let before = merge_carried_path(&root, "ignored").unwrap();
+        fs::write(root.join("ignored/nested/work.txt"), b"after").unwrap();
+        assert_ne!(merge_carried_path(&root, "ignored").unwrap(), before);
+        assert!(merge_path_digest(&root.join("ignored"), &mut 1, &mut 0, 0).is_err());
+        assert!(merge_path_digest(
+            &root.join("ignored"),
+            &mut 512,
+            &mut { crate::conflicts::MAX_CONFLICT_FILES - 1 },
+            0
+        )
+        .is_err());
+        assert!(merge_path_digest(&root.join("ignored"), &mut 512, &mut 0, 129).is_err());
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn history_retention_protects_live_interrupted_and_unknown_merge_evidence_in_every_worktree() {
+        let common = PathBuf::from(crate::test_support::unique_temp_dir(
+            "merge-start-retention",
+        ));
+        let linked = common.join("worktrees/linked");
+        fs::create_dir_all(merge_starts(&linked)).unwrap();
+        let mut record = MergeStartRecord {
+            schema_version: 1,
+            id: "start-1".into(),
+            owner_id: "worktree-linked".into(),
+            created_at_ms: 1,
+            branch: "linked".into(),
+            head: "a".repeat(40),
+            incoming: "b".repeat(40),
+            source_ref: "refs/heads/feature".into(),
+            title: "Merge branch 'feature'".into(),
+            state_token: "token".into(),
+            recovery_reference: "refs/gitodile/recovery/test".into(),
+            overlapping_paths: vec![],
+            carried: vec![],
+            outcome: MergeStartOutcome::Pending,
+        };
+        write_merge_start(&linked, &record, true).unwrap();
+        assert!(write_merge_start(&linked, &record, true).is_err());
+        assert!(merge_start_protects_history(
+            &common,
+            &record.recovery_reference
+        ));
+        record.outcome = MergeStartOutcome::Uncertain;
+        write_merge_start(&linked, &record, false).unwrap();
+        assert!(merge_start_protects_history(
+            &common,
+            &record.recovery_reference
+        ));
+        record.outcome = MergeStartOutcome::Paused;
+        write_merge_start(&linked, &record, false).unwrap();
+        fs::write(linked.join("MERGE_HEAD"), &record.incoming).unwrap();
+        assert!(merge_start_protects_history(
+            &common,
+            &record.recovery_reference
+        ));
+        let repository = RepositoryContext::from_parts(&common, &linked, &common, false).unwrap();
+        record.owner_id = worktree_owner_id(&repository);
+        let mut older = record.clone();
+        older.id = "older-1".into();
+        older.created_at_ms = 0;
+        older.outcome = MergeStartOutcome::Pending;
+        older.recovery_reference.push_str("-older");
+        write_merge_start(&linked, &older, true).unwrap();
+        record.outcome = MergeStartOutcome::Ended;
+        write_merge_start(&linked, &record, false).unwrap();
+        assert!(read_merge_start(
+            &repository,
+            &record.head,
+            std::slice::from_ref(&record.incoming)
+        )
+        .is_none());
+        assert!(!merge_start_protects_history(
+            &common,
+            &record.recovery_reference
+        ));
+        record.outcome = MergeStartOutcome::EndedUncertain;
+        write_merge_start(&linked, &record, false).unwrap();
+        assert!(merge_start_protects_history(
+            &common,
+            &record.recovery_reference
+        ));
+        record.outcome = MergeStartOutcome::Paused;
+        write_merge_start(&linked, &record, false).unwrap();
+        fs::remove_file(linked.join("MERGE_HEAD")).unwrap();
+        assert!(!merge_start_protects_history(
+            &common,
+            &record.recovery_reference
+        ));
+        record.outcome = MergeStartOutcome::Refused;
+        write_merge_start(&linked, &record, false).unwrap();
+        {
+            let _permit = repository_access::global()
+                .acquire(&repository, AccessMode::Write, None)
+                .unwrap();
+            let mut next = record.clone();
+            next.id = "next-1".into();
+            next.head = "c".repeat(40);
+            next.incoming = "d".repeat(40);
+            next.recovery_reference.push_str("-next");
+            next.outcome = MergeStartOutcome::Pending;
+            new_merge_start(&repository, next).unwrap();
+        }
+        // Even though timestamp 1 is expired, this refusal must keep masking
+        // the retained older pending attempt for the same pair of heads.
+        assert!(merge_starts(&linked).join("start-1.json").is_file());
+        assert!(read_merge_start(
+            &repository,
+            &record.head,
+            std::slice::from_ref(&record.incoming)
+        )
+        .is_none());
+        fs::create_dir(linked.join("MERGE_HEAD")).unwrap();
+        assert!(merge_start_protects_history(
+            &common,
+            &record.recovery_reference
+        ));
+        fs::remove_dir(linked.join("MERGE_HEAD")).unwrap();
+        fs::write(merge_starts(&linked).join("unknown.json"), b"unreadable").unwrap();
+        assert!(merge_start_protects_history(
+            &common,
+            &record.recovery_reference
+        ));
+        let _ = fs::remove_dir_all(common);
     }
 }

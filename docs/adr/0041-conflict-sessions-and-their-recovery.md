@@ -185,9 +185,10 @@ itself:
 - It refuses first, by name, when there are prepared (staged) changes or an
   unsaved change to a path the merge touches, exactly as `git merge` would
   refuse to protect them, and when another operation is paused.
-- It runs `git merge --no-ff --no-commit --no-autostash <commit>` with the
-  reviewed commit, so `merge.ff`, `merge.autoStash` and
-  `branch.<name>.mergeOptions` cannot change what was previewed. Nothing is
+- It refuses any configured `branch.<name>.mergeOptions`, then runs
+  `git -c rerere.enabled=false merge --no-ff --no-commit --no-autostash
+  -m <reviewed-title> <commit>`. Explicit flags override `merge.ff` and
+  `merge.autoStash`; rerere cannot apply or stage a remembered resolution. Nothing is
   written to the user's Git configuration.
 - It writes a start record, then the history recovery point (ADR 0008),
   immediately before the merge, so the session's origin is `gitodile` and the
@@ -340,6 +341,93 @@ marking a file resolved, and neither publishes.
   with the observed `HEAD`, parents and markers, never repaired, and every
   snapshot, journal and ref is kept. A restart reads whatever Git left like
   any other state.
+
+### 10. Amendment (2026-10-30): durable initiation of an overlapping merge
+
+Task 065-4-2 adds `start_overlapping_merge`. Its source is either a branch
+(`{kind: "branch", source: IntegrationSource}`) or the configured upstream
+(`{kind: "upstream"}`). The branch uses Bring in changes' token and recovery
+operation; the upstream uses Get's token and `get-team-changes` recovery.
+There is no fetch. The IPC adapter validates the project epoch; execution is
+a history mutation under the common-repository write permit, including the
+snapshot and verification. Only saved-version overlaps can start this way.
+Unsaved overlaps still require saving or discarding first.
+
+The durable prefix, in order, is a **start record**, verified history recovery
+(ADR 0008), then the real Git merge of §7. The record lives at:
+
+```text
+<git-dir>/gitodile/conflicts/v1/starts/<recovery-id>.json
+```
+
+Schema 1 records its ID, owner, timestamp, current branch and HEAD, source ref
+and commit, reviewed title and token, history recovery ref, all predicted
+unmerged paths and fingerprints of the carried work (relative path, type,
+executable bit and SHA-256). It stores neither absolute paths nor file
+contents. Files, links and the contents of carried untracked directories are verified
+without following links, bounded at 512 MiB, 5,000 entries and 128 nested
+directories per path; a capture beyond a bound refuses before Git runs. Directory enumeration is
+bounded before collecting entries, and the streaming file buffer is kept out
+of recursive frames. Ignored caches outside the footprint are not scanned:
+the collision check proves that Git's merge cannot write to those paths, and
+a dependency cache must not consume the conflict capture budget.
+The JSON is capped at 16 MiB.
+A temporary file is flushed and published create-only through a hard link
+in the same directory, then read back; an existing ID is never replaced.
+Outcome updates use a flushed temporary file and rename.
+
+The session reader remains read-only. The newest matching record for that
+worktree establishes `origin: gitodile` only while active, when its previous
+HEAD and incoming commit match the paused HEAD and sole MERGE_HEAD, including after termination
+between Git and the conflict snapshot. The unique start ID also participates
+in the session ID: abandoning and restarting the same pair of heads must not
+reuse an earlier attempt's snapshot or journal. External sessions keep §5's
+identity. The start metadata participates in the state token. Every subsequent
+resolver action that takes the first snapshot propagates this origin.
+
+Starting refuses all staged work, unsaved work on any affected path,
+untracked/ignored collisions (including path-component and rename endpoints),
+an existing paused operation, sparse/unsupported history setups, an index
+lock and any branch mergeOptions, including an empty value. The conflict
+prediction retains merge-tree's provisional tree and exact per-path stages;
+its digest participates in both existing plan tokens. The provisional tree's changes from HEAD,
+their rename endpoints and unresolved paths define the safety footprint.
+
+Verification does not trust Git's exit code. A pause needs unchanged HEAD and branch,
+exactly the reviewed MERGE_HEAD, a complete unmerged listing with exactly the
+predicted paths, stages, modes and object IDs, and unchanged carried work.
+Every stage-0 entry outside the conflicts must also match the provisional
+tree, including modes and paths; a missing or extra entry is uncertain.
+The actual pause is snapshotted under the same permit even when its stages
+or carried work differ from the forecast, preserving the first conflict
+bytes before returning an uncertain result. Success requires a complete
+snapshot; history recovery is verified again. A snapshot or verification
+failure is `merge_outcome_uncertain`, with the merge left as Git left it.
+A refusal is `merge_start_refused` only when HEAD, logical index entries,
+operation markers (including ORIG_HEAD), affected working files and carried
+work are proven unchanged. Unreadable evidence is uncertain. There is no
+automatic abort, repair, retry, stage, commit or publish.
+
+Records distinguish pending, paused, ended, refused, uncertain and
+ended-uncertain attempts. Only pending/paused/uncertain records establish
+origin: a merge GitOdile has already ended cannot claim a later external
+merge between the same heads or reuse its old snapshot. A live
+record never expires. Verified ended/refused attempts follow the conflict
+owner's 30-day/ten-record retention, trimmed only when another start is
+written. A newer ended or refused record is also retained while it retires an older
+pending/uncertain record for the same heads; otherwise expiring the end could
+revive that ambiguous attempt's origin. Pending/uncertain/ended-uncertain,
+corrupt and unsupported records stay for inspection. Abandoned temporary files are removed after an hour. History
+retention protects refs named by live or pending/uncertain starts across all
+linked worktrees, and conservatively protects unknown evidence. A verified
+Finish or Abandon records an explicit ended state and releases interruption
+protection. If the merge ended but carried evidence differs, ended-uncertain
+retains protection without claiming a future session. Failure to publish the
+end is reported as uncertain and leaves the old evidence protected.
+Abandon's exact-result verification also checks the recorded carried work: the plan promises best effort if later
+edits made that evidence differ, and a change to that promise invalidates the
+plan token. Exact execution verifies the carried work again after Git runs.
+It never discards those later edits.
 
 ## Consequences
 

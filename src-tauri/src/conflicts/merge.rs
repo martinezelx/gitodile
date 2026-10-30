@@ -255,6 +255,7 @@ fn unsaved_counts(raw: &[u8], session: &ConflictSession) -> (usize, usize) {
 /// A supported merge, read now, with the one merge head and the `HEAD` it
 /// paused on.
 struct PausedMerge {
+    start: Option<crate::recovery::MergeStartRecord>,
     head: String,
     merge_head: String,
     unmerged: Vec<UnmergedPath>,
@@ -265,6 +266,7 @@ fn paused_merge(path: &str, repository: &RepositoryContext) -> Result<PausedMerg
     let read: SessionRead = read_session(path, repository)?.ok_or_else(stale)?;
     let head = read.head.clone().ok_or_else(stale)?;
     let unmerged = read.listing.paths.clone();
+    let start = read.start.clone();
     let session = describe_session(repository, read);
     if !session.operation.supported {
         return Err(unsupported());
@@ -273,6 +275,7 @@ fn paused_merge(path: &str, repository: &RepositoryContext) -> Result<PausedMerg
         return Err(unsupported());
     };
     Ok(PausedMerge {
+        start,
         head,
         merge_head: merge_head.clone(),
         unmerged,
@@ -576,6 +579,19 @@ pub(crate) fn finish_merge_with(
             ));
         }
     }
+    if let Some(mut start) = merge.start {
+        // A verified end resolves a pending/uncertain attempt after a restart;
+        // metadata failure keeps the older evidence conservatively protected.
+        start.outcome = crate::recovery::MergeStartOutcome::Ended;
+        if crate::recovery::write_merge_start(repository.git_dir.backend_path(), &start, false)
+            .is_err()
+        {
+            return Err(uncertain(
+                "The merge finished, but GitOdile couldn't record that this session ended.",
+                &observed,
+            ));
+        }
+    }
     let commit = observed.head.clone().unwrap_or_default();
     let short_commit = run_git(path, &["rev-parse", "--short", &commit])
         .ok()
@@ -605,8 +621,13 @@ fn check_abort(
     let (staged, unsaved) = in_parallel(|| staged_listing(path), || unsaved_listing(path));
     let (staged, unsaved) = (staged?, unsaved?);
     let session = &merge.session;
+    let carried_kept = merge.start.as_ref().is_none_or(|start| {
+        crate::recovery::merge_carried_matches(repository.worktree_root.backend_path(), start)
+    });
     let restoration = match &session.snapshot {
-        Some(snapshot) if session.origin == ConflictOrigin::Gitodile && snapshot.complete => {
+        Some(snapshot)
+            if session.origin == ConflictOrigin::Gitodile && snapshot.complete && carried_kept =>
+        {
             Restoration::Exact
         }
         _ => Restoration::BestEffort,
@@ -617,6 +638,7 @@ fn check_abort(
             merge.head.as_bytes(),
             &staged,
             &unsaved,
+            &[u8::from(carried_kept)],
         ]),
         session_id: session.session_id.clone(),
         origin: session.origin,
@@ -737,11 +759,47 @@ pub(crate) fn abort_merge(path: String, state_token: String) -> Result<AbortMerg
         succeeded,
         session_unchanged,
     ) {
-        Outcome::Done => Ok(AbortMergeResult {
-            restoration: plan.restoration,
-            snapshot_reference: snapshot.pin_reference,
-            abandoned_reference: journal.abandoned_index.map(|pinned| pinned.reference),
-        }),
+        Outcome::Done
+            if plan.restoration == Restoration::Exact
+                && merge.start.as_ref().is_some_and(|start| {
+                    !crate::recovery::merge_carried_matches(
+                        repository.worktree_root.backend_path(),
+                        start,
+                    )
+                }) =>
+        {
+            if let Some(mut start) = merge.start {
+                start.outcome = crate::recovery::MergeStartOutcome::EndedUncertain;
+                let _ = crate::recovery::write_merge_start(
+                    repository.git_dir.backend_path(),
+                    &start,
+                    false,
+                );
+            }
+            Err(uncertain(
+                "The merge ended, but the unsaved work recorded before it no longer matches.",
+                &observed,
+            ))
+        }
+        Outcome::Done => {
+            if let Some(mut start) = merge.start {
+                start.outcome = crate::recovery::MergeStartOutcome::Ended;
+                if crate::recovery::write_merge_start(
+                    repository.git_dir.backend_path(),
+                    &start,
+                    false,
+                )
+                .is_err()
+                {
+                    return Err(uncertain("The merge was abandoned, but GitOdile couldn't record that this session ended.", &observed));
+                }
+            }
+            Ok(AbortMergeResult {
+                restoration: plan.restoration,
+                snapshot_reference: snapshot.pin_reference,
+                abandoned_reference: journal.abandoned_index.map(|pinned| pinned.reference),
+            })
+        }
         Outcome::Unchanged => {
             let detail = match &output {
                 Ok(output) => String::from_utf8_lossy(&output.stderr).into_owned(),

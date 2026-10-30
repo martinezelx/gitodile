@@ -67,7 +67,7 @@ Split on 2026-10-29 into five children, executed in order:
 | Child | Outcome |
 | --- | --- |
 | [065-4-1](../done/065-4-1-bring-in-changes-core.md) | Rust plan and execution for bringing another branch in when nothing overlaps |
-| [065-4-2](065-4-2-pause-on-overlaps.md) | Overlaps become a real paused `git merge` with a start record, handed to task 037 |
+| [065-4-2](../done/065-4-2-pause-on-overlaps.md) | Overlaps become a real paused `git merge` with a start record, handed to task 037 |
 | [065-4-3](065-4-3-bring-in-changes-dialog.md) | The Bring in changes dialog and its entries |
 | [065-4-4](065-4-4-get-diverged-overlaps.md) | Get project changes hands a diverged upstream's overlaps to task 037 |
 | [065-4-5](065-4-5-integration-audit.md) | Desktop audit of the whole integration workflow |

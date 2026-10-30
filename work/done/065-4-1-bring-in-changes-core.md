@@ -58,7 +58,7 @@ and adds the states a branch source can be in.
   sparse checkout, Git too old, and every local-safety blocker the forecast
   already reports. (`branch.<name>.mergeOptions` moved to 065-4-2: see
   Decisions.)
-- Overlaps are reported by name and refused; [065-4-2](../0.5.0/065-4-2-pause-on-overlaps.md)
+- Overlaps are reported by name and refused; [065-4-2](065-4-2-pause-on-overlaps.md)
   turns them into a paused merge.
 
 # Out of scope

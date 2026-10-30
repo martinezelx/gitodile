@@ -58,7 +58,8 @@ use crate::{
     sync::{
         self, BringInChangesPlan, BringInChangesResult, ConnectRemotePlan, ConnectRemoteResult,
         GetTeamChangesPhase, GetTeamChangesPlan, GetTeamChangesResult, IntegrationSource,
-        ProjectRemotes, RemoteDiscovery, RemoteHome, TeamSyncStatus,
+        OverlappingMergeSource, ProjectRemotes, RemoteDiscovery, RemoteHome,
+        StartOverlappingMergeResult, TeamSyncStatus,
     },
     technology::{self, ProjectTechnology},
     tooling::{
@@ -1508,6 +1509,29 @@ pub(crate) fn bring_in_changes(
 }
 
 #[tauri::command(async)]
+pub(crate) fn start_overlapping_merge(
+    path: String,
+    session_epoch: String,
+    source: OverlappingMergeSource,
+    state_token: String,
+    recovery_reference: String,
+) -> Result<StartOverlappingMergeResult, AppError> {
+    report_result(
+        "start_overlapping_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::start_overlapping_merge(
+                path,
+                session_epoch,
+                source,
+                state_token,
+                recovery_reference,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
 pub(crate) fn list_unpublished_versions(
     path: String,
     session_epoch: String,
@@ -2249,6 +2273,7 @@ mod contract_tests {
             AppErrorCode::ConflictCaseCollision,
             AppErrorCode::FileRunsAsProgram,
             AppErrorCode::MergeAbortRefused,
+            AppErrorCode::MergeStartRefused,
             AppErrorCode::MergeOutcomeUncertain,
             AppErrorCode::IgnoreFileTooLarge,
             AppErrorCode::IgnoreFileNotText,

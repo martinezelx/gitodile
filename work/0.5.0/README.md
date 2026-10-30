@@ -16,12 +16,13 @@ The three-pane conflict editor is not part of this version; it is epic
 
 | Queue | Task | Outcome |
 | --- | --- | --- |
-| 01 | [065-4-2](065-4-2-pause-on-overlaps.md) | Turn overlaps into a paused merge that task 037 resolves |
-| 02 | [065-4-3](065-4-3-bring-in-changes-dialog.md) | Bring in changes from another branch on screen |
-| 03 | [065-4-4](065-4-4-get-diverged-overlaps.md) | Resolve a diverged upstream's overlaps from Get project changes |
-| 04 | [065-4-5](065-4-5-integration-audit.md) | Audit the integration workflow end to end |
+| 01 | [065-4-3](065-4-3-bring-in-changes-dialog.md) | Bring in changes from another branch on screen |
+| 02 | [065-4-4](065-4-4-get-diverged-overlaps.md) | Resolve a diverged upstream's overlaps from Get project changes |
+| 03 | [065-4-5](065-4-5-integration-audit.md) | Audit the integration workflow end to end |
 
-Done: [065-4-1](../done/065-4-1-bring-in-changes-core.md), bringing in
+Done: [065-4-2](../done/065-4-2-pause-on-overlaps.md), durable initiation of
+real overlapping merges in Rust;
+[065-4-1](../done/065-4-1-bring-in-changes-core.md), bringing in
 another branch when nothing overlaps, in Rust;
 [037-1](../done/037-1-conflict-domain-and-recovery.md), conflict truth,
 recovery, and how detected overlaps become sessions;
@@ -39,7 +40,7 @@ the merge;
 the whole workflow on Windows.
 
 Epics: [065-4 integrate branches](065-4-integrate-branches.md), split into
-five children, the first done; [037 resolve overlapping changes](037-guided-conflict-resolution.md),
+five children, the first two done; [037 resolve overlapping changes](037-guided-conflict-resolution.md),
 with [037-6 resolve each file](037-6-resolve-files.md) split into three
 slices, all done. The 037-7 audit passed
 every criterion on Windows; both epics stay open for the macOS and Linux runs

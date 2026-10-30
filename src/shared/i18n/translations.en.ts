@@ -114,6 +114,7 @@ export const en: SharedTranslations = {
   errorConflictActionUnavailable: "This file doesn't allow that right now. Read the overlapping changes again.",
   errorConflictMarkersRemain: "This file still has overlapping parts marked in it. Edit them out, or mark it resolved anyway.",
   errorConflictChoiceNeeded: "Choose which side to keep for this file first.",
+  errorMergeStartRefused: "Git could not start combining. Your project files and saved versions are unchanged; review the project before trying again.",
   errorMergeAbortRefused: "Git wouldn't stop combining, so nothing was changed. A file the merge brought in may have unsaved edits Git won't overwrite: save them or set them aside, then try again.",
   errorMergeOutcomeUncertain: "GitOdile couldn't confirm how this ended. Read the overlapping changes again before going on; the copy GitOdile kept stays in the project.",
   errorConflictContentNotKept: "GitOdile couldn't keep this file's original content. Nothing was changed; you can still put back the overlap alone.",

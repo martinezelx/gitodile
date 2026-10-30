@@ -421,6 +421,7 @@ fn reserve_history_recovery_slot(
             false
         }
     });
+    records.retain(|(_, record)| !super::history_recovery_is_protected(common, &record.reference));
     records.sort_by_key(|(_, record)| record.created_at_ms);
     while refs.len() >= operation.retention_limit() {
         let Some((manifest_path, record)) = records.first().cloned() else {

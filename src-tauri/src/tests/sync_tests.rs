@@ -1745,6 +1745,8 @@ fn unsaved_edits_on_other_lines_of_an_incoming_file_stay_unsaved_on_top_of_it() 
     }
 }
 
+// More than 5 s on Windows: a published repository, second clone and fetch
+// are required to prove both upstream execution paths preserve unsaved overlap.
 #[test]
 fn unsaved_edits_to_the_same_lines_are_refused_and_left_untouched() {
     let (repo, remote, other, branch) = repo_with_lines("get-unsaved-overlap");
@@ -1766,6 +1768,19 @@ fn unsaved_edits_to_the_same_lines_are_refused_and_left_untouched() {
         }]
     );
     let plan = plan_get_team_changes(repo.clone(), session("unsaved-overlap")).unwrap();
+    assert_eq!(
+        start_overlapping_merge(
+            repo.clone(),
+            session("unsaved-overlap"),
+            OverlappingMergeSource::Upstream,
+            plan.state_token.clone(),
+            plan.recovery.reference.clone()
+        )
+        .unwrap_err()
+        .code,
+        AppErrorCode::IncomingTrackedChangeCollision
+    );
+    assert!(!recovery_ref_exists(&repo, &plan.recovery.reference));
     let error = get_team_changes(
         repo.clone(),
         session("unsaved-overlap"),
@@ -2474,6 +2489,556 @@ fn a_linked_worktree_brings_changes_into_its_own_branch_and_owns_its_recovery() 
     );
 
     for path in [linked, repo, remote] {
+        let _ = fs::remove_dir_all(path);
+    }
+}
+
+/// A local overlap needs no published fixture or fetch. The upstream tests
+/// configure an already-known tracking ref in this same small repository.
+fn overlapping_project(label: &str) -> String {
+    let repo = unique_temp_dir(label);
+    assert!(git_succeeds(&repo, &["init", "-q", "-b", "main"]));
+    set_identity(&repo);
+    assert!(git_succeeds(&repo, &["config", "core.autocrlf", "false"]));
+    write_file(&repo, "clash.txt", "base\n");
+    write_file(&repo, "shared.txt", "base\n");
+    write_file(&repo, "notes.txt", "notes\n");
+    git_add_all(&repo);
+    git_commit(&repo, "base");
+    assert!(git_succeeds(&repo, &["switch", "-q", "-c", "feature"]));
+    write_file(&repo, "clash.txt", "incoming\n");
+    write_file(&repo, "shared.txt", "same on both sides\n");
+    write_file(&repo, "new.txt", "new\n");
+    git_add_all(&repo);
+    git_commit(&repo, "incoming");
+    assert!(git_succeeds(&repo, &["switch", "-q", "main"]));
+    write_file(&repo, "clash.txt", "current\n");
+    write_file(&repo, "shared.txt", "same on both sides\n");
+    git_add_all(&repo);
+    git_commit(&repo, "current");
+    repo
+}
+
+fn start_branch_overlap(
+    repo: &str,
+    label: &str,
+    plan: &BringInChangesPlan,
+) -> Result<StartOverlappingMergeResult, AppError> {
+    start_overlapping_merge(
+        repo.to_string(),
+        session(label),
+        OverlappingMergeSource::Branch {
+            source: local_branch("feature"),
+        },
+        plan.state_token.clone(),
+        plan.recovery.reference.clone(),
+    )
+}
+
+// More than 5 s on Windows: a real three-version divergence, durable recovery,
+// snapshot, and Git's abort are the behavior; a synthetic index cannot prove it.
+#[test]
+fn a_branch_overlap_pauses_and_aborts_with_carried_work_intact() {
+    use crate::conflicts::{self, merge, ConflictOrigin};
+    let repo = overlapping_project("start-overlap-branch");
+    // Both branches changed this path identically; the merge does not touch
+    // it, so its unsaved edit must remain allowed and byte-for-byte intact.
+    write_file(&repo, "shared.txt", "unsaved shared work\n");
+    write_file(&repo, "notes.txt", "unsaved\n");
+    write_file(&repo, "untracked.txt", "keep me\n");
+    // A normal dependency/build cache must not consume the conflict capture
+    // budget. Its entire folder is outside the merge footprint, and ignored
+    // collisions still refuse in the dedicated preflight cases below.
+    fs::write(Path::new(&repo).join(".git/info/exclude"), "cache/\n").unwrap();
+    fs::create_dir(Path::new(&repo).join("cache")).unwrap();
+    for index in 0..=crate::conflicts::MAX_CONFLICT_FILES {
+        fs::write(
+            Path::new(&repo).join("cache").join(format!("{index}.bin")),
+            b"cache",
+        )
+        .unwrap();
+    }
+    let before = head(&repo);
+    let plan = plan_bring_in(&repo, "start", &local_branch("feature")).unwrap();
+    let result = start_branch_overlap(&repo, "start", &plan).unwrap();
+    assert_eq!(result.session.origin, ConflictOrigin::Gitodile);
+    assert_eq!(
+        result.session.operation.current.name.as_deref(),
+        Some("main")
+    );
+    assert_eq!(
+        result.session.operation.incoming.name.as_deref(),
+        Some("feature")
+    );
+    assert_eq!(result.session.unresolved_count, 1);
+    assert!(result.session.snapshot.as_ref().unwrap().complete);
+    assert_eq!(head(&repo), before);
+    assert_eq!(read_text(&repo, "notes.txt"), "unsaved\n");
+    assert_eq!(read_text(&repo, "new.txt"), "new\n");
+    assert!(recovery_ref_exists(&repo, &plan.recovery.reference));
+    let abort = merge::plan_abort_merge(repo.clone()).unwrap();
+    assert_eq!(abort.restoration, merge::Restoration::Exact);
+    merge::abort_merge(repo.clone(), abort.state_token).unwrap();
+    assert_eq!(head(&repo), before);
+    assert_eq!(read_text(&repo, "clash.txt"), "current\n");
+    assert_eq!(read_text(&repo, "notes.txt"), "unsaved\n");
+    assert_eq!(read_text(&repo, "untracked.txt"), "keep me\n");
+    assert_eq!(read_text(&repo, "shared.txt"), "unsaved shared work\n");
+    assert_eq!(read_text(&repo, "cache/5000.bin"), "cache");
+    assert!(!Path::new(&repo).join("new.txt").exists());
+    assert!(conflicts::read_conflict_session(repo.clone())
+        .unwrap()
+        .is_none());
+    // A terminal merge of the same heads must not inherit GitOdile's ended
+    // start, origin or original snapshot (and must not promise exact abort).
+    assert!(!git_succeeds(&repo, &["merge", "--no-commit", "feature"]));
+    let external = conflicts::read_conflict_session(repo.clone())
+        .unwrap()
+        .unwrap();
+    assert_eq!(external.origin, ConflictOrigin::External);
+    assert!(external.snapshot.is_none());
+    assert_eq!(
+        merge::plan_abort_merge(repo.clone()).unwrap().restoration,
+        merge::Restoration::BestEffort
+    );
+    assert!(git_succeeds(&repo, &["merge", "--abort"]));
+    // Repeating the same pair of heads is a new pause, with its own original
+    // snapshot; it must not reuse the previous attempt's reset evidence.
+    let again = plan_bring_in(&repo, "start", &local_branch("feature")).unwrap();
+    let second = start_branch_overlap(&repo, "start", &again).unwrap();
+    assert_ne!(second.session.session_id, result.session.session_id);
+    let original = Path::new(&repo)
+        .join(".git/gitodile/conflicts/v1")
+        .join(&result.session.session_id)
+        .join("manifest.json");
+    assert!(original.is_file());
+    let exact = merge::plan_abort_merge(repo.clone()).unwrap();
+    write_file(&repo, "notes.txt", "later work\n");
+    let later = merge::plan_abort_merge(repo.clone()).unwrap();
+    assert_eq!(later.restoration, merge::Restoration::BestEffort);
+    assert_eq!(
+        merge::abort_merge(repo.clone(), exact.state_token)
+            .unwrap_err()
+            .code,
+        AppErrorCode::StaleConflictSession
+    );
+    merge::abort_merge(repo.clone(), later.state_token).unwrap();
+    assert_eq!(read_text(&repo, "notes.txt"), "later work\n");
+    let _ = fs::remove_dir_all(repo);
+}
+
+// More than 5 s on Windows: a paused upstream, refused commit hook, and retry
+// exercise the real merge parents, commit hooks and durable resolver handoff.
+#[test]
+fn an_upstream_overlap_uses_gets_token_and_finishes_through_commit_hooks() {
+    use crate::conflicts::{self, merge, ConflictOrigin};
+    let repo = overlapping_project("start-overlap-upstream");
+    for args in [
+        vec!["remote", "add", "origin", "."],
+        vec!["update-ref", "refs/remotes/origin/main", "feature"],
+        vec!["config", "branch.main.remote", "origin"],
+        vec!["config", "branch.main.merge", "refs/heads/main"],
+    ] {
+        assert!(git_succeeds(&repo, &args));
+    }
+    let before = head(&repo);
+    let incoming = git_stdout(&test_git(&repo, &["rev-parse", "feature"]).unwrap());
+    let plan = plan_get_team_changes(repo.clone(), session("upstream")).unwrap();
+    assert_eq!(
+        start_overlapping_merge(
+            repo.clone(),
+            session("upstream"),
+            OverlappingMergeSource::Branch {
+                source: local_branch("feature")
+            },
+            plan.state_token.clone(),
+            plan.recovery.reference.clone()
+        )
+        .unwrap_err()
+        .code,
+        AppErrorCode::StaleBringInPlan
+    );
+    let result = start_overlapping_merge(
+        repo.clone(),
+        session("upstream"),
+        OverlappingMergeSource::Upstream,
+        plan.state_token,
+        plan.recovery.reference.clone(),
+    )
+    .unwrap();
+    assert_eq!(result.session.origin, ConflictOrigin::Gitodile);
+    assert_eq!(result.recovery.operation, "get-team-changes");
+    write_file(&repo, "clash.txt", "resolved\n");
+    assert!(git_succeeds(&repo, &["add", "clash.txt"]));
+    write_hook(&repo, "commit-msg", "exit 1");
+    let finish = merge::plan_finish_merge(repo.clone()).unwrap();
+    assert_eq!(
+        merge::finish_merge(repo.clone(), finish.title, None, finish.state_token, true)
+            .unwrap_err()
+            .code,
+        AppErrorCode::HookRejected
+    );
+    assert_eq!(head(&repo), before);
+    assert!(conflicts::read_conflict_session(repo.clone())
+        .unwrap()
+        .is_some());
+    for name in [
+        "pre-commit",
+        "prepare-commit-msg",
+        "commit-msg",
+        "post-commit",
+    ] {
+        write_hook(&repo, name, &format!("echo {name} >> hook-ran"));
+    }
+    write_hook(&repo, "pre-merge-commit", "echo should-not-run >> hook-ran");
+    let finish = merge::plan_finish_merge(repo.clone()).unwrap();
+    merge::finish_merge(repo.clone(), finish.title, None, finish.state_token, true).unwrap();
+    assert_eq!(parents_of_head(&repo), [before, incoming]);
+    assert_eq!(
+        read_text(&repo, "hook-ran"),
+        "pre-commit\nprepare-commit-msg\ncommit-msg\npost-commit\n"
+    );
+    assert!(recovery_ref_exists(&repo, &plan.recovery.reference));
+    let _ = fs::remove_dir_all(repo);
+}
+
+// More than 5 s on Windows: reuse one real divergent repository to prove each
+// preflight refuses before start/recovery, with no extra fixture commits.
+#[test]
+fn starting_an_overlap_refuses_unsafe_work_and_custom_merge_options() {
+    let repo = overlapping_project("start-overlap-refusals");
+    let before = head(&repo);
+    let source = local_branch("feature");
+    let attempt = |expected| {
+        let plan = plan_bring_in(&repo, "refuse", &source).unwrap();
+        assert_eq!(
+            start_branch_overlap(&repo, "refuse", &plan)
+                .unwrap_err()
+                .code,
+            expected
+        );
+        assert!(!Path::new(&repo)
+            .join(".git/gitodile/conflicts/v1/starts")
+            .exists());
+        assert!(!recovery_ref_exists(&repo, &plan.recovery.reference));
+        assert_eq!(head(&repo), before);
+    };
+    write_file(&repo, "notes.txt", "prepared\n");
+    assert!(git_succeeds(&repo, &["add", "notes.txt"]));
+    attempt(AppErrorCode::IncomingTrackedChangeCollision);
+    assert!(git_succeeds(&repo, &["restore", "--staged", "notes.txt"]));
+    write_file(&repo, "notes.txt", "notes\n");
+    write_file(&repo, "clash.txt", "unsaved conflict\n");
+    attempt(AppErrorCode::IncomingTrackedChangeCollision);
+    write_file(&repo, "clash.txt", "current\n");
+    write_file(&repo, "new.txt", "untracked collision\n");
+    attempt(AppErrorCode::IncomingTrackedChangeCollision);
+    // Ignored content must not be overwritten either.
+    fs::write(Path::new(&repo).join(".git/info/exclude"), "new.txt\n").unwrap();
+    attempt(AppErrorCode::IncomingTrackedChangeCollision);
+    fs::remove_file(Path::new(&repo).join("new.txt")).unwrap();
+    for options in ["--squash", "--strategy=ours", ""] {
+        assert!(git_succeeds(
+            &repo,
+            &["config", "branch.main.mergeOptions", options]
+        ));
+        attempt(AppErrorCode::UnsupportedMergeSetup);
+    }
+    assert!(git_succeeds(
+        &repo,
+        &["config", "--unset", "branch.main.mergeOptions"]
+    ));
+    fs::write(Path::new(&repo).join(".git/index.lock"), "busy").unwrap();
+    attempt(AppErrorCode::RefLocked);
+    fs::remove_file(Path::new(&repo).join(".git/index.lock")).unwrap();
+    let plan = plan_bring_in(&repo, "refuse", &source).unwrap();
+    // A pending operation is rejected even when no index entry is unmerged.
+    fs::write(Path::new(&repo).join(".git/MERGE_HEAD"), &before).unwrap();
+    assert_eq!(
+        start_branch_overlap(&repo, "refuse", &plan)
+            .unwrap_err()
+            .code,
+        AppErrorCode::GitOperationInProgress
+    );
+    fs::remove_file(Path::new(&repo).join(".git/MERGE_HEAD")).unwrap();
+    write_file(&repo, "notes.txt", "changed after review\n");
+    assert_eq!(
+        start_branch_overlap(&repo, "refuse", &plan)
+            .unwrap_err()
+            .code,
+        AppErrorCode::StaleBringInPlan
+    );
+    write_file(&repo, "notes.txt", "notes\n");
+    assert!(git_succeeds(
+        &repo,
+        &["config", "merge.suppressDest", "main"]
+    ));
+    assert_eq!(
+        start_branch_overlap(&repo, "refuse", &plan)
+            .unwrap_err()
+            .code,
+        AppErrorCode::StaleBringInPlan
+    );
+    assert!(git_succeeds(
+        &repo,
+        &["config", "--unset", "merge.suppressDest"]
+    ));
+    assert!(git_succeeds(
+        &repo,
+        &["update-ref", "refs/heads/feature", "HEAD"]
+    ));
+    assert_eq!(
+        start_branch_overlap(&repo, "refuse", &plan)
+            .unwrap_err()
+            .code,
+        AppErrorCode::StaleBringInPlan
+    );
+    let _ = fs::remove_dir_all(repo);
+}
+
+// More than 5 s on Windows: train Git's actual rerere cache and reuse the same
+// conflict, proving GitOdile neither applies it nor changes user configuration.
+#[test]
+fn a_paused_overlap_disables_rerere_for_that_invocation_only() {
+    let repo = overlapping_project("start-overlap-rerere");
+    assert!(git_succeeds(&repo, &["config", "rerere.enabled", "true"]));
+    assert!(git_succeeds(
+        &repo,
+        &["config", "rerere.autoupdate", "true"]
+    ));
+    assert!(!git_succeeds(&repo, &["merge", "--no-commit", "feature"]));
+    write_file(&repo, "clash.txt", "trained resolution\n");
+    assert!(git_succeeds(&repo, &["rerere"]));
+    assert!(git_succeeds(&repo, &["merge", "--abort"]));
+    // Prove the cache can resolve this exact conflict before testing the opt-out.
+    let _ = test_git(&repo, &["merge", "--no-commit", "feature"]).unwrap();
+    assert_eq!(read_text(&repo, "clash.txt"), "trained resolution\n");
+    assert!(git_succeeds(&repo, &["merge", "--abort"]));
+    let plan = plan_bring_in(&repo, "rerere", &local_branch("feature")).unwrap();
+    let started = start_branch_overlap(&repo, "rerere", &plan).unwrap();
+    assert_eq!(started.session.unresolved_count, 1);
+    assert!(read_text(&repo, "clash.txt").contains("<<<<<<<"));
+    for key in ["rerere.enabled", "rerere.autoupdate"] {
+        assert_eq!(
+            git_stdout(&test_git(&repo, &["config", "--get", key]).unwrap()),
+            "true"
+        );
+    }
+    let _ = fs::remove_dir_all(repo);
+}
+
+// More than 5 s on Windows: real Git refusal and snapshot-ref failure must
+// retain history recovery and origin evidence rather than trigger repair.
+// A third real merge injects clean-index drift after Git releases its lock.
+#[test]
+fn a_refused_or_uncertain_overlap_keeps_its_start_and_history_recovery() {
+    use crate::conflicts::{self, ConflictOrigin};
+    let repo = overlapping_project("start-overlap-outcomes");
+    let before = head(&repo);
+    assert!(git_succeeds(&repo, &["update-ref", "ORIG_HEAD", &before]));
+    assert!(git_succeeds(&repo, &["config", "user.name", ""]));
+    let plan = plan_bring_in(&repo, "outcomes", &local_branch("feature")).unwrap();
+    let error = start_branch_overlap(&repo, "outcomes", &plan).unwrap_err();
+    assert_eq!(error.code, AppErrorCode::MergeStartRefused, "{error:?}");
+    assert_eq!(head(&repo), before);
+    assert_eq!(read_text(&repo, "clash.txt"), "current\n");
+    assert!(!Path::new(&repo).join(".git/MERGE_HEAD").exists());
+    assert!(recovery_ref_exists(&repo, &plan.recovery.reference));
+    set_identity(&repo);
+    let plan = plan_bring_in(&repo, "outcomes", &local_branch("feature")).unwrap();
+    // This file blocks only the conflict pin namespace, after history recovery
+    // has succeeded. Git's merge is left intact and the partial snapshot kept.
+    let blocked = Path::new(&repo).join(".git/refs/gitodile/recovery/v1/conflict");
+    fs::write(&blocked, "blocked").unwrap();
+    let error = start_branch_overlap(&repo, "outcomes", &plan).unwrap_err();
+    assert_eq!(error.code, AppErrorCode::MergeOutcomeUncertain);
+    assert!(error.detail.unwrap().contains(&plan.recovery.reference));
+    let paused_session = conflicts::read_conflict_session(repo.clone())
+        .unwrap()
+        .unwrap();
+    assert_eq!(paused_session.origin, ConflictOrigin::Gitodile);
+    assert!(!paused_session.snapshot.unwrap().complete);
+    assert!(recovery_ref_exists(&repo, &plan.recovery.reference));
+    assert_eq!(head(&repo), before);
+    assert!(Path::new(&repo).join(".git/MERGE_HEAD").is_file());
+    fs::remove_file(blocked).unwrap();
+    assert!(git_succeeds(&repo, &["merge", "--abort"]));
+    let plan = plan_bring_in(&repo, "outcomes", &local_branch("feature")).unwrap();
+    let error = start_overlapping_merge_with(
+        repo.clone(),
+        session("outcomes"),
+        OverlappingMergeSource::Branch {
+            source: local_branch("feature"),
+        },
+        plan.state_token,
+        plan.recovery.reference.clone(),
+        |path, args| {
+            let output = run_git(path, args)?;
+            // Deterministic external index drift, after real Git's index.lock
+            // was released, before the application verifies the actual pause.
+            assert!(
+                run_git(path, &["update-index", "--force-remove", "--", "new.txt"])?
+                    .status
+                    .success()
+            );
+            Ok(output)
+        },
+    )
+    .unwrap_err();
+    assert_eq!(error.code, AppErrorCode::MergeOutcomeUncertain);
+    let observed = conflicts::read_conflict_session(repo.clone())
+        .unwrap()
+        .unwrap();
+    assert_eq!(observed.origin, ConflictOrigin::Gitodile);
+    assert!(observed.snapshot.unwrap().complete);
+    assert!(read_text(&repo, "clash.txt").contains("<<<<<<<"));
+    assert_eq!(head(&repo), before);
+    assert!(recovery_ref_exists(&repo, &plan.recovery.reference));
+    let _ = fs::remove_dir_all(repo);
+}
+
+// More than 5 s on Windows: crash boundary is represented by the actual durable
+// prefix (start, history ref, Git merge) and a fresh read, without a snapshot.
+#[test]
+fn an_interrupted_overlap_is_still_gitodiles_session_before_any_snapshot() {
+    use crate::conflicts::{self, ConflictOrigin};
+    use crate::recovery::{MergeStartOutcome, MergeStartRecord};
+    let repo = overlapping_project("start-overlap-restart");
+    write_file(&repo, "notes.txt", "carried\n");
+    let plan = plan_bring_in(&repo, "restart", &local_branch("feature")).unwrap();
+    let owner;
+    {
+        let (repository, _permit) =
+            application::authorize_repository(&repo, "start_overlapping_merge", None).unwrap();
+        let record = new_merge_start(
+            &repository,
+            MergeStartRecord {
+                schema_version: 1,
+                id: plan.recovery.reference.rsplit('/').next().unwrap().into(),
+                owner_id: String::new(),
+                created_at_ms: 0,
+                branch: plan.branch.clone(),
+                head: plan.local_commit.clone(),
+                incoming: plan.source.commit.clone(),
+                source_ref: plan.source.reference.clone(),
+                title: plan.merge_message.clone().unwrap(),
+                state_token: plan.state_token.clone(),
+                recovery_reference: plan.recovery.reference.clone(),
+                overlapping_paths: vec!["clash.txt".into()],
+                carried: vec![merge_carried_path(Path::new(&repo), "notes.txt").unwrap()],
+                outcome: MergeStartOutcome::Pending,
+            },
+        )
+        .unwrap();
+        owner = record.owner_id;
+        create_history_recovery_for(
+            &repository,
+            HistoryRecoveryOperation::BringInChanges,
+            &plan.recovery.reference,
+            HistoryRecoveryMetadata {
+                branch: plan.branch.clone(),
+                previous_commit: plan.local_commit.clone(),
+                target_commit: plan.source.commit.clone(),
+                remote: String::new(),
+                destination_branch: "feature".into(),
+                tracking_ref: plan.source.reference.clone(),
+                state_token: plan.state_token,
+                unsaved_snapshot: None,
+            },
+        )
+        .unwrap();
+        let output = run_git(
+            &repo,
+            &[
+                "-c",
+                "rerere.enabled=false",
+                "merge",
+                "--no-ff",
+                "--no-commit",
+                "--no-autostash",
+                "-m",
+                &record.title,
+                &plan.source.commit,
+            ],
+        )
+        .unwrap();
+        assert!(!output.status.success());
+        // The application stops here: no snapshot creation or outcome update.
+    }
+    let paused = conflicts::read_conflict_session(repo.clone())
+        .unwrap()
+        .unwrap();
+    assert_eq!(paused.origin, ConflictOrigin::Gitodile);
+    assert!(paused.snapshot.is_none());
+    assert_eq!(read_text(&repo, "notes.txt"), "carried\n");
+    assert!(recovery_ref_exists(&repo, &plan.recovery.reference));
+    // Reading origin never writes a snapshot. A mismatched head or worktree
+    // owner must not borrow the recorded origin.
+    let incoming_marker = Path::new(&repo).join(".git/MERGE_HEAD");
+    fs::write(&incoming_marker, &plan.local_commit).unwrap();
+    assert_eq!(
+        conflicts::read_conflict_session(repo.clone())
+            .unwrap()
+            .unwrap()
+            .origin,
+        ConflictOrigin::External
+    );
+    fs::write(&incoming_marker, &plan.source.commit).unwrap();
+    let start_path = Path::new(&repo)
+        .join(".git/gitodile/conflicts/v1/starts")
+        .join(format!(
+            "{}.json",
+            plan.recovery.reference.rsplit('/').next().unwrap()
+        ));
+    let bytes = fs::read(&start_path).unwrap();
+    fs::write(
+        &start_path,
+        String::from_utf8(bytes)
+            .unwrap()
+            .replace(&owner, "worktree-other"),
+    )
+    .unwrap();
+    assert_eq!(
+        conflicts::read_conflict_session(repo.clone())
+            .unwrap()
+            .unwrap()
+            .origin,
+        ConflictOrigin::External
+    );
+    let _ = fs::remove_dir_all(repo);
+}
+
+// More than 5 s on Windows: a linked Git worktree has separate markers,
+// snapshot/start folders and recovery ownership while sharing objects/refs.
+#[test]
+fn a_linked_worktree_owns_its_overlap_without_changing_the_main_worktree() {
+    let repo = overlapping_project("start-overlap-linked");
+    let before = head(&repo);
+    let linked = unique_temp_dir("start-overlap-linked-tree");
+    assert!(git_succeeds(
+        &repo,
+        &["worktree", "add", "-q", "-b", "linked", &linked, "main"]
+    ));
+    let main_plan = plan_bring_in(&repo, "linked", &local_branch("feature")).unwrap();
+    let plan = plan_bring_in(&linked, "linked", &local_branch("feature")).unwrap();
+    let result = start_branch_overlap(&linked, "linked", &plan).unwrap();
+    assert_ne!(
+        plan.recovery.reference.split('/').nth(5),
+        main_plan.recovery.reference.split('/').nth(5)
+    );
+    assert_eq!(
+        result.session.operation.current.name.as_deref(),
+        Some("linked")
+    );
+    assert_eq!(head(&repo), before);
+    assert_eq!(read_text(&repo, "clash.txt"), "current\n");
+    assert!(!Path::new(&repo).join("new.txt").exists());
+    assert!(!Path::new(&repo).join(".git/MERGE_HEAD").exists());
+    assert!(!Path::new(&repo)
+        .join(".git/gitodile/conflicts/v1/starts")
+        .exists());
+    assert!(recovery_ref_exists(&repo, &plan.recovery.reference));
+    for path in [linked, repo] {
         let _ = fs::remove_dir_all(path);
     }
 }

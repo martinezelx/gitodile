@@ -315,6 +315,7 @@ struct UnsavedCombination {
 /// What getting would do. Built without changing files, the index or refs.
 #[derive(Debug)]
 struct Analysis {
+    prediction: Option<ConflictPrediction>,
     kind: IntegrationKind,
     /// The tree the files move to; `None` when saved versions overlap.
     target_tree: Option<String>,
@@ -395,9 +396,16 @@ impl ValidatedGetTeamChanges {
     }
 }
 
+#[derive(Debug, Clone)]
+struct ConflictPrediction {
+    tree: String,
+    paths: Vec<String>,
+    stages: Vec<crate::recovery::SnapshotStageEntry>,
+}
+
 enum TreeMerge {
     Clean(String),
-    Conflicts(Vec<String>),
+    Conflicts(ConflictPrediction),
     /// This Git does not have `merge-tree --write-tree` (or `--merge-base`).
     Unsupported,
 }
@@ -757,7 +765,6 @@ fn merge_trees(
     let mut args = vec![
         "merge-tree".to_string(),
         "--write-tree".to_string(),
-        "--name-only".to_string(),
         "--no-messages".to_string(),
         "-z".to_string(),
     ];
@@ -787,16 +794,42 @@ fn merge_trees(
             Ok(TreeMerge::Clean(tree))
         }
         Some(1) => {
-            let _tree = fields.next();
-            let mut seen = HashSet::new();
+            let tree = fields
+                .next()
+                .and_then(|value| std::str::from_utf8(value).ok())
+                .filter(|value| crate::conflicts::is_object_id(value))
+                .ok_or_else(incomplete_status_error)?
+                .to_string();
+            let entries = fields
+                .flat_map(|field| {
+                    let mut item = field.to_vec();
+                    item.push(0);
+                    item
+                })
+                .collect::<Vec<_>>();
+            let parsed = crate::conflicts::parse_unmerged_entries(&entries)?;
             let mut paths = Vec::new();
-            for field in fields {
-                let value = std::str::from_utf8(field).map_err(|_| path_encoding_error())?;
-                if seen.insert(value.to_string()) {
-                    paths.push(value.to_string());
+            let mut seen = HashSet::new();
+            let mut stages = Vec::new();
+            for entry in parsed {
+                let relative = std::str::from_utf8(&entry.path)
+                    .map_err(|_| path_encoding_error())?
+                    .to_string();
+                if seen.insert(relative.clone()) {
+                    paths.push(relative.clone());
                 }
+                stages.push(crate::recovery::SnapshotStageEntry {
+                    path: relative,
+                    stage: entry.stage,
+                    mode: entry.mode,
+                    object_id: entry.object_id,
+                });
             }
-            Ok(TreeMerge::Conflicts(paths))
+            Ok(TreeMerge::Conflicts(ConflictPrediction {
+                tree,
+                paths,
+                stages,
+            }))
         }
         // A usage error: this Git predates the form used here.
         Some(129) => Ok(TreeMerge::Unsupported),
@@ -867,6 +900,7 @@ fn analyze(
     };
     let (authors, author_count) = incoming_authors(path, local_commit, remote_commit)?;
     let mut analysis = Analysis {
+        prediction: None,
         kind,
         target_tree: None,
         incoming: Vec::new(),
@@ -889,7 +923,9 @@ fn analyze(
         )?)?),
         IntegrationKind::Merge => match merge_trees(path, None, local_commit, remote_commit)? {
             TreeMerge::Clean(tree) => Some(tree),
-            TreeMerge::Conflicts(paths) => {
+            TreeMerge::Conflicts(prediction) => {
+                let paths = prediction.paths.clone();
+                analysis.prediction = Some(prediction);
                 analysis
                     .overlaps
                     .extend(paths.into_iter().map(|path| ForecastOverlap {
@@ -1020,7 +1056,8 @@ fn analyze(
                 combined_tree,
             });
         }
-        TreeMerge::Conflicts(paths) => {
+        TreeMerge::Conflicts(prediction) => {
+            let paths = prediction.paths;
             analysis
                 .overlaps
                 .extend(paths.into_iter().map(|path| ForecastOverlap {
@@ -1053,6 +1090,7 @@ pub(crate) fn forecast_incoming(
     let in_progress = git_operation_in_progress(path).ok()?;
     if in_progress.is_some() {
         let mut analysis = Analysis {
+            prediction: None,
             kind: if relation.ahead == 0 {
                 IntegrationKind::FastForward
             } else {
@@ -1103,6 +1141,12 @@ fn compute_integration_state_token(evidence: IntegrationTokenEvidence<'_>) -> St
     evidence.recovery_reference.hash(&mut hasher);
     if let Some(analysis) = evidence.analysis {
         analysis.kind.hash(&mut hasher);
+        if let Some(prediction) = &analysis.prediction {
+            prediction.tree.hash(&mut hasher);
+            serde_json::to_vec(&prediction.stages)
+                .unwrap_or_default()
+                .hash(&mut hasher);
+        }
         analysis.target_tree.hash(&mut hasher);
         analysis.safety.raw.hash(&mut hasher);
         analysis
@@ -1214,6 +1258,7 @@ fn validate_get_team_changes(
             &target.remote,
             &target.destination_branch,
             &target.tracking_ref,
+            &merge_message(&target, &branch),
         ],
         source_commit: &remote_commit,
         recovery_reference,
@@ -2527,9 +2572,574 @@ pub(crate) fn bring_in_changes(
     })
 }
 
+/// The workflow selects the existing plan/token contract; upstream never
+/// silently becomes a branch-source plan (or the reverse).
+#[derive(serde::Deserialize, Debug, Clone)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) enum OverlappingMergeSource {
+    Branch { source: IntegrationSource },
+    Upstream,
+}
+
+#[derive(serde::Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct StartOverlappingMergeResult {
+    pub(crate) session: crate::conflicts::ConflictSession,
+    pub(crate) recovery: HistoryRecoveryRecord,
+}
+
+/// Canonical clean entries from `ls-tree -r -z` or `ls-files --stage -z`.
+/// Unmerged paths are verified separately against all predicted stages.
+fn clean_merge_entries(
+    listing: &[u8],
+    tree: bool,
+    overlapping: &HashSet<&str>,
+) -> Result<Vec<Vec<u8>>, AppError> {
+    let mut entries = Vec::new();
+    for record in listing
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let tab = record
+            .iter()
+            .position(|byte| *byte == b'\t')
+            .ok_or_else(incomplete_status_error)?;
+        let (metadata, path) = (&record[..tab], &record[tab + 1..]);
+        let metadata = std::str::from_utf8(metadata).map_err(|_| incomplete_status_error())?;
+        let fields = metadata.split(' ').collect::<Vec<_>>();
+        if fields.len() != 3
+            || path.is_empty()
+            || fields[0].len() != 6
+            || !fields[0].bytes().all(|byte| (b'0'..=b'7').contains(&byte))
+        {
+            return Err(incomplete_status_error());
+        }
+        let object = fields[if tree { 2 } else { 1 }];
+        if !crate::conflicts::is_object_id(object)
+            || (tree && !matches!(fields[1], "blob" | "commit"))
+            || (!tree && !matches!(fields[2], "0" | "1" | "2" | "3"))
+        {
+            return Err(incomplete_status_error());
+        }
+        if std::str::from_utf8(path).is_ok_and(|path| overlapping.contains(path)) {
+            continue;
+        }
+        if !tree && fields[2] != "0" {
+            return Err(incomplete_status_error());
+        }
+        let mut entry = format!("{} {object}\t", fields[0]).into_bytes();
+        entry.extend_from_slice(path);
+        entries.push(entry);
+    }
+    entries.sort_unstable();
+    Ok(entries)
+}
+
+/// Starts only a reviewed saved-version overlap. All paths used for safety
+/// and verification are uncapped; only presentation lists are truncated.
+pub(crate) fn start_overlapping_merge(
+    path: String,
+    session_epoch: String,
+    source: OverlappingMergeSource,
+    state_token: String,
+    recovery_reference: String,
+) -> Result<StartOverlappingMergeResult, AppError> {
+    start_overlapping_merge_with(
+        path,
+        session_epoch,
+        source,
+        state_token,
+        recovery_reference,
+        run_git,
+    )
+}
+
+/// The runner boundary permits deterministic tests of external index changes
+/// after real Git returns. It runs under the same command policy and permit.
+pub(crate) fn start_overlapping_merge_with(
+    path: String,
+    session_epoch: String,
+    source: OverlappingMergeSource,
+    state_token: String,
+    recovery_reference: String,
+    execute_merge: impl FnOnce(&str, &[&str]) -> Result<std::process::Output, AppError>,
+) -> Result<StartOverlappingMergeResult, AppError> {
+    use crate::conflicts::{
+        describe_session, read_session, stage_entries, ConflictOrigin, PausedOperationKind,
+    };
+    use crate::recovery::{
+        create_conflict_snapshot, merge_carried_matches, merge_carried_path, new_merge_start,
+        write_merge_start, MergeStartOutcome, MergeStartRecord,
+    };
+
+    let (repository, _access) =
+        application::authorize_repository(&path, "start_overlapping_merge", None)?;
+    let identity = repository.common_git_dir.match_key().to_string();
+    let (
+        branch,
+        head,
+        incoming,
+        source_ref,
+        remote,
+        source_branch,
+        title,
+        analysis,
+        token,
+        operation,
+        stale_code,
+    ) = match source {
+        OverlappingMergeSource::Branch { source } => {
+            let validated = validate_bring_in(
+                &path,
+                &session_epoch,
+                &identity,
+                &recovery_reference,
+                &source,
+            )?;
+            let analysis = validated.analysis;
+            (
+                validated.branch,
+                validated.local_commit,
+                validated.source.commit,
+                validated.source.reference,
+                validated.source.remote.unwrap_or_default(),
+                validated.source.branch,
+                validated.merge_message,
+                analysis,
+                validated.state_token,
+                HistoryRecoveryOperation::BringInChanges,
+                AppErrorCode::StaleBringInPlan,
+            )
+        }
+        OverlappingMergeSource::Upstream => {
+            let validated =
+                validate_get_team_changes(&path, &session_epoch, &identity, &recovery_reference)?;
+            require_full_checkout(&path)?;
+            require_shared_history(&path, &validated.local_commit, &validated.remote_commit)?;
+            let title = merge_message(&validated.target, &validated.branch);
+            (
+                validated.branch,
+                validated.local_commit,
+                validated.remote_commit,
+                validated.target.tracking_ref,
+                validated.target.remote,
+                validated.target.destination_branch,
+                title,
+                Some(validated.analysis),
+                validated.state_token,
+                HistoryRecoveryOperation::GetTeamChanges,
+                AppErrorCode::StaleGetTeamChangesPlan,
+            )
+        }
+    };
+    if state_token != token {
+        return Err(AppError::new(
+            stale_code,
+            "The reviewed integration changed. Review it again.",
+        ));
+    }
+    let analysis = analysis.ok_or_else(|| {
+        AppError::new(
+            AppErrorCode::IncomingTrackedChangeCollision,
+            "There are no saved overlaps to resolve.",
+        )
+    })?;
+    let setup = run_git(
+        &path,
+        &[
+            "config",
+            "--get-all",
+            &format!("branch.{branch}.mergeOptions"),
+        ],
+    )?;
+    if !setup.status.success() && setup.status.code() != Some(1) {
+        return Err(AppError::new(
+            AppErrorCode::UnsupportedMergeSetup,
+            "GitOdile couldn't inspect this branch's merge options.",
+        ));
+    }
+    if setup.status.success() {
+        return Err(AppError::new(
+            AppErrorCode::UnsupportedMergeSetup,
+            "This branch has custom merge options.",
+        )
+        .with_remediation("Use the tool that configured those options to merge this branch."));
+    }
+    let prediction = analysis.prediction.as_ref().ok_or_else(|| {
+        AppError::new(
+            AppErrorCode::IncomingTrackedChangeCollision,
+            "Only overlapping saved versions can start a paused merge.",
+        )
+    })?;
+    if analysis.blocker.is_some() || prediction.paths.is_empty() {
+        return Err(AppError::new(
+            AppErrorCode::UnsupportedMergeSetup,
+            "GitOdile couldn't safely predict this merge.",
+        ));
+    }
+    // The provisional tree includes clean merge results and conflict renderings.
+    // Also include both rename endpoints and every unmerged path, including
+    // paths absent from that tree (delete/rename and directory conflicts).
+    let affected = incoming_files(&path, &[&head, &prediction.tree])?;
+    let overlapping = prediction
+        .paths
+        .iter()
+        .map(String::as_str)
+        .collect::<HashSet<_>>();
+    let expected_index = clean_merge_entries(
+        &checked_dynamic_output(
+            &path,
+            vec![
+                "ls-tree".into(),
+                "-r".into(),
+                "-z".into(),
+                prediction.tree.clone(),
+            ],
+        )?,
+        true,
+        &overlapping,
+    )?;
+    let clean_index_matches = || {
+        checked_dynamic_output(
+            &path,
+            vec!["ls-files".into(), "--stage".into(), "-z".into()],
+        )
+        .and_then(|listing| clean_merge_entries(&listing, false, &overlapping))
+        .is_ok_and(|entries| entries == expected_index)
+    };
+    let touches = |candidate: &str| {
+        affected.iter().any(|file| {
+            std::iter::once(file.path.as_str())
+                .chain(file.original_path.as_deref())
+                .any(|relative| paths_overlap(candidate, relative))
+        }) || prediction
+            .paths
+            .iter()
+            .any(|relative| paths_overlap(candidate, relative))
+    };
+    for change in &analysis.safety.tracked {
+        if change.index_status != b'.' || change.paths().any(&touches) {
+            return Err(AppError::new(
+                AppErrorCode::IncomingTrackedChangeCollision,
+                "Prepared changes or unsaved work in a merge path prevent starting the merge.",
+            )
+            .with_detail(change.path.clone())
+            .with_remediation("Save or discard those changes, then review the merge again."));
+        }
+    }
+    if let Some(collision) = analysis
+        .safety
+        .untracked
+        .iter()
+        .chain(&analysis.safety.ignored)
+        .find(|relative| touches(relative))
+    {
+        return Err(AppError::new(
+            AppErrorCode::IncomingTrackedChangeCollision,
+            "An untracked or ignored file occupies a merge path.",
+        )
+        .with_detail(collision.clone())
+        .with_remediation("Move or save that file, then review the merge again."));
+    }
+    let root = repository.worktree_root.backend_path();
+    let carried = analysis
+        .safety
+        .tracked
+        .iter()
+        .flat_map(TrackedChange::paths)
+        .chain(analysis.safety.untracked.iter().map(String::as_str))
+        .map(|relative| merge_carried_path(root, relative))
+        .collect::<Result<Vec<_>, _>>()?;
+    // Capture affected paths too, so a Git refusal is called unchanged only
+    // when the relevant working bytes as well as HEAD/index/markers agree.
+    let mut affected_paths = affected
+        .iter()
+        .flat_map(|file| std::iter::once(file.path.clone()).chain(file.original_path.clone()))
+        .chain(prediction.paths.clone())
+        .collect::<Vec<_>>();
+    affected_paths.sort();
+    affected_paths.dedup();
+    let before_files = affected_paths
+        .iter()
+        .map(|relative| merge_carried_path(root, relative))
+        .collect::<Result<Vec<_>, _>>()?;
+    let before_index = checked_dynamic_output(
+        &path,
+        vec!["ls-files".into(), "--stage".into(), "-z".into()],
+    )?;
+    let git_dir = repository.git_dir.backend_path();
+    if git_dir.join("index.lock").exists() {
+        return Err(AppError::new(
+            AppErrorCode::RefLocked,
+            "Another Git operation holds this project's index.",
+        )
+        .with_remediation(
+            "Wait for the other Git operation to finish, then review the merge again.",
+        ));
+    }
+    let marker_names = [
+        "MERGE_HEAD",
+        "MERGE_MSG",
+        "MERGE_MODE",
+        "MERGE_AUTOSTASH",
+        "AUTO_MERGE",
+        "ORIG_HEAD",
+    ];
+    let markers = || {
+        marker_names
+            .iter()
+            .map(|name| match std::fs::read(git_dir.join(name)) {
+                Ok(bytes) => Ok(Some(bytes)),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+                Err(_) => Err(incomplete_status_error()),
+            })
+            .collect::<Result<Vec<_>, AppError>>()
+    };
+    let before_markers = markers()?;
+    let mut record = new_merge_start(
+        &repository,
+        MergeStartRecord {
+            schema_version: 1,
+            id: recovery_reference
+                .rsplit('/')
+                .next()
+                .unwrap_or_default()
+                .to_string(),
+            owner_id: String::new(),
+            created_at_ms: 0,
+            branch: branch.clone(),
+            head: head.clone(),
+            incoming: incoming.clone(),
+            source_ref: source_ref.clone(),
+            title: title.clone(),
+            state_token: token.clone(),
+            recovery_reference: recovery_reference.clone(),
+            overlapping_paths: prediction.paths.clone(),
+            carried,
+            outcome: MergeStartOutcome::Pending,
+        },
+    )?;
+    let recovery = create_history_recovery_for(
+        &repository,
+        operation,
+        &recovery_reference,
+        HistoryRecoveryMetadata {
+            branch,
+            previous_commit: head.clone(),
+            target_commit: incoming.clone(),
+            remote,
+            destination_branch: source_branch,
+            tracking_ref: source_ref,
+            state_token: token,
+            unsaved_snapshot: None,
+        },
+    )?;
+    // No global/config-file writes, no autostash and no automatic resolution.
+    let output = execute_merge(
+        &path,
+        &[
+            "-c",
+            "rerere.enabled=false",
+            "merge",
+            "--no-ff",
+            "--no-commit",
+            "--no-autostash",
+            "-m",
+            &title,
+            &incoming,
+        ],
+    );
+    let read = read_session(&path, &repository);
+    let reviewed_branch = record.branch.clone();
+    let expected_pause = |read: &crate::conflicts::SessionRead| {
+        if read.operation.kind != PausedOperationKind::Merge
+            || read.operation.current.name.as_deref() != Some(reviewed_branch.as_str())
+            || read.head.as_deref() != Some(&head)
+            || read.operation.operation_heads != [incoming.clone()]
+            || !read.listing.complete
+        {
+            return false;
+        }
+        let mut actual = read
+            .listing
+            .paths
+            .iter()
+            .flat_map(|unmerged| {
+                std::str::from_utf8(&unmerged.path)
+                    .ok()
+                    .map(|relative| stage_entries(relative, unmerged))
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>();
+        let mut expected = prediction.stages.clone();
+        actual.sort_by(|left, right| (&left.path, left.stage).cmp(&(&right.path, right.stage)));
+        expected.sort_by(|left, right| (&left.path, left.stage).cmp(&(&right.path, right.stage)));
+        actual == expected
+    };
+    let paused = read
+        .as_ref()
+        .ok()
+        .and_then(|read| read.as_ref())
+        .is_some_and(expected_pause);
+    let mut verification_warning = String::new();
+    // Preserve the actual pause even when its stages or carried work differ
+    // from the prediction. Uncertainty must not lose the first conflict bytes.
+    let owned_pause = read
+        .as_ref()
+        .ok()
+        .and_then(|read| read.as_ref())
+        .is_some_and(|read| {
+            read.operation.kind == PausedOperationKind::Merge
+                && read.head.as_deref() == Some(&head)
+                && read.operation.operation_heads == [incoming.clone()]
+        });
+    if owned_pause {
+        let captured = (|| {
+            let read = read_session(&path, &repository)?.ok_or_else(incomplete_status_error)?;
+            if read.operation.kind != PausedOperationKind::Merge
+                || read.head.as_deref() != Some(&head)
+                || read.operation.operation_heads != [incoming.clone()]
+            {
+                return Err(incomplete_status_error());
+            }
+            let snapshot = create_conflict_snapshot(
+                &path,
+                &repository,
+                &read.state_token,
+                ConflictOrigin::Gitodile,
+            )?;
+            verify_history_recovery(&path, &recovery)?;
+            if !paused
+                || !snapshot.complete
+                || !merge_carried_matches(root, &record)
+                || !clean_index_matches()
+            {
+                return Err(incomplete_status_error());
+            }
+            record.outcome = MergeStartOutcome::Paused;
+            write_merge_start(git_dir, &record, false)?;
+            let read = read_session(&path, &repository)?.ok_or_else(incomplete_status_error)?;
+            if !expected_pause(&read)
+                || !read
+                    .snapshot
+                    .as_ref()
+                    .is_some_and(|snapshot| snapshot.complete)
+                || !merge_carried_matches(root, &record)
+                || !clean_index_matches()
+            {
+                return Err(incomplete_status_error());
+            }
+            Ok(describe_session(&repository, read))
+        })();
+        match captured {
+            Ok(session) => return Ok(StartOverlappingMergeResult { session, recovery }),
+            Err(error) => verification_warning = error.message,
+        }
+    }
+    let read = read_session(&path, &repository);
+    let unchanged = !paused
+        && observed_head(&path).as_deref() == Some(&head)
+        && merge_carried_matches(root, &record)
+        && read.as_ref().is_ok_and(|session| session.is_none())
+        && markers().is_ok_and(|after| after == before_markers)
+        && checked_dynamic_output(
+            &path,
+            vec!["ls-files".into(), "--stage".into(), "-z".into()],
+        )
+        .is_ok_and(|after| after == before_index)
+        && before_files.iter().all(|before| {
+            merge_carried_path(root, &before.path).is_ok_and(|after| after == *before)
+        });
+    record.outcome = if unchanged {
+        MergeStartOutcome::Refused
+    } else {
+        MergeStartOutcome::Uncertain
+    };
+    let recorded = write_merge_start(git_dir, &record, false).is_ok();
+    let observed_pause = read
+        .as_ref()
+        .map(|read| {
+            read.as_ref().map_or_else(
+                || "none".to_string(),
+                |read| {
+                    format!(
+                        "heads: {}; unmerged paths: {}; complete: {}",
+                        read.operation.operation_heads.join(" "),
+                        read.listing.paths.len(),
+                        read.listing.complete
+                    )
+                },
+            )
+        })
+        .unwrap_or_else(|_| "unreadable".into());
+    let detail = format!(
+        "HEAD: {}; expected HEAD: {}; incoming: {}; observed pause: {}; recovery: {}; start: {}; verification: {}; {}",
+        observed_head(&path).unwrap_or_else(|| "unreadable".into()),
+        head,
+        incoming,
+        observed_pause,
+        recovery.reference,
+        record.id,
+        verification_warning,
+        output
+            .as_ref()
+            .map(|output| truncate_detail(&String::from_utf8_lossy(&output.stderr)))
+            .unwrap_or_else(|error| error.message.clone())
+    );
+    Err(AppError::new(
+        if unchanged && recorded {
+            AppErrorCode::MergeStartRefused
+        } else {
+            AppErrorCode::MergeOutcomeUncertain
+        },
+        if unchanged && recorded {
+            "Git refused to start the merge; project files and history are unchanged."
+        } else {
+            "GitOdile couldn't confirm the merge pause. All recovery evidence was kept."
+        },
+    )
+    .with_detail(detail)
+    .with_remediation(
+        "Read the current project state before trying again. Keep the reported recovery reference.",
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_paused_merge_must_also_match_every_automatically_combined_index_entry() {
+        let ours = "a".repeat(40);
+        let incoming = "b".repeat(40);
+        let overlaps = HashSet::from(["conflict.txt"]);
+        let tree =
+            format!("100644 blob {ours}\tconflict.txt\0100755 blob {incoming}\tclean file.txt\0");
+        let tree = tree.as_bytes();
+        let index = format!("100755 {incoming} 0\tclean file.txt\0100644 {ours} 1\tconflict.txt\0100644 {incoming} 3\tconflict.txt\0");
+        let expected = clean_merge_entries(tree, true, &overlaps).unwrap();
+        assert_eq!(
+            clean_merge_entries(index.as_bytes(), false, &overlaps).unwrap(),
+            expected
+        );
+        for changed in [
+            index.replace("100755", "100644"),
+            index.replace(&format!("{incoming} 0"), &format!("{ours} 0")),
+            format!("{index}100644 {ours} 0\textra.txt\0"),
+            format!("100644 {ours} 1\tconflict.txt\0"),
+        ] {
+            assert_ne!(
+                clean_merge_entries(changed.as_bytes(), false, &overlaps).unwrap(),
+                expected
+            );
+        }
+        for malformed in [
+            format!("100644 {ours} 1\tunexpected-conflict.txt\0"),
+            "broken\0".into(),
+        ] {
+            assert!(clean_merge_entries(malformed.as_bytes(), false, &overlaps).is_err());
+        }
+    }
 
     #[test]
     fn collision_matching_is_component_aware_and_conservative() {
@@ -2650,6 +3260,7 @@ mod tests {
             })
             .collect::<Vec<_>>();
         let analysis = Analysis {
+            prediction: None,
             kind: IntegrationKind::Merge,
             target_tree: None,
             incoming: Vec::new(),

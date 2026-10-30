@@ -5,8 +5,9 @@
 //! worktree's `.git` directory (ADR 0007); [`history`] preserves a pre-rewrite
 //! branch tip as a hidden ref (ADR 0008); [`conflict`] preserves a paused
 //! operation's unmerged stages and working content before its first change
-//! (ADR 0041). They share nothing but the clock and the worktree owner ID
-//! below — before the split the first two shared a namespace, which is why
+//! (ADR 0041). They share the clock and worktree owner ID; this parent also
+//! coordinates retention protection for a merge start that names a history
+//! recovery ref. Before the split the first two shared a namespace, which is why
 //! the history half had to prefix every helper with `history_` to avoid
 //! colliding with its neighbour.
 
@@ -20,6 +21,12 @@ pub(crate) use history::*;
 
 use crate::repository_access::RepositoryContext;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Cross-owner retention policy stays at the parent boundary: history never
+/// reads conflict manifests or imports its sibling's implementation.
+fn history_recovery_is_protected(common: &std::path::Path, reference: &str) -> bool {
+    conflict::merge_start_protects_history(common, reference)
+}
 
 /// Wall-clock milliseconds. Every owner stamps records with it, and all need
 /// the same value shape, so it stays here rather than being duplicated.

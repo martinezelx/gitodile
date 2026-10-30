@@ -673,7 +673,7 @@ two-tree update `git read-tree -u -m <old> <new>` and the compare-and-swap
 branch move `git update-ref refs/heads/<branch> <new> <old>`, writes combined
 content back through Git's filters, and verifies HEAD, the carried
 porcelain-v2 records and bytes, the combined files, the recovery refs and the
-relation to the remote. It never calls `pull`, `merge`, rebase, reset, stash,
+relation to the remote. The clean execution never calls `pull`, `merge`, rebase, reset, stash,
 force or conflict resolution. A failure after recovery is conservatively
 returned as an uncertain local result with the observed `HEAD`, the recovery
 refs and inspection instructions. The authoritative success snapshot is
@@ -689,8 +689,8 @@ as this computer has it, never fetched. Its plan answers already contained,
 fast-forward, merge or an empty merge (a merge version that changes no
 file); its token also binds the source's ref and commit. A merge needs a
 shared saved version, so unrelated histories and a shallow copy that lacks
-it block by name, as does a sparse checkout. Overlaps are still refused by
-name until task 065-4-2 pauses a real merge on them. See the 2026-10-29
+it block by name, as does a sparse checkout. Its clean execution still refuses overlaps by name; an explicit
+`start_overlapping_merge` starts the paused-merge path below. See the 2026-10-29
 amendment to ADR 0030.
 
 History-mutation recovery follows
@@ -742,6 +742,33 @@ amendment to ADR 0007 carries the reasoning, the verification that replaces the
 whole-tree comparison in that mode, and the retention rule.
 
 ### Conflict sessions
+
+`start_overlapping_merge` in `sync/integrate.rs` owns initiation for either a
+branch (Bring's existing token and recovery operation) or the configured
+upstream (Get's token and operation), without fetching. It is a history
+mutation under the common-directory write permit. It rejects staged work,
+unsaved work on affected paths, untracked/ignored collisions, paused operations,
+index locks and branch mergeOptions. It publishes a versioned start record
+through `recovery/conflict.rs`, verifies history recovery, then runs
+`git -c rerere.enabled=false merge --no-ff --no-commit --no-autostash -m
+<title> <commit>`. Merge-tree's provisional tree and exact stages are retained
+internally and bound in the existing tokens. A verified pause requires matching
+HEAD, sole MERGE_HEAD and complete unmerged stages, unchanged carried bytes,
+stage-0 entries matching the provisional tree, and a complete conflict
+snapshot taken under the same permit (also captured for an unexpected pause). A proven
+unchanged refusal is `merge_start_refused`; any other failure is
+`merge_outcome_uncertain`, preserving all evidence and Git's state.
+
+Start records live in `<git-dir>/gitodile/conflicts/v1/starts/`, independently
+of snapshots. A matching owner and pair of heads establish GitOdile origin
+even after a restart before snapshot capture. The unique start ID distinguishes
+repeated pauses of the same heads, and start evidence participates in the
+session token. Live/interrupted starts protect their history recovery refs
+across linked worktrees. Ended records follow the conflict owner's retention;
+unknown or uncertain evidence is kept. Explicit ended records cannot
+attribute a later external merge to GitOdile. Ignored caches outside the
+merge footprint are not scanned or charged to the capture budget. See ADR 0041 §10 for the format,
+publication, capture bounds, exact-abort verification and retention protocol.
 
 A paused operation is read by `conflicts.rs`
 ([ADR 0041](adr/0041-conflict-sessions-and-their-recovery.md)). The index

@@ -113,6 +113,7 @@ export interface SharedTranslations {
   errorConflictMarkersRemain: string;
   errorConflictChoiceNeeded: string;
   errorConflictContentNotKept: string;
+  errorMergeStartRefused: string;
   errorMergeAbortRefused: string;
   errorMergeOutcomeUncertain: string;
   errorFileLocked: string;
