@@ -171,6 +171,42 @@ describe("App shell", () => {
     expect(screen.getByRole("dialog", { name: "Updates" })).toBeInTheDocument();
   });
 
+  // Exercises real shell coordination, lazy resolver mounting and refresh;
+  // a feature mock would not prove that the returned session survives handoff.
+  it("adopts Get's verified upstream pause before opening the existing resolver", async () => {
+    restoreProjectWithStatusBar();
+    const base = mockedInvoke.getMockImplementation()!;
+    const forecast = { ...getTeamPlan.forecast, outcome: "overlap" as const, integration: "merge" as const, localCount: 1, overlaps: [{ path: "lines.txt", side: "saved" as const }], overlapCount: 1 };
+    const session: import("../features/conflicts").ConflictSession = {
+      sessionId: "upstream-pause", stateToken: "verified", origin: "gitodile",
+      operation: { kind: "merge", supported: true, unsupportedReason: null, step: null,
+        current: { name: "main", commit: getTeamPlan.localCommit }, incoming: { name: "origin/main", commit: getTeamPlan.remoteCommit },
+        operationHeads: [getTeamPlan.remoteCommit], continueCommand: "git merge --continue", abortCommand: "git merge --abort" },
+      files: [{ path: "lines.txt", pathIsExact: true, shape: "both-changed", facets: [], base: null, current: null, incoming: null, working: "file", state: "unresolved", kept: null, allowedActions: [] }],
+      unresolvedCount: 1, listingComplete: true, snapshot: null, allowedActions: ["abort-merge"],
+    };
+    mockedInvoke.mockImplementation((command, args) => {
+      if (command === "read_team_sync_status" || command === "check_team_changes") return Promise.resolve({ ...freshBehindTeamSync, state: "diverged", ahead: 1, forecast });
+      if (command === "plan_get_team_changes") return Promise.resolve({ ...getTeamPlan, integration: "merge", localCount: 1, forecast });
+      if (command === "start_overlapping_merge") return Promise.resolve({ session, recovery: {} });
+      // Any coordinated follow-up read is held: arrival must render the
+      // session from start_overlapping_merge, without waiting for another read.
+      if (command === "read_conflict_session") return new Promise(() => undefined);
+      return base(command, args);
+    });
+    render(<LanguageProvider><App /></LanguageProvider>);
+    const statusBar = await screen.findByRole("contentinfo", { name: "Project status" });
+    await userEvent.click(await within(statusBar).findByRole("button", { name: "Get and publish" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Resolve in GitOdile" }));
+    expect(await screen.findByRole("heading", { name: "Overlapping changes" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: /lines.txt/ })).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(mockedInvoke).toHaveBeenCalledWith("start_overlapping_merge", {
+      path: restoredProject.path, sessionEpoch: restoredProject.sessionEpoch, source: { kind: "upstream" }, stateToken: getTeamPlan.stateToken, recoveryReference: getTeamPlan.recovery.reference,
+    });
+    expect(mockedInvoke.mock.calls.some(([command]) => ["plan_publish", "publish", "get_team_changes", "plan_bring_in_changes"].includes(String(command)))).toBe(false);
+  });
+
   it("opens the release notes and About from the overflow menu, not the status bar", async () => {
     restoreProjectWithStatusBar();
     render(<LanguageProvider><App /></LanguageProvider>);

@@ -317,7 +317,7 @@ describe("NextStepCard with a forecast", () => {
     expect(actions.getAndPublish).toHaveBeenCalledOnce();
   });
 
-  it("names the overlapping file and offers only to look", async () => {
+  it("opens the review of saved upstream overlaps without starting resolution", async () => {
     const { actions, container } = card(
       tree([]),
       teamSync({
@@ -329,7 +329,6 @@ describe("NextStepCard with a forecast", () => {
     expect(container.querySelector(".next-step")).toHaveClass("next-step--blocked");
     expect(screen.getByRole("heading", { name: "Your changes and origin's overlap" })).toBeInTheDocument();
     expect(screen.getByText(/src\/auth\.ts changes the same lines on both sides \(and 1 more\)/)).toBeInTheDocument();
-    expect(container.querySelectorAll(".primary-button")).toHaveLength(0);
     await userEvent.click(screen.getByRole("button", { name: "See what overlaps" }));
     expect(actions.explainIncoming).toHaveBeenCalledOnce();
   });

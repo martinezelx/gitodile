@@ -25,7 +25,7 @@ decides, with GitOdile as the session's origin.
 # User outcome
 
 None visible yet; [065-4-3](065-4-3-bring-in-changes-dialog.md) and
-[065-4-4](../0.5.0/065-4-4-get-diverged-overlaps.md) offer it. Abandoning such a merge
+[065-4-4](065-4-4-get-diverged-overlaps.md) offer it. Abandoning such a merge
 can promise an exact return.
 
 # Scope

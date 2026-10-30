@@ -117,7 +117,7 @@ export const es: SyncTranslations = {
   },
   getTeamWorking: "Trayendo…",
   getTeamOverlapTitle: (remote) => `Tus cambios y los de ${remote} se pisan`,
-  getTeamOverlapBody: "Tocáis las mismas líneas en estos archivos. Todavía no se pueden combinar desde GitOdile, así que no se trae nada.",
+  getTeamOverlapBody: "Inicia una combinación local y elige cómo resolver cada solapamiento en GitOdile. No se publica nada, aunque hayas elegido traer y publicar.",
   getTeamOverlapSide: { saved: "tu versión guardada", unsaved: "tus cambios sin guardar" },
   getTeamOverlapMore: (count) => `Y ${count} más.`,
   getTeamSafeNothingChanged: "Tu trabajo está a salvo y no se ha tocado nada.",

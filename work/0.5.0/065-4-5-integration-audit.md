@@ -12,7 +12,7 @@ areas:
 created: 2026-10-29
 completed:
 parent: "065-4"
-queue: "02"
+queue: "01"
 ---
 
 # Goal
@@ -31,7 +31,7 @@ a rejecting remote.
 # Dependencies
 
 [065-4-1](../done/065-4-1-bring-in-changes-core.md) through
-[065-4-4](065-4-4-get-diverged-overlaps.md).
+[065-4-4](../done/065-4-4-get-diverged-overlaps.md).
 
 # Implementation notes
 

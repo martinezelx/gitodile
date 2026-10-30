@@ -3478,6 +3478,12 @@ export function App(): React.JSX.Element {
         <GetTeamChangesDialog
           isOpen
           controller={syncController}
+          overlapPort={bringInPort}
+          onPaused={async (session) => {
+            await conflictsController.acceptSession({ projectId: getTeamDialogSession.id, sessionEpoch: getTeamDialogSession.epoch }, session);
+            await repositoryReads.refreshAfterMutation(projectRuntime, projectRuntime.getSnapshot(), getTeamDialogSession.project.path);
+            navigateToView("conflicts");
+          }}
           projectPath={getTeamDialogSession.project.path}
           sessionEpoch={getTeamDialogSession.epoch}
           intent={getTeamIntent}

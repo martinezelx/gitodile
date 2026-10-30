@@ -13,7 +13,6 @@ import {
   LoaderCircle,
   Save,
   ShieldCheck,
-  TriangleAlert,
 } from "lucide-react";
 
 import { useLanguage } from "../../i18n";
@@ -30,6 +29,8 @@ import {
   useToast,
   type DialogFact,
 } from "../../shared/ui";
+import type { ConflictSession } from "../conflicts";
+import type { BringInPort } from "./port";
 import type { SyncController } from "./controller";
 import { forecastBlockerCopy } from "./forecastCopy";
 import type {
@@ -52,12 +53,12 @@ type ExecutingPhase = GetTeamChangesPhase | "publishing";
 type DialogState =
   | { status: "planning" }
   | { status: "blocked"; error: unknown }
-  /** Nothing to get as far as this computer knows, but the remote could not
-   * be asked: a reason to try again, not "up to date". */
-  | { status: "unchecked"; error: unknown }
+  /** The remote could not be asked. Cached saved overlaps cannot start a
+   * merge until the check succeeds; nothing-to-get also waits for that truth. */
+  | { status: "unchecked"; error: unknown; hasIncoming?: boolean }
   | { status: "ready"; plan: GetTeamChangesPlan; remoteMoved: boolean }
   | { status: "executing"; plan: GetTeamChangesPlan; phase: ExecutingPhase }
-  | { status: "uncertain"; result: GetTeamChangesResult }
+  | { status: "uncertain"; evidence: string }
   | { status: "execution-error"; plan: GetTeamChangesPlan; error: unknown }
   | { status: "publish-error"; plan: GetTeamChangesPlan; result: GetTeamChangesResult; error: unknown };
 
@@ -98,6 +99,8 @@ function shortCommit(commit: string): string {
 export function GetTeamChangesDialog({
   isOpen,
   controller,
+  overlapPort,
+  onPaused,
   projectPath,
   sessionEpoch,
   intent = "get",
@@ -115,6 +118,8 @@ export function GetTeamChangesDialog({
 }: {
   isOpen: boolean;
   controller: SyncController;
+  overlapPort: Pick<BringInPort, "startOverlap">;
+  onPaused: (session: ConflictSession) => Promise<void>;
   projectPath: string;
   sessionEpoch: string;
   intent?: GetTeamIntent;
@@ -150,6 +155,9 @@ export function GetTeamChangesDialog({
   const closeRef = useRef(onClose);
   const phaseRef = useRef(onPhaseChange);
   const busyRef = useRef(false);
+  const generation = useRef(0);
+  const upstreamGoneRef = useRef(upstreamGone);
+  upstreamGoneRef.current = upstreamGone;
   const stateRef = useRef<DialogState>({ status: "planning" });
   const [state, setStateValue] = useState<DialogState>({ status: "planning" });
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -214,19 +222,31 @@ export function GetTeamChangesDialog({
   };
 
   const query = { projectId: projectPath, sessionEpoch };
-  const plan = useCallback(
-    (remoteMoved: boolean): Promise<void> =>
-      controller.planGet({ projectId: projectPath, sessionEpoch }).then(
-        (next) => setState({ status: "ready", plan: next, remoteMoved }),
-        (error: unknown) => planFailedRef.current(error),
-      ),
-    [controller, projectPath, sessionEpoch, setState],
-  );
+  const plan = useCallback(async (remoteMoved: boolean): Promise<void> => {
+    const ticket = ++generation.current;
+    if (upstreamGoneRef.current) {
+      planFailedRef.current(UPSTREAM_GONE);
+      return;
+    }
+    try {
+      const next = await controller.planGet({ projectId: projectPath, sessionEpoch });
+      if (ticket === generation.current) {
+        if (next.forecast.outcome === "overlap" && refreshFailureRef.current) {
+          setState({ status: "unchecked", error: refreshFailureRef.current.error, hasIncoming: true });
+          phaseRef.current("error");
+        } else setState({ status: "ready", plan: next, remoteMoved });
+      }
+    } catch (error: unknown) {
+      if (ticket === generation.current) planFailedRef.current(error);
+    }
+  }, [controller, projectPath, sessionEpoch, setState]);
 
   // The plan is local, so the dialog opens on it at once.
   useEffect(() => {
-    if (!isOpen) return undefined;
-    let cancelled = false;
+    // A check can update upstream props during a mutation or after uncertainty.
+    // Repository read results must not replace that operation's outcome/evidence.
+    if (!isOpen || ["executing", "uncertain", "publish-error"].includes(stateRef.current.status)) return undefined;
+    generation.current++;
     if (upstreamGone) {
       setState({ status: "blocked", error: UPSTREAM_GONE });
       phaseRef.current("error");
@@ -235,16 +255,9 @@ export function GetTeamChangesDialog({
     phaseRef.current("planning");
     setState({ status: "planning" });
     refreshFailureRef.current = null;
-    controller.planGet({ projectId: projectPath, sessionEpoch }).then(
-      (next) => {
-        if (!cancelled) setState({ status: "ready", plan: next, remoteMoved: false });
-      },
-      (error: unknown) => {
-        if (!cancelled) planFailedRef.current(error);
-      },
-    );
-    return () => { cancelled = true; };
-  }, [controller, isOpen, projectPath, retryToken, sessionEpoch, setState, upstreamGone]);
+    void plan(false);
+    return () => { generation.current++; };
+  }, [isOpen, plan, retryToken, setState, upstreamGone]);
 
   // One background check when the last one is old. If the remote moved, the
   // summary is planned again in place and says so; once an update is under
@@ -272,9 +285,15 @@ export function GetTeamChangesDialog({
         const current = stateRef.current;
         if (status?.state === "upstreamGone") {
           if (current.status === "ready" || current.status === "planning" || current.status === "blocked") {
+            generation.current++;
             setState({ status: "blocked", error: UPSTREAM_GONE });
             phaseRef.current("error");
           }
+          return undefined;
+        }
+        if (refreshFailureRef.current && current.status === "ready" && current.plan.forecast.outcome === "overlap") {
+          setState({ status: "unchecked", error: refreshFailureRef.current.error, hasIncoming: true });
+          phaseRef.current("error");
           return undefined;
         }
         const shown = current.status === "ready" ? current.plan.remoteCommit : null;
@@ -297,6 +316,12 @@ export function GetTeamChangesDialog({
       setIsRefreshing(false);
     };
   }, [isOpen, plan, retryToken]);
+
+  useEffect(() => {
+    if (isOpen && isShellVisible && !dialogRef.current?.contains(document.activeElement)) {
+      dialogRef.current?.querySelector<HTMLButtonElement>(".dialog-actions button:not(:disabled)")?.focus();
+    }
+  }, [isOpen, isShellVisible, state.status]);
 
   if (!isOpen || !isShellVisible) return null;
   const isBusy = state.status === "executing";
@@ -329,6 +354,9 @@ export function GetTeamChangesDialog({
   };
 
   const execute = (current: GetTeamChangesPlan, thenPublish: boolean): void => {
+    if (busyRef.current) return;
+    generation.current++; // Mutation outcomes supersede every pending preview.
+    busyRef.current = true;
     phaseRef.current("executing");
     setState({ status: "executing", plan: current, phase: "checkingLocalSafety" });
     controller.get({
@@ -342,7 +370,11 @@ export function GetTeamChangesDialog({
       },
     }).then(async (result) => {
       if (result.outcome === "uncertain") {
-        setState({ status: "uncertain", result });
+        setState({ status: "uncertain", evidence: [
+          `${t.getTeamRecoveryReference}: ${result.recovery.reference}`,
+          result.recovery.unsavedReference ? `${t.getTeamUnsavedCopy}: ${result.recovery.unsavedReference}` : null,
+          result.observedHead ? `${t.getTeamObservedHead}: ${result.observedHead}` : null,
+        ].filter(Boolean).join("\n") });
         phaseRef.current("uncertain");
         return;
       }
@@ -362,6 +394,11 @@ export function GetTeamChangesDialog({
       });
       closeRef.current();
     }).catch((error: unknown) => {
+      if (isAppError(error) && ["merge_outcome_uncertain", "get_team_changes_uncertain"].includes(error.code)) {
+        setState({ status: "uncertain", evidence: [current.recovery.reference, error.detail].filter(Boolean).join("\n") });
+        phaseRef.current("uncertain");
+        return;
+      }
       // The project or its remote moved after the summary was read: show the
       // new summary instead of an error to dismiss.
       if (isAppError(error) && error.code === "stale_get_team_changes_plan") {
@@ -371,7 +408,39 @@ export function GetTeamChangesDialog({
       }
       setState({ status: "execution-error", plan: current, error });
       phaseRef.current("error");
-    });
+    }).finally(() => { busyRef.current = false; });
+  };
+
+  const resolveOverlap = async (current: GetTeamChangesPlan): Promise<void> => {
+    if (busyRef.current || refreshPendingRef.current) return;
+    generation.current++;
+    busyRef.current = true;
+    setState({ status: "executing", plan: current, phase: "checkingLocalSafety" });
+    phaseRef.current("executing");
+    let paused = false;
+    try {
+      const result = await overlapPort.startOverlap({
+        ...query, source: { kind: "upstream" },
+        stateToken: current.stateToken, recoveryReference: current.recovery.reference,
+      });
+      paused = true;
+      await onPaused(result.session);
+      phaseRef.current("success");
+      closeRef.current();
+    } catch (error: unknown) {
+      if (paused || (isAppError(error) && error.code === "merge_outcome_uncertain")) {
+        setState({ status: "uncertain", evidence: [current.recovery.reference, isAppError(error) ? error.detail : null].filter(Boolean).join("\n") });
+        phaseRef.current("uncertain");
+      } else if (isAppError(error) && error.code === "stale_get_team_changes_plan") {
+        phaseRef.current("planning");
+        await plan(true);
+      } else {
+        setState({ status: "execution-error", plan: current, error });
+        phaseRef.current("error");
+      }
+    } finally {
+      busyRef.current = false;
+    }
   };
 
   if (state.status === "blocked") {
@@ -407,7 +476,7 @@ export function GetTeamChangesDialog({
         body={uncheckedReason(state.error, t.syncUnavailableTitle) ?? t.getTeamUncheckedBody}
         onClose={requestClose}
         dialogRef={dialogRef}
-        details={<p className="app-dialog__text">{t.getTeamUncheckedLocal}</p>}
+        details={state.hasIncoming ? undefined : <p className="app-dialog__text">{t.getTeamUncheckedLocal}</p>}
         actions={
           <>
             <button className="secondary-button" type="button" onClick={requestClose}>{t.commonClose}</button>
@@ -429,45 +498,8 @@ export function GetTeamChangesDialog({
         details={
           <details className="app-dialog__details">
             <summary>{t.syncTechnicalDetails}</summary>
-            <pre>
-              {`${t.getTeamRecoveryReference}: ${state.result.recovery.reference}`}
-              {state.result.recovery.unsavedReference
-                ? `\n${t.getTeamUnsavedCopy}: ${state.result.recovery.unsavedReference}`
-                : ""}
-              {state.result.observedHead ? `\n${t.getTeamObservedHead}: ${state.result.observedHead}` : ""}
-            </pre>
+            <pre>{state.evidence}</pre>
           </details>
-        }
-        actions={<button className="primary-button" type="button" onClick={requestClose}>{t.commonClose}</button>}
-      />
-    );
-  }
-
-  if (state.status === "ready" && state.plan.forecast.outcome === "overlap") {
-    const { forecast, target } = state.plan;
-    const hidden = forecast.overlapCount - forecast.overlaps.length;
-    return (
-      <AlertDialog
-        tone="danger"
-        icon={<TriangleAlert />}
-        title={t.getTeamOverlapTitle(target.remote)}
-        body={t.getTeamOverlapBody}
-        onClose={requestClose}
-        dialogRef={dialogRef}
-        details={
-          <>
-            <ul className="get-team-overlaps" aria-label={t.getTeamOverlapTitle(target.remote)}>
-              {forecast.overlaps.map((overlap) => (
-                <li key={overlap.path}>
-                  <FileText aria-hidden="true" />
-                  <span className="get-team-overlaps__path">{overlap.path}</span>
-                  <small>{t.getTeamOverlapSide[overlap.side]}</small>
-                </li>
-              ))}
-            </ul>
-            {hidden > 0 && <p className="get-team-plan__bounded-note">{t.getTeamOverlapMore(hidden)}</p>}
-            <p className="app-dialog__text">{t.getTeamSafeNothingChanged}</p>
-          </>
         }
         actions={<button className="primary-button" type="button" onClick={requestClose}>{t.commonClose}</button>}
       />
@@ -506,13 +538,17 @@ export function GetTeamChangesDialog({
 
   const current = state.status === "planning" ? null : state.plan;
   const isMerge = current?.integration === "merge";
+  const overlaps = current?.forecast.outcome === "overlap";
+  const unsavedOverlap = overlaps && current.forecast.overlaps.some((item) => item.side === "unsaved");
+  const canResolve = overlaps && isMerge && !unsavedOverlap;
   // Publishing after the get only means something when there is saved work
   // of the person's to publish.
-  const publishes = intent === "getAndPublish" && Boolean(onPublishAfter) && (current?.localCount ?? 0) > 0;
+  const publishes = !overlaps && intent === "getAndPublish" && Boolean(onPublishAfter) && (current?.localCount ?? 0) > 0;
   const remote = current?.target.remote ?? "";
   const from = current ? t.getTeamFrom(current.forecast.authors, current.forecast.authorCount) : "";
   const title = !current
     ? t.getTeamDialogTitle
+    : overlaps ? t.getTeamReviewConflicts
     : publishes
       ? t.getTeamTitlePublish(current.localCount, remote)
       : isMerge
@@ -555,6 +591,10 @@ export function GetTeamChangesDialog({
         <PlanContent plan={current} publishes={publishes} formatsNow={Date.now()} formats={formats} />
       )}
 
+      {overlaps && <DialogBanner tone="warning" icon={<Info />}>
+        <p>{canResolve ? t.getTeamOverlapBody : t.bringInSaveFirst}</p>
+      </DialogBanner>}
+
       {state.status === "ready" && state.remoteMoved && (
         <DialogBanner tone="info" icon={<Info />} role="status">
           <p>{t.getTeamRemoteMoved}</p>
@@ -587,17 +627,19 @@ export function GetTeamChangesDialog({
           <button className="secondary-button" type="button" onClick={requestClose} disabled={isBusy}>
             {state.status === "publish-error" ? t.commonClose : t.commonCancel}
           </button>
-          {state.status === "ready" && isMerge && !publishes && canPublish && onPublishAfter && (
+          {state.status === "ready" && !overlaps && isMerge && !publishes && canPublish && onPublishAfter && (
             <button className="secondary-button" type="button" onClick={() => execute(state.plan, true)}>
               <CloudUpload aria-hidden="true" />{t.getTeamAlsoPublish}
             </button>
           )}
-          {state.status === "ready" && (
+          {state.status === "ready" && !overlaps && (
             <button className="primary-button" type="button" onClick={() => execute(state.plan, publishes)}>
               {publishes ? <CloudUpload aria-hidden="true" /> : <ArrowDownToLine aria-hidden="true" />}
               {publishes ? t.getTeamConfirmPublish : isMerge ? t.getTeamConfirmMerge : t.getTeamConfirmFastForward}
             </button>
           )}
+          {state.status === "ready" && canResolve && <button className="primary-button" type="button" disabled={isRefreshing} onClick={() => void resolveOverlap(state.plan)}>{t.bringInResolve}</button>}
+          {state.status === "ready" && overlaps && !canResolve && onSaveVersion && <button className="primary-button" type="button" onClick={onSaveVersion}>{t.getTeamSaveVersion}</button>}
           {(state.status === "planning" || state.status === "executing") && (
             <button className="primary-button" type="button" disabled>
               <LoaderCircle aria-hidden="true" className="icon--spinning" />{t.getTeamWorking}
@@ -674,11 +716,12 @@ function PlanContent({
 }): React.JSX.Element {
   const { t } = useLanguage();
   const { forecast } = plan;
+  const overlaps = forecast.outcome === "overlap";
   /* What happens first, then what stays safe in one line, last and in the
      success tone (DESIGN.md § Dialogs): two or three facts, not five. */
   const facts: DialogFact[] = [];
   if (plan.integration === "merge") {
-    facts.push({ icon: <GitMerge />, text: t.getTeamMergeFact(plan.localCount) });
+    facts.push({ icon: <GitMerge />, text: overlaps ? t.bringInOverlaps : t.getTeamMergeFact(plan.localCount) });
   }
   if (publishes) {
     facts.push({ icon: <CloudUpload />, text: t.getTeamPublishFact(plan.localCount, plan.target.remote) });
@@ -692,9 +735,9 @@ function PlanContent({
   facts.push({
     icon: <ShieldCheck />,
     text: [
-      t.getTeamNothingOverlaps,
+      overlaps ? t.bringInSafety : t.getTeamNothingOverlaps,
       forecast.carriedUnsavedCount > 0 ? t.getTeamCarried(forecast.carriedUnsavedCount) : null,
-      t.getTeamRecoveryFirst,
+      overlaps ? null : t.getTeamRecoveryFirst,
     ].filter(Boolean).join(" "),
     safe: true,
   });
@@ -702,6 +745,16 @@ function PlanContent({
   return (
     <div className="get-team-plan">
       <DialogFacts facts={facts} />
+      {overlaps && <>
+        <ul className="get-team-overlaps" aria-label={t.getTeamOverlapTitle(plan.target.remote)}>
+          {forecast.overlaps.map((overlap) => <li key={overlap.path}>
+            <FileText aria-hidden="true" />
+            <span className="get-team-overlaps__path">{overlap.path}</span>
+            <small>{t.getTeamOverlapSide[overlap.side]}</small>
+          </li>)}
+        </ul>
+        {forecast.overlapCount > forecast.overlaps.length && <p className="get-team-plan__bounded-note">{t.getTeamOverlapMore(forecast.overlapCount - forecast.overlaps.length)}</p>}
+      </>}
 
       <details className="get-team-disclosure">
         <summary><ChevronDown aria-hidden="true" />{t.getTeamWhatComesIn}</summary>

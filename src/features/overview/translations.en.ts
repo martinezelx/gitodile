@@ -110,10 +110,10 @@ export const en: OverviewTranslations = {
   overviewNextSeeWhy: "See why",
   overviewNextOverlapTitle: (remote) => `Your changes and ${remote ?? "the remote"}'s overlap`,
   overviewNextOverlapHint: (path, more) =>
-    `${path} changes the same lines on both sides${more > 0 ? ` (and ${more} more)` : ""}. They can't be combined in GitOdile yet.`,
+    `${path} changes the same lines on both sides${more > 0 ? ` (and ${more} more)` : ""}. Review them before getting project changes.`,
   overviewNextNoteClear: "Nothing of yours overlaps.",
   overviewNextNoteCanCombine: "They don't overlap: they can be combined.",
-  overviewNextNoteOverlap: "Nothing comes in until they stop overlapping.",
+  overviewNextNoteOverlap: "Nothing is published.",
   overviewNextNoteIncomingClear: (count, remote) =>
     `${count === 1 ? "1 new version" : `${count} new versions`} on ${remote ?? "the remote"} ${count === 1 ? "doesn't" : "don't"} touch your files.`,
   overviewNextNoteIncomingCombined: (count, remote, file, fileCount) =>

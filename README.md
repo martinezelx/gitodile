@@ -98,8 +98,11 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   version because both sides have new versions, or overlaps local work. Branches
   that don't overlap are advanced or combined with a merge version (running
   the project's merge hooks and honouring commit signing); unsaved edits on
-  other lines of an incoming file stay unsaved on top of it; real overlaps are
-  refused with the files named. A verified recovery point (and a copy of any
+  other lines of an incoming file stay unsaved on top of it. Saved overlaps
+  in a diverged upstream can explicitly open the existing resolver after a
+  verified local merge pause; unsaved or prepared overlaps still require
+  saving or discarding first. Nothing is published after a pause, including
+  from Get and publish. A verified recovery point (and a copy of any
   combined unsaved content) is kept first, and uncertain local outcomes are
   reported without an automatic repair. Publishing when the remote moved on
   gets, combines and publishes in the same confirmation.

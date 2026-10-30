@@ -110,10 +110,10 @@ export const es: OverviewTranslations = {
   overviewNextSeeWhy: "Ver por qué",
   overviewNextOverlapTitle: (remote) => `Tus cambios y los de ${remote ?? "el remoto"} se pisan`,
   overviewNextOverlapHint: (path, more) =>
-    `${path} cambia las mismas líneas en los dos lados${more > 0 ? ` (y ${more} más)` : ""}. Aún no se pueden combinar desde GitOdile.`,
+    `${path} cambia las mismas líneas en los dos lados${more > 0 ? ` (y ${more} más)` : ""}. Revísalos antes de traer cambios del proyecto.`,
   overviewNextNoteClear: "No choca con nada tuyo.",
   overviewNextNoteCanCombine: "No se pisan: se pueden combinar.",
-  overviewNextNoteOverlap: "No se trae nada hasta que dejen de pisarse.",
+  overviewNextNoteOverlap: "No se publica nada.",
   overviewNextNoteIncomingClear: (count, remote) =>
     `${count === 1 ? "Hay 1 versión nueva" : `Hay ${count} versiones nuevas`} en ${remote ?? "el remoto"} que no ${count === 1 ? "toca" : "tocan"} tus archivos.`,
   overviewNextNoteIncomingCombined: (count, remote, file, fileCount) =>

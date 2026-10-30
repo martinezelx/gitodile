@@ -196,10 +196,10 @@ describe("deriveNextStep with a forecast", () => {
     expect(next({ pendingVersionsCount: 1, teamSync: diverged() }, false).secondary).toEqual([]);
   });
 
-  it("stops on an overlap with no primary action, saved or unsaved", () => {
+  it("offers a saved overlap review while unsaved overlaps still need saving", () => {
     const overlaps = [{ path: "a.txt", side: "saved" as const }];
     expect(next({ teamSync: diverged({ outcome: "overlap", overlaps, overlapCount: 1 }) })).toMatchObject({
-      kind: "overlap", tone: "blocked", primary: null, secondary: ["explainIncoming"], note: { kind: "overlap" },
+      kind: "overlap", tone: "blocked", primary: "explainIncoming", secondary: [], note: { kind: "overlap" },
     });
     expect(
       next({ workingTree: tree({ changed: 1, total: 1 }), teamSync: behind({ outcome: "overlap", overlaps, overlapCount: 1 }) }),

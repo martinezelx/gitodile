@@ -117,7 +117,7 @@ export const en: SyncTranslations = {
   },
   getTeamWorking: "Getting…",
   getTeamOverlapTitle: (remote) => `Your changes and ${remote}'s overlap`,
-  getTeamOverlapBody: "You both changed the same lines in these files. They can't be combined in GitOdile yet, so nothing comes in.",
+  getTeamOverlapBody: "Start a local merge, then choose how to resolve each overlap in GitOdile. Nothing is published, even if you came here to get and publish.",
   getTeamOverlapSide: { saved: "your saved version", unsaved: "your unsaved changes" },
   getTeamOverlapMore: (count) => `And ${count} more.`,
   getTeamSafeNothingChanged: "Your work is safe and nothing was changed.",

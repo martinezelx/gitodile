@@ -645,7 +645,8 @@ collision blocks. A prepared change to an incoming path blocks. An unsaved,
 unstaged edit to a regular file the remote edits in place is combined line by
 line with `merge-tree --merge-base=HEAD`, using a temporary index that holds
 the file's working content; any other unsaved overlap, or a saved one, is an
-overlap and is refused by name. Separate unsaved changes are carried; the plan
+overlap and is refused by the clean execution. Saved overlaps can explicitly
+start the paused-merge path below. Separate unsaved changes are carried; the plan
 and the execution also prove that with a dry-run two-tree update run against a
 copy of the index, so the question never takes `index.lock` beside other
 reads. The read model relies on the path comparison alone.
@@ -709,6 +710,19 @@ retrying. A verified pause is installed in the conflicts controller before
 opening its screen. Uncertain results retain the mutation slot until Close
 and never initiate resolution, abort, retry or publish. App only wires the
 entry callbacks, mutation slot, coordinated refresh and resolver handoff.
+
+Get project changes also uses `BringInPort.startOverlap` with `{kind: "upstream"}`,
+but passes its own Get plan token and `get-team-changes` recovery reference.
+Its eager dialog offers this choice for saved overlaps of a diverged upstream;
+Overview opens that review. Unsaved/prepared overlaps retain Save/discard
+guidance. The upstream check must finish before starting a pause; a failed
+check or deleted upstream blocks it. Replans ignore superseded/closed answers;
+starting a mutation invalidates pending previews, and upstream prop changes
+cannot replace an executing or uncertain outcome.
+App adopts the returned session before the coordinated refresh and navigation
+to the existing resolver. This path never enters the clean Get/publish chain,
+even for Get and publish. A native uncertain result, or an unconfirmed handoff
+after a verified pause, offers only Close and preserves evidence.
 
 History-mutation recovery follows
 [ADR 0008](adr/0008-store-history-recovery-as-versioned-hidden-refs.md): the
