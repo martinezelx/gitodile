@@ -214,16 +214,24 @@ describe("bringing a reviewed branch into the current one", () => {
     expect(await confirm()).toBeEnabled();
   });
 
-  it.each(["result", "overlap-error"])("an uncertain %s offers only Close and no automatic follow-up", async (mode) => {
-    const flow = setup(mode === "result" ? bringPlan : { ...bringPlan, forecast: { ...clearForecast, outcome: "overlap", overlaps: [{ path: "a.txt", side: "saved" }] } }, {
-      bring: vi.fn(async () => ({ ...completed, outcome: "uncertain" as const })),
-      startOverlap: vi.fn().mockRejectedValue({ code: "merge_outcome_uncertain", message: "uncertain", remediation: null, detail: "observed HEAD" }),
-    });
-    await userEvent.click(await screen.findByRole("button", { name: mode === "result" ? "Bring in changes" : "Resolve in GitOdile" }));
+  it.each(["result", "overlap-error", "handoff-error", "refresh-error"])("an uncertain %s offers only Close and no automatic follow-up", async (mode) => {
+    const onPaused = vi.fn(async () => { if (mode === "handoff-error") throw new Error("refresh failed after pause"); });
+    const onApplied = vi.fn(async () => { if (mode === "refresh-error") throw new Error("refresh failed after update"); });
+    const clean = mode === "result" || mode === "refresh-error";
+    const withCopy = { ...completed, recovery: { ...completed.recovery, unsavedReference: "refs/gitodile/recovery/v1/bring-in-changes-unsaved/worktree-a/1" } };
+    const flow = setup(clean ? bringPlan : { ...bringPlan, forecast: { ...clearForecast, outcome: "overlap", overlaps: [{ path: "a.txt", side: "saved" }] } }, {
+      bring: vi.fn(async () => ({ ...withCopy, outcome: mode === "result" ? "uncertain" as const : "completed" as const })),
+      startOverlap: mode === "handoff-error"
+        ? vi.fn(async () => ({ session: { sessionId: "verified" } as ConflictSession, recovery: completed.recovery }))
+        : vi.fn().mockRejectedValue({ code: "merge_outcome_uncertain", message: "uncertain", remediation: null, detail: "observed HEAD" }),
+    }, { onPaused, onApplied });
+    await userEvent.click(await screen.findByRole("button", { name: clean ? "Bring in changes" : "Resolve in GitOdile" }));
     await screen.findByRole("alert");
     expect(within(screen.getByRole("dialog")).getAllByRole("button").every((button) => button.getAttribute("aria-label") === "Close" || button.textContent === "Close")).toBe(true);
-    expect(flow.onApplied).not.toHaveBeenCalled();
-    expect(flow.onPaused).not.toHaveBeenCalled();
+    expect(onApplied).toHaveBeenCalledTimes(mode === "refresh-error" ? 1 : 0);
+    expect(onPaused).toHaveBeenCalledTimes(mode === "handoff-error" ? 1 : 0);
+    if (clean) expect(screen.getByRole("dialog")).toHaveTextContent(withCopy.recovery.unsavedReference);
+    expect(flow.port.plan).toHaveBeenCalledOnce();
     expect(flow.onPhaseChange).toHaveBeenLastCalledWith("uncertain");
   });
 

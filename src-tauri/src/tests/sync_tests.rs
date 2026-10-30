@@ -1826,18 +1826,20 @@ fn a_prepared_edit_to_an_incoming_file_blocks_even_on_other_lines() {
     }
 }
 
+// More than 5 s on Windows: divergence, line-level unsaved content and real
+// merge hooks are needed to prove a hook cannot overwrite the reviewed work.
 #[test]
 fn merge_hooks_can_stop_the_merge_version_before_anything_moves() {
-    let (repo, remote, branch) = published_repo_and_remote("get-merge-hook");
-    set_identity(&repo);
-    let other = clone_remote(&remote, "get-merge-hook-other");
+    let (repo, remote, other, branch) = repo_with_lines("get-merge-hook");
     write_file(&other, "team.txt", "team\n");
+    write_file(&other, "lines.txt", "l1\nl2\nl3\nl4\nl5\nl6\nl7\nTEAM\n");
     git_add_all(&other);
     git_commit(&other, "team side");
     push(&other, &branch);
     write_file(&repo, "local.txt", "local\n");
     git_add_all(&repo);
     git_commit(&repo, "local side");
+    write_file(&repo, "lines.txt", "LOCAL\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n");
     let previous = head(&repo);
     let git_dir = git_stdout(&test_git(&repo, &["rev-parse", "--absolute-git-dir"]).unwrap());
     write_failing_hook(Path::new(&git_dir), "pre-merge-commit");
@@ -1857,6 +1859,33 @@ fn merge_hooks_can_stop_the_merge_version_before_anything_moves() {
     assert!(!Path::new(&repo).join("team.txt").exists());
     assert!(!recovery_ref_exists(&repo, &plan.recovery.reference));
 
+    // A successful hook may edit the very unsaved content the old forecast
+    // combined. Revalidate after hooks, before releasing or snapshotting it.
+    write_hook(
+        &repo,
+        "pre-merge-commit",
+        "printf 'HOOK\\nl2\\nl3\\nl4\\nl5\\nl6\\nl7\\nl8\\n' > lines.txt",
+    );
+    let changed = plan_get_team_changes(repo.clone(), session("merge-hook")).unwrap();
+    assert_eq!(changed.forecast.combined_unsaved_count, 1);
+    let error = get_team_changes(
+        repo.clone(),
+        session("merge-hook"),
+        changed.state_token,
+        changed.recovery.reference.clone(),
+        true,
+        |_| {},
+    )
+    .unwrap_err();
+    assert_eq!(error.code, AppErrorCode::StaleGetTeamChangesPlan);
+    assert_eq!(head(&repo), previous);
+    assert!(!Path::new(&repo).join("team.txt").exists());
+    assert!(!recovery_ref_exists(&repo, &changed.recovery.reference));
+    assert_eq!(
+        read_text(&repo, "lines.txt"),
+        "HOOK\nl2\nl3\nl4\nl5\nl6\nl7\nl8\n"
+    );
+
     // With hooks turned off in Settings, the same update goes through.
     let plan = plan_get_team_changes(repo.clone(), session("merge-hook")).unwrap();
     let result = get_team_changes(
@@ -1870,6 +1899,10 @@ fn merge_hooks_can_stop_the_merge_version_before_anything_moves() {
     .unwrap();
     assert_eq!(result.outcome, GetTeamChangesOutcome::Completed);
     assert_eq!(read_text(&repo, "team.txt"), "team\n");
+    assert_eq!(
+        read_text(&repo, "lines.txt"),
+        "HOOK\nl2\nl3\nl4\nl5\nl6\nl7\nTEAM\n"
+    );
 
     for path in [repo, remote, other] {
         let _ = fs::remove_dir_all(path);
@@ -1918,7 +1951,15 @@ fn a_split_index_still_lets_the_plan_prove_separate_unsaved_work_can_be_carried(
 
 #[test]
 fn remote_home_names_the_published_remote_and_never_reports_one_missing() {
-    let (repo, remote, _branch) = published_repo_and_remote("remote-home");
+    let (repo, remote, branch) = published_repo_and_remote("remote-home");
+    assert!(git_succeeds(&repo, &["tag", &branch]));
+    assert_eq!(
+        crate::sync::read_project_remotes(repo.clone())
+            .unwrap()
+            .upstream_remote
+            .as_deref(),
+        Some("origin")
+    );
     let leaf = std::path::Path::new(&remote)
         .file_name()
         .and_then(|name| name.to_str())
@@ -2345,8 +2386,8 @@ fn file_url(path: &str) -> String {
     }
 }
 
-// About 5 s alone on Windows: the published fixture, a shallow clone and one
-// plan per blocking state, each refused before any analysis runs.
+// More than 5 s alone on Windows: the published fixture, a shallow clone and
+// both workflows' blocking plans need real Git ancestry/configuration.
 #[test]
 fn bringing_in_refuses_states_it_cannot_combine_safely() {
     let (repo, remote, main) = published_repo_and_remote("bring-in-blocked");
@@ -2368,12 +2409,33 @@ fn bringing_in_refuses_states_it_cannot_combine_safely() {
     assert!(git_succeeds(&repo, &["switch", "-q", "-f", &main]));
     let lonely = local_branch("lonely");
     assert_eq!(code(&repo, &lonely), AppErrorCode::NoSharedHistory);
+    // Get must reject the same unsupported histories as Bring, before analysis.
+    assert!(git_succeeds(
+        &repo,
+        &[
+            "update-ref",
+            &format!("refs/remotes/origin/{main}"),
+            "lonely"
+        ]
+    ));
+    assert_eq!(
+        plan_get_team_changes(repo.clone(), session("blocked"))
+            .unwrap_err()
+            .code,
+        AppErrorCode::NoSharedHistory
+    );
 
     assert!(git_succeeds(
         &repo,
         &["config", "core.sparseCheckout", "true"]
     ));
     assert_eq!(code(&repo, &lonely), AppErrorCode::UnsupportedMergeSetup);
+    assert_eq!(
+        plan_get_team_changes(repo.clone(), session("blocked"))
+            .unwrap_err()
+            .code,
+        AppErrorCode::UnsupportedMergeSetup
+    );
     assert!(git_succeeds(
         &repo,
         &["config", "--unset", "core.sparseCheckout"]
@@ -2423,6 +2485,16 @@ fn bringing_in_refuses_states_it_cannot_combine_safely() {
         branch: "deep".to_string(),
     };
     assert_eq!(code(&shallow, &deep), AppErrorCode::ShallowHistory);
+    assert!(git_succeeds(
+        &shallow,
+        &["config", &format!("branch.{main}.merge"), "refs/heads/deep"]
+    ));
+    assert_eq!(
+        plan_get_team_changes(shallow.clone(), session("blocked"))
+            .unwrap_err()
+            .code,
+        AppErrorCode::ShallowHistory
+    );
 
     for path in [repo, remote, unborn, shallow] {
         let _ = fs::remove_dir_all(path);
@@ -2471,6 +2543,26 @@ fn merge_version_failures_and_overlaps_leave_the_project_untouched() {
         &repo,
         &["config", "--unset", "commit.gpgSign"]
     ));
+
+    write_hook(
+        &repo,
+        "pre-merge-commit",
+        "printf 'hook edit\\n' > main.txt",
+    );
+    assert_eq!(attempt(), AppErrorCode::StaleBringInPlan);
+    assert_eq!(read_text(&repo, "main.txt"), "hook edit\n");
+    write_file(&repo, "main.txt", "main work\n");
+    write_hook(
+        &repo,
+        "pre-merge-commit",
+        "git update-ref refs/heads/feature HEAD",
+    );
+    assert_eq!(attempt(), AppErrorCode::StaleBringInPlan);
+    assert!(git_succeeds(
+        &repo,
+        &["update-ref", "refs/heads/feature", &plan.source.commit]
+    ));
+    fs::remove_file(Path::new(&repo).join(".git/hooks/pre-merge-commit")).unwrap();
 
     // The same lines changed on both sides: named, and refused until the
     // user chooses to resolve them (task 065-4-2).
@@ -2760,8 +2852,26 @@ fn starting_an_overlap_refuses_unsafe_work_and_custom_merge_options() {
     let repo = overlapping_project("start-overlap-refusals");
     let before = head(&repo);
     let source = local_branch("feature");
-    let attempt = |expected| {
+    let attempt = |expected, blocker, unsaved: bool| {
         let plan = plan_bring_in(&repo, "refuse", &source).unwrap();
+        assert_eq!(
+            plan.forecast
+                .as_ref()
+                .unwrap()
+                .blocker
+                .as_ref()
+                .map(|value| value.kind),
+            blocker
+        );
+        assert_eq!(
+            plan.forecast
+                .as_ref()
+                .unwrap()
+                .overlaps
+                .iter()
+                .any(|value| value.side == OverlapSide::Unsaved),
+            unsaved
+        );
         assert_eq!(
             start_branch_overlap(&repo, "refuse", &plan)
                 .unwrap_err()
@@ -2776,31 +2886,51 @@ fn starting_an_overlap_refuses_unsafe_work_and_custom_merge_options() {
     };
     write_file(&repo, "notes.txt", "prepared\n");
     assert!(git_succeeds(&repo, &["add", "notes.txt"]));
-    attempt(AppErrorCode::IncomingTrackedChangeCollision);
+    attempt(
+        AppErrorCode::IncomingTrackedChangeCollision,
+        Some(ForecastBlockerKind::CarryFailed),
+        false,
+    );
     assert!(git_succeeds(&repo, &["restore", "--staged", "notes.txt"]));
     write_file(&repo, "notes.txt", "notes\n");
+    write_file(&repo, "clash.txt", "prepared conflict\n");
+    assert!(git_succeeds(&repo, &["add", "clash.txt"]));
+    attempt(
+        AppErrorCode::IncomingTrackedChangeCollision,
+        Some(ForecastBlockerKind::PreparedOverlap),
+        false,
+    );
+    assert!(git_succeeds(&repo, &["restore", "--staged", "clash.txt"]));
     write_file(&repo, "clash.txt", "unsaved conflict\n");
-    attempt(AppErrorCode::IncomingTrackedChangeCollision);
+    attempt(AppErrorCode::IncomingTrackedChangeCollision, None, true);
     write_file(&repo, "clash.txt", "current\n");
     write_file(&repo, "new.txt", "untracked collision\n");
-    attempt(AppErrorCode::IncomingTrackedChangeCollision);
+    attempt(
+        AppErrorCode::IncomingTrackedChangeCollision,
+        Some(ForecastBlockerKind::UntrackedCollision),
+        false,
+    );
     // Ignored content must not be overwritten either.
     fs::write(Path::new(&repo).join(".git/info/exclude"), "new.txt\n").unwrap();
-    attempt(AppErrorCode::IncomingTrackedChangeCollision);
+    attempt(
+        AppErrorCode::IncomingTrackedChangeCollision,
+        Some(ForecastBlockerKind::UntrackedCollision),
+        false,
+    );
     fs::remove_file(Path::new(&repo).join("new.txt")).unwrap();
     for options in ["--squash", "--strategy=ours", ""] {
         assert!(git_succeeds(
             &repo,
             &["config", "branch.main.mergeOptions", options]
         ));
-        attempt(AppErrorCode::UnsupportedMergeSetup);
+        attempt(AppErrorCode::UnsupportedMergeSetup, None, false);
     }
     assert!(git_succeeds(
         &repo,
         &["config", "--unset", "branch.main.mergeOptions"]
     ));
     fs::write(Path::new(&repo).join(".git/index.lock"), "busy").unwrap();
-    attempt(AppErrorCode::RefLocked);
+    attempt(AppErrorCode::RefLocked, None, false);
     fs::remove_file(Path::new(&repo).join(".git/index.lock")).unwrap();
     let plan = plan_bring_in(&repo, "refuse", &source).unwrap();
     // A pending operation is rejected even when no index entry is unmerged.

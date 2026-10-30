@@ -112,7 +112,9 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   explicitly hand saved overlaps to the existing resolver. Only the selected
   remote source is checked when its check is unknown or over a minute old;
   local sources, planning and execution never fetch. Uncertain outcomes offer
-  only Close. Rebase, compare and merging into another branch remain Soon.
+  only Close, including a failed handoff after a verified pause. Unsupported
+  sparse checkouts and histories without an available shared version block
+  both integration workflows. Rebase, compare and merging into another branch remain Soon.
 - List, create, switch, rename, and safely delete local branches, with dirty-worktree checks and recovery references where required.
   A branch is only called safe to delete when another local or remote-tracking
   reference already holds its saved work; a published branch can have its remote
@@ -216,6 +218,9 @@ The dependency-ordered `1.0.0` plan is in the
 [`task 065-1`](work/done/065-1-core-workflow-audit.md), clone evidence in
 [`task 065-2`](work/done/065-2-clone-remote-project.md), and local-creation
 evidence in [`task 065-3`](work/done/065-3-create-local-project.md).
+The branch/upstream integration audit and its Windows evidence are in
+[`065-4-5`](work/done/065-4-5-integration-audit.md); macOS/Linux runtime
+and real assistive-technology qualification remain open.
 The completed History implementation and its validation are recorded in
 [`task 015`](work/done/015-history-timeline.md).
 

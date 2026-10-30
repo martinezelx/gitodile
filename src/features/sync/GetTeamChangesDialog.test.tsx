@@ -476,11 +476,22 @@ describe("Get project changes dialog", () => {
     expect(screen.getByText("Something changed while this was open. This is the updated summary.")).toBeInTheDocument();
   });
 
-  it("reports an uncertain result with its recovery evidence", async () => {
-    renderDialog(controller(basePlan, { get: vi.fn(async () => result("uncertain")) } as Partial<SyncController>));
-    await userEvent.click(await screen.findByRole("button", { name: "Get" }));
-    expect(await screen.findByRole("alertdialog", { name: "Result not confirmed" })).toBeInTheDocument();
-    expect(screen.getByText(/refs\/gitodile\/recovery\/v1\/get-team-changes\/worktree-a\/1/)).toBeInTheDocument();
+  it.each(["native", "refresh", "stale-refresh"])("preserves recovery and offers only Close after uncertainty in %s", async (mode) => {
+    const completed = result(mode === "native" ? "uncertain" : "completed");
+    completed.recovery.unsavedReference = "refs/gitodile/recovery/v1/get-team-changes-unsaved/worktree-a/1";
+    const sync = controller(mergePlan, { get: vi.fn(async () => completed) });
+    const onPublishAfter = vi.fn();
+    const { onApplied, onPhaseChange } = renderDialog(sync, { intent: "getAndPublish", onPublishAfter });
+    onApplied.mockRejectedValue(mode === "stale-refresh" ? { code: "stale_get_team_changes_plan", message: "refresh failed", remediation: null } : new Error("refresh failed after native update"));
+    await userEvent.click(await screen.findByRole("button", { name: "Get and publish" }));
+    const alert = await screen.findByRole("alertdialog", { name: "Result not confirmed" });
+    expect(alert).toHaveTextContent(completed.recovery.reference);
+    expect(alert).toHaveTextContent(completed.recovery.unsavedReference);
+    expect(screen.getAllByRole("button").every((button) => button.textContent === "Close" || button.getAttribute("aria-label") === "Close")).toBe(true);
+    expect(onPhaseChange).toHaveBeenLastCalledWith("uncertain");
+    expect(sync.get).toHaveBeenCalledOnce();
+    expect(sync.planGet).toHaveBeenCalledOnce();
+    expect(onPublishAfter).not.toHaveBeenCalled();
   });
 
   it("offers nothing to get from a branch whose remote branch is gone", async () => {
@@ -502,9 +513,9 @@ describe("Get project changes dialog", () => {
     expect(screen.queryByRole("button", { name: "Get" })).not.toBeInTheDocument();
   });
 
-  it("closes a deterministic refusal without offering a retry", async () => {
+  it.each(["git_operation_in_progress", "no_shared_history", "shallow_history", "unsupported_merge_setup"])("closes a deterministic %s refusal without offering a retry", async (code) => {
     renderDialog(controller(basePlan, {
-      planGet: vi.fn().mockRejectedValue({ code: "git_operation_in_progress", message: "x", remediation: null }),
+      planGet: vi.fn().mockRejectedValue({ code, message: "x", remediation: null }),
     } as Partial<SyncController>));
     expect(await screen.findByRole("alertdialog", { name: "The update stopped safely" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();

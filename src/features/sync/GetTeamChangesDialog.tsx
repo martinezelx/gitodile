@@ -76,6 +76,9 @@ function deterministicBlock(error: unknown): boolean {
     "unborn_branch_no_version",
     "git_operation_in_progress",
     "no_remote_configured",
+    "no_shared_history",
+    "shallow_history",
+    "unsupported_merge_setup",
   ].includes(error.code);
 }
 
@@ -359,6 +362,7 @@ export function GetTeamChangesDialog({
     busyRef.current = true;
     phaseRef.current("executing");
     setState({ status: "executing", plan: current, phase: "checkingLocalSafety" });
+    let applied: GetTeamChangesResult | null = null;
     controller.get({
       ...query,
       stateToken: current.stateToken,
@@ -378,6 +382,7 @@ export function GetTeamChangesDialog({
         phaseRef.current("uncertain");
         return;
       }
+      applied = result;
       await onApplied(result);
       if (thenPublish && onPublishAfter) {
         publishAfter(current, result);
@@ -394,8 +399,15 @@ export function GetTeamChangesDialog({
       });
       closeRef.current();
     }).catch((error: unknown) => {
-      if (isAppError(error) && ["merge_outcome_uncertain", "get_team_changes_uncertain"].includes(error.code)) {
-        setState({ status: "uncertain", evidence: [current.recovery.reference, error.detail].filter(Boolean).join("\n") });
+      // Once native Get completed, a refresh failure cannot make its old
+      // plan retryable, even when that later failure happens to be stale.
+      if (applied || (isAppError(error) && ["merge_outcome_uncertain", "get_team_changes_uncertain"].includes(error.code))) {
+        setState({ status: "uncertain", evidence: [
+          applied?.recovery.reference ?? current.recovery.reference,
+          applied?.recovery.unsavedReference,
+          applied?.observedHead,
+          isAppError(error) ? error.detail : null,
+        ].filter(Boolean).join("\n") });
         phaseRef.current("uncertain");
         return;
       }

@@ -1,7 +1,7 @@
 ---
 id: 065-4
 title: Integrate branches and diverged project changes safely
-status: active
+status: blocked
 priority: high
 type: epic
 areas:
@@ -70,7 +70,7 @@ Split on 2026-10-29 into five children, executed in order:
 | [065-4-2](../done/065-4-2-pause-on-overlaps.md) | Overlaps become a real paused `git merge` with a start record, handed to task 037 |
 | [065-4-3](../done/065-4-3-bring-in-changes-dialog.md) | The Bring in changes dialog and its entries |
 | [065-4-4](../done/065-4-4-get-diverged-overlaps.md) | Get project changes hands a diverged upstream's overlaps to task 037 |
-| [065-4-5](065-4-5-integration-audit.md) | Desktop audit of the whole integration workflow |
+| [065-4-5](../done/065-4-5-integration-audit.md) | Desktop audit of the whole integration workflow |
 
 # Out of scope
 
@@ -81,19 +81,19 @@ Split on 2026-10-29 into five children, executed in order:
 
 # Acceptance criteria
 
-- [ ] Local branch and configured-upstream integration handle already-contained,
+- [x] Local branch and configured-upstream integration handle already-contained,
       fast-forward, clean merge, empty merge, and conflict outcomes accurately.
-- [ ] Planning and execution bind exact refs/commits/status/fetch evidence;
+- [x] Planning and execution bind exact refs/commits/status/fetch evidence;
       moved refs or changed work produce a stale result, never a retargeted merge.
-- [ ] Dirty, unborn, detached, shallow, locked, in-progress, missing-upstream,
+- [x] Dirty, unborn, detached, shallow, locked, in-progress, missing-upstream,
       and unsupported states block with actionable guidance.
-- [ ] Recovery is verified before mutation and remains discoverable after
+- [x] Recovery is verified before mutation and remains discoverable after
       success, conflict, failure, interruption, or restart.
-- [ ] Conflicts enter task 037 without losing source roles or performing an
+- [x] Conflicts enter task 037 without losing source roles or performing an
       automatic stage, resolution, abort, commit, or publish.
-- [ ] Hooks, signing, identity, credential, remote rejection, and uncertain
+- [x] Hooks, signing, identity, credential, remote rejection, and uncertain
       outcomes remain truthful and bounded.
-- [ ] Linked worktrees serialize common-ref mutations while refreshing only the
+- [x] Linked worktrees serialize common-ref mutations while refreshing only the
       correct worktree content plus shared refs.
 - [ ] Full temporary-repository, frontend, accessibility, and cross-platform
       tests pass, IPC/docs are current, and `pnpm run check` passes.
@@ -142,12 +142,24 @@ Split on 2026-10-29 into five children, executed in order:
 
 # Implementation notes
 
-Record ancestry/path algorithms, merge arguments, recovery ownership,
-conflict handoff, invalidation, and platform findings.
+All five implementation/audit children are done. Durable algorithms and
+ownership are documented in ADR 0030/0041 and ARCHITECTURE.md; the audit's
+[traceability matrix](../assets/065-4-5/integration-audit.md) maps every
+criterion to named tests and desktop evidence. Checked criteria above mean
+Windows execution and automated contract evidence, not other-platform runtime.
 
 # Validation
 
-The upstream UI handoff is completed in [065-4-4](../done/065-4-4-get-diverged-overlaps.md),
-including temporary-repository desktop evidence, both themes and the passing
-aggregate gate. The full integration matrix remains task 065-4-5; this does
-not mark the epic's comprehensive acceptance criteria complete.
+2026-10-30: [065-4-5](../done/065-4-5-integration-audit.md) completed the
+Windows Tauri/WebView2 audit with temporary projects/remotes and an isolated
+profile. Its audit and pre-commit fixes, regression counts and successful
+aggregate gate are recorded there.
+
+The epic remains **blocked** on the last criterion: no macOS/Linux runtime
+environment or real screen reader was available, and the resolver's inherited
+live forced-colour qualification remains open. Run the integration matrix on
+WKWebView/WebKitGTK with the platform-specific filesystem/credential behavior
+and appropriate assistive technology before closing that criterion. See
+[ADR 0006](../../docs/adr/0006-defer-macos-and-linux-runtime-validation.md) and
+[037-7](../done/037-7-conflict-workflow-audit.md). No current CI result or
+non-Windows execution is claimed, and this audit authorizes no release.

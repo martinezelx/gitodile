@@ -72,7 +72,7 @@ product specification.
 | Browse commit history and commit diffs | Delivered | Audit and harden |
 | Create, switch, publish, and delete branches | Mostly delivered | Audit; publish uses the existing remote flow |
 | Fetch, fast-forward pull, and push | Delivered | Audit and harden |
-| Merge a local branch or diverged upstream | Missing | Required: task 065-4 (`0.5.0`) |
+| Merge a local branch or diverged upstream | Implemented; Windows audited | Task 065-4 (`0.5.0`); non-Windows runtime/accessibility qualification remains open |
 | Resolve merge conflicts | Delivered on Windows; macOS and Linux unverified | GitHub Desktop level: epic 037 (`0.5.0`), open for the macOS/Linux and assistive-technology runs; three-pane editor after `1.0.0` (epic 206) |
 | Stash and restore unfinished work | Missing | Required: epic 064 (`0.6.0`) |
 | Undo/revert earlier work safely | Partial recovery plumbing only | Required: tasks 065-5 and 065-6 (`0.6.0`) |
@@ -150,9 +150,11 @@ save a change, and verify the result in History.
    left by another tool is detected and explained read-only, never resolved.
    The three-pane editor is epic 206 after `1.0.0` (decided 2026-10-27).
 - **065-4: Integrate branches and diverged project changes.** Add previewed
-   local-branch merge. Clean, non-fast-forward team integration shipped in
-   task 161 (ADR 0030); overlaps still enter task 037's established session
-   contract.
+   local/remote-branch merge and diverged upstream integration. All initiation,
+   clean and paused outcomes are implemented and Windows-audited in
+   [065-4-5](../work/done/065-4-5-integration-audit.md); overlaps use task 037's
+   existing resolver. The epic remains open for macOS/Linux runtime and
+   accessibility qualification, alongside task 037's inherited gaps.
 
 Exit condition: both the clean and conflicting collaboration paths can finish
 without a terminal. Rebase and force push remain excluded.

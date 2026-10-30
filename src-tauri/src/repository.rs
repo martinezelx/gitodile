@@ -159,7 +159,7 @@ enum HeadAnswer {
 }
 
 /// Parses `rev-parse --is-inside-work-tree --show-toplevel --absolute-git-dir
-/// --git-common-dir --abbrev-ref HEAD --`: the worktree root, Git directory and
+/// --git-common-dir --symbolic-full-name HEAD --`: the worktree root, Git directory and
 /// common Git directory as Git prints them, and what `HEAD` is. `None` for
 /// anything but six clean lines from a working tree.
 fn parse_discovery_with_head(output: &str) -> Option<(String, String, String, HeadAnswer)> {
@@ -167,14 +167,12 @@ fn parse_discovery_with_head(output: &str) -> Option<(String, String, String, He
     let ["true", root, git_dir, common, head, "--"] = lines.as_slice() else {
         return None;
     };
-    // `--abbrev-ref` shortens the way `symbolic-ref --short` and
-    // `refname:short` do everywhere else (`heads/main` when a tag shares the
-    // name), so the branch matches the inventory. A detached `HEAD` names
-    // itself, and Git refuses a branch called `HEAD`.
+    // Short refs become `heads/main` when a tag shares the branch's name.
+    // Strip only the exact local-branch namespace. Detached HEAD names itself.
     let head = match *head {
         "" => return None,
         "HEAD" => HeadAnswer::Detached,
-        name => HeadAnswer::Branch(name.to_string()),
+        name => HeadAnswer::Branch(name.strip_prefix("refs/heads/")?.to_string()),
     };
     Some((
         root.to_string(),
@@ -189,11 +187,16 @@ fn parse_discovery_with_head(output: &str) -> Option<(String, String, String, He
 fn classify_head_one_question_at_a_time(
     path: &str,
 ) -> Result<(Option<String>, HeadState), AppError> {
-    let symbolic_head = run_git(path, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
+    let symbolic_head = run_git(path, &["symbolic-ref", "--quiet", "HEAD"])?;
     let branch = symbolic_head
         .status
         .success()
-        .then(|| git_stdout(&symbolic_head));
+        .then(|| {
+            git_stdout(&symbolic_head)
+                .strip_prefix("refs/heads/")
+                .map(str::to_string)
+        })
+        .flatten();
     let verified_head = run_git(path, &["rev-parse", "--verify", "HEAD"])?;
     let head_state = match (verified_head.status.success(), branch.is_some()) {
         (true, true) => HeadState::Branch,
@@ -276,7 +279,7 @@ pub(crate) fn open_repository(
             "--show-toplevel",
             "--absolute-git-dir",
             "--git-common-dir",
-            "--abbrev-ref",
+            "--symbolic-full-name",
             "HEAD",
             "--",
         ],
@@ -363,11 +366,16 @@ pub(crate) fn open_repository(
         // A branch with no versions yet keeps its name; a `HEAD` that names
         // nothing at all has none to report.
         HeadAnswer::Unresolved => {
-            let symbolic_head = run_git(&path, &["symbolic-ref", "--quiet", "--short", "HEAD"])?;
+            let symbolic_head = run_git(&path, &["symbolic-ref", "--quiet", "HEAD"])?;
             let branch = symbolic_head
                 .status
                 .success()
-                .then(|| git_stdout(&symbolic_head));
+                .then(|| {
+                    git_stdout(&symbolic_head)
+                        .strip_prefix("refs/heads/")
+                        .map(str::to_string)
+                })
+                .flatten();
             (branch, HeadState::Unborn)
         }
         HeadAnswer::Unknown => classify_head_one_question_at_a_time(&path)?,
@@ -402,7 +410,7 @@ mod tests {
         let read =
             |head: &str| parse_discovery_with_head(&format!("true\n/p\n/p/.git\n.git\n{head}\n--"));
         assert_eq!(
-            read("feature/a"),
+            read("refs/heads/feature/a"),
             Some((
                 "/p".to_string(),
                 "/p/.git".to_string(),
@@ -415,9 +423,10 @@ mod tests {
             Some(HeadAnswer::Detached)
         );
         assert_eq!(
-            read("heads/main").map(|found| found.3),
+            read("refs/heads/heads/main").map(|found| found.3),
             Some(HeadAnswer::Branch("heads/main".to_string()))
         );
+        assert_eq!(read("refs/tags/main"), None);
         // Not a working tree, or a line break inside a path: the slow path.
         assert_eq!(
             parse_discovery_with_head("false\n/p/.git\n.git\nHEAD\n--"),

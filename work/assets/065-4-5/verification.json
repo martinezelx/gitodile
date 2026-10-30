@@ -1,0 +1,232 @@
+{
+  "platform": "Windows only",
+  "cases": {
+    "fastForward": {
+      "head": "7cf72acd1a0b80429373b40386c40bce90d4607e",
+      "expected": "7cf72acd1a0b80429373b40386c40bce90d4607e"
+    },
+    "clean": {
+      "parents": [
+        "3a0a26c716e2e35f6dadbb040ae4965a996cb964",
+        "cd6b4631d8f0f89d8f34bb5792c2f87d621e2c93"
+      ],
+      "expected": [
+        "3a0a26c716e2e35f6dadbb040ae4965a996cb964",
+        "cd6b4631d8f0f89d8f34bb5792c2f87d621e2c93"
+      ]
+    },
+    "empty": {
+      "tree": "6ca93ac5b42d61980b43ed532f5923c0a527974a",
+      "expected": "6ca93ac5b42d61980b43ed532f5923c0a527974a"
+    },
+    "contained": {
+      "head": "30a30f27972892d624f20600af4dbd05ada04de7",
+      "expected": "30a30f27972892d624f20600af4dbd05ada04de7"
+    },
+    "stale": {
+      "head": "a4aa71aa1ded35afae135f29e406c309b23208a0",
+      "expected": "a4aa71aa1ded35afae135f29e406c309b23208a0",
+      "recovery": ""
+    },
+    "uncertain": {
+      "head": "f836af8aa255a53c670217908a7b07b4822111b0",
+      "expected": "f836af8aa255a53c670217908a7b07b4822111b0",
+      "status": "A  incoming.txt",
+      "recovery": "refs/gitodile/recovery/v1/bring-in-changes/worktree-1f5962a2ce9803c8/1793388381325-4040-1-0"
+    },
+    "linked": {
+      "mainHead": "919f823d329220cfce89d32da01343c290bb10e6",
+      "expected": "919f823d329220cfce89d32da01343c290bb10e6",
+      "mainStatus": "M notes.txt\n?? untracked.txt",
+      "linkedStatus": ""
+    },
+    "upstream": {
+      "parents": [
+        "4b0ea1147a8f91d920c67e573a6991bc34118b97",
+        "f66eec4f4e93a59bfe0651517c9b7711ddbc8c0d"
+      ],
+      "expected": [
+        "4b0ea1147a8f91d920c67e573a6991bc34118b97",
+        "f66eec4f4e93a59bfe0651517c9b7711ddbc8c0d"
+      ],
+      "remote": "f66eec4f4e93a59bfe0651517c9b7711ddbc8c0d",
+      "expectedRemote": "f66eec4f4e93a59bfe0651517c9b7711ddbc8c0d",
+      "status": "M notes.txt\n?? untracked.txt"
+    }
+  },
+  "getMatrix": [
+    {
+      "name": "get-ff",
+      "integration": "fastForward",
+      "forecast": "clear",
+      "files": 1,
+      "outcome": "completed",
+      "recovery": "refs/gitodile/recovery/v1/get-team-changes/worktree-1f5962a2ce9803c8/1793388454557-4040-4-0",
+      "phases": [
+        "checkingLocalSafety",
+        "creatingRecovery",
+        "updatingFilesAndHistory",
+        "verifying"
+      ],
+      "contained": "nothing_to_get"
+    },
+    {
+      "name": "get-clean",
+      "integration": "merge",
+      "forecast": "clear",
+      "files": 1,
+      "outcome": "completed",
+      "recovery": "refs/gitodile/recovery/v1/get-team-changes/worktree-1f5962a2ce9803c8/1793388457797-4040-6-0",
+      "phases": [
+        "checkingLocalSafety",
+        "combiningVersions",
+        "creatingRecovery",
+        "updatingFilesAndHistory",
+        "verifying"
+      ],
+      "contained": "nothing_to_get"
+    },
+    {
+      "name": "get-empty",
+      "integration": "merge",
+      "forecast": "clear",
+      "files": 0,
+      "outcome": "completed",
+      "recovery": "refs/gitodile/recovery/v1/get-team-changes/worktree-1f5962a2ce9803c8/1793388461419-4040-8-0",
+      "phases": [
+        "checkingLocalSafety",
+        "combiningVersions",
+        "creatingRecovery",
+        "updatingFilesAndHistory",
+        "verifying"
+      ],
+      "contained": "nothing_to_get"
+    }
+  ],
+  "offlineGet": {
+    "plan": "merge",
+    "result": "completed",
+    "explicitCheckFailure": "git_command_failed"
+  },
+  "localMatrix": [
+    {
+      "label": "preparedSeparate",
+      "bring": {
+        "outcome": "blocked",
+        "blocker": {
+          "kind": "carryFailed",
+          "path": "notes.txt"
+        },
+        "overlaps": [
+          {
+            "path": "clash.txt",
+            "side": "saved"
+          }
+        ]
+      },
+      "get": {
+        "outcome": "blocked",
+        "blocker": {
+          "kind": "carryFailed",
+          "path": "notes.txt"
+        },
+        "overlaps": [
+          {
+            "path": "clash.txt",
+            "side": "saved"
+          }
+        ]
+      }
+    },
+    {
+      "label": "unsavedAffected",
+      "bring": {
+        "outcome": "overlap",
+        "blocker": null,
+        "overlaps": [
+          {
+            "path": "clash.txt",
+            "side": "saved"
+          },
+          {
+            "path": "clash.txt",
+            "side": "unsaved"
+          }
+        ]
+      },
+      "get": {
+        "outcome": "overlap",
+        "blocker": null,
+        "overlaps": [
+          {
+            "path": "clash.txt",
+            "side": "saved"
+          },
+          {
+            "path": "clash.txt",
+            "side": "unsaved"
+          }
+        ]
+      }
+    },
+    {
+      "label": "untrackedCollision",
+      "bring": {
+        "outcome": "blocked",
+        "blocker": {
+          "kind": "untrackedCollision",
+          "path": "incoming.txt"
+        },
+        "overlaps": [
+          {
+            "path": "clash.txt",
+            "side": "saved"
+          }
+        ]
+      },
+      "get": {
+        "outcome": "blocked",
+        "blocker": {
+          "kind": "untrackedCollision",
+          "path": "incoming.txt"
+        },
+        "overlaps": [
+          {
+            "path": "clash.txt",
+            "side": "saved"
+          }
+        ]
+      }
+    },
+    {
+      "label": "ignoredCollision",
+      "bring": {
+        "outcome": "blocked",
+        "blocker": {
+          "kind": "untrackedCollision",
+          "path": "incoming.txt"
+        },
+        "overlaps": [
+          {
+            "path": "clash.txt",
+            "side": "saved"
+          }
+        ]
+      },
+      "get": {
+        "outcome": "blocked",
+        "blocker": {
+          "kind": "untrackedCollision",
+          "path": "incoming.txt"
+        },
+        "overlaps": [
+          {
+            "path": "clash.txt",
+            "side": "saved"
+          }
+        ]
+      }
+    }
+  ],
+  "verified": true
+}

@@ -95,7 +95,7 @@ pub(crate) fn identity_configured(
 ) -> Result<bool, AppError> {
     let output = run_git_with_global_override(
         path,
-        &["config", "--get-regexp", "^user\\.(name|email)$"],
+        &["config", "--null", "--get-regexp", "^user\\.(name|email)$"],
         config_override,
     )?;
     if !output.status.success() {
@@ -106,16 +106,13 @@ pub(crate) fn identity_configured(
 
     let mut has_name = false;
     let mut has_email = false;
-    for line in git_stdout(&output).lines() {
-        let Some((key, value)) = line.split_once(' ') else {
-            continue;
-        };
-        if value.trim().is_empty() {
-            continue;
-        }
+    // NUL separates records; the first newline separates the key and value.
+    // A valueless key has no newline. It masks an inherited value too.
+    for entry in String::from_utf8_lossy(&output.stdout).split('\0') {
+        let (key, value) = entry.split_once('\n').unwrap_or((entry, ""));
         match key {
-            "user.name" => has_name = true,
-            "user.email" => has_email = true,
+            "user.name" => has_name = !value.trim().is_empty(),
+            "user.email" => has_email = !value.trim().is_empty(),
             _ => {}
         }
     }

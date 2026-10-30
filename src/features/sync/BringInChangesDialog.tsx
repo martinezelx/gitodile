@@ -106,13 +106,18 @@ export function BringInChangesDialog(props: BringInChangesDialogProps): React.JS
 
   const execute = async (plan: BringInChangesPlan, overlap: boolean): Promise<void> => {
     if (!source || busy.current || checking) return;
+    generation.current++;
     busy.current = true;
     setState({ status: "executing", plan, phase: "checkingLocalSafety" });
     callbacks.current.onPhaseChange("executing");
     const request = { projectId: projectPath, sessionEpoch, stateToken: plan.stateToken, recoveryReference: plan.recovery.reference };
+    let applied = false;
+    let appliedEvidence = plan.recovery.reference;
     try {
       if (overlap) {
         const result = await controller.port.startOverlap({ ...request, source: { kind: "branch", source } });
+        applied = true;
+        appliedEvidence = [result.recovery.reference, result.recovery.unsavedReference].filter(Boolean).join("\n");
         // The returned, verified session is installed before the resolver opens.
         await callbacks.current.onPaused(result.session);
       } else {
@@ -125,14 +130,18 @@ export function BringInChangesDialog(props: BringInChangesDialogProps): React.JS
           callbacks.current.onPhaseChange("uncertain");
           return;
         }
+        applied = true;
+        appliedEvidence = [result.recovery.reference, result.recovery.unsavedReference, result.observedHead].filter(Boolean).join("\n");
         await callbacks.current.onApplied(result);
         toast({ icon: <GitMerge />, message: t.bringInSuccess });
       }
       callbacks.current.onPhaseChange("success");
       callbacks.current.onClose();
     } catch (error: unknown) {
-      if (isAppError(error) && ["merge_outcome_uncertain", "get_team_changes_uncertain"].includes(error.code)) {
-        setState({ status: "uncertain", evidence: [plan.recovery.reference, error.detail].filter(Boolean).join("\n") });
+      // A native pause/update has already changed the project. A failed
+      // adoption or refresh cannot turn it back into a retryable execution.
+      if (applied || (isAppError(error) && ["merge_outcome_uncertain", "get_team_changes_uncertain"].includes(error.code))) {
+        setState({ status: "uncertain", evidence: [appliedEvidence, isAppError(error) ? error.detail : null].filter(Boolean).join("\n") });
         callbacks.current.onPhaseChange("uncertain");
       } else if (isAppError(error) && error.code === "stale_bring_in_plan") {
         setStale(true);

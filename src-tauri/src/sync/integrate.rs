@@ -368,6 +368,14 @@ impl Analysis {
             overlaps: self
                 .overlaps
                 .iter()
+                // Both dialogs decide whether Resolve is safe from this
+                // bounded list. Never truncate away all unsaved evidence.
+                .filter(|item| item.side == OverlapSide::Unsaved)
+                .chain(
+                    self.overlaps
+                        .iter()
+                        .filter(|item| item.side == OverlapSide::Saved),
+                )
                 .take(MAX_FORECAST_PATHS)
                 .cloned()
                 .collect(),
@@ -753,6 +761,16 @@ fn paths_overlap(left: &str, right: &str) -> bool {
             .is_some_and(|suffix| suffix.starts_with('/'))
 }
 
+fn merge_touches(affected: &[IncomingFile], conflicts: &[String], candidate: &str) -> bool {
+    affected.iter().any(|file| {
+        std::iter::once(file.path.as_str())
+            .chain(file.original_path.as_deref())
+            .any(|relative| paths_overlap(candidate, relative))
+    }) || conflicts
+        .iter()
+        .any(|relative| paths_overlap(candidate, relative))
+}
+
 /// `git merge-tree --write-tree` in memory: no file, index or ref changes. It
 /// writes the result's objects, which nothing references until a commit does
 /// and `git gc` removes otherwise.
@@ -965,6 +983,50 @@ fn analyze(
         Err(error) => return Err(error),
     };
     let Some(target_tree) = analysis.target_tree.clone() else {
+        if let Some(prediction) = &analysis.prediction {
+            // A saved overlap still needs a truthful local-work preview.
+            // Use the same provisional footprint the real merge revalidates.
+            let affected = incoming_files(path, &[local_commit, &prediction.tree])?;
+            let touches = |candidate: &str| merge_touches(&affected, &prediction.paths, candidate);
+            if let Some(prepared) = analysis
+                .safety
+                .tracked
+                .iter()
+                .find(|change| change.index_status != b'.')
+            {
+                analysis.blocker = Some(ForecastBlocker {
+                    kind: if prepared.paths().any(&touches) {
+                        ForecastBlockerKind::PreparedOverlap
+                    } else {
+                        ForecastBlockerKind::CarryFailed
+                    },
+                    path: Some(prepared.path.clone()),
+                });
+            } else if let Some(collision) = analysis
+                .safety
+                .untracked
+                .iter()
+                .chain(&analysis.safety.ignored)
+                .find(|relative| touches(relative))
+            {
+                analysis.blocker = Some(ForecastBlocker {
+                    kind: ForecastBlockerKind::UntrackedCollision,
+                    path: Some(collision.clone()),
+                });
+            } else {
+                analysis.overlaps.extend(
+                    analysis
+                        .safety
+                        .tracked
+                        .iter()
+                        .filter(|change| change.paths().any(&touches))
+                        .map(|change| ForecastOverlap {
+                            path: change.path.clone(),
+                            side: OverlapSide::Unsaved,
+                        }),
+                );
+            }
+        }
         return Ok(analysis);
     };
     if analysis.blocker.is_some() {
@@ -1247,6 +1309,8 @@ fn validate_get_team_changes(
     if relation.behind == 0 {
         return Err(get_relation_blocker(relation_state(&relation)));
     }
+    require_full_checkout(path)?;
+    require_shared_history(path, &local_commit, &remote_commit)?;
     let analysis = analyze(path, &local_commit, &remote_commit, &relation, true)?;
     let state_token = compute_integration_state_token(IntegrationTokenEvidence {
         repository_identity,
@@ -1587,7 +1651,7 @@ fn create_merge_version(
                     format!("The project's {hook} hook stopped the merge version."),
                 )
                 .with_remediation(
-                    "Nothing was changed. Check the hook's output, address what it's flagging, then try again.",
+                    "The integration wasn't applied. Check the hook's output, address what it's flagging, then try again.",
                 )
                 .with_detail(truncate_detail(&String::from_utf8_lossy(&output.stderr))));
             }
@@ -1749,7 +1813,8 @@ enum IntegrationApplied {
 }
 
 /// Applies a revalidated, clear analysis: the merge version first (so a hook,
-/// identity or signing failure changes nothing), then the recovery point, the
+/// identity or signing failure applies no update), then revalidation after
+/// hooks/signing, the recovery point, the
 /// two-tree update, the compare-and-swap branch move and the combined unsaved
 /// content, and finally the verification. Any failure after the recovery
 /// point is an uncertain result that keeps it.
@@ -1786,14 +1851,58 @@ fn apply_integration(
         IntegrationKind::FastForward => run.source_commit.to_string(),
         IntegrationKind::Merge => {
             progress(GetTeamChangesPhase::CombiningVersions);
-            create_merge_version(
+            let commit = create_merge_version(
                 path,
                 &target_tree,
                 run.local_commit,
                 run.source_commit,
                 &run.merge_message,
                 run.run_hooks,
-            )?
+            )?;
+            // Hooks and signing run external programs after the preview was
+            // validated. Never release combined files using an older copy
+            // if those programs changed the tracked work or reviewed refs.
+            let after = read_local_safety(path)?;
+            let same_tracked = after
+                .tracked
+                .iter()
+                .map(|change| &change.record)
+                .eq(analysis.safety.tracked.iter().map(|change| &change.record));
+            // Unrelated untracked hook output may stay. A new collision in
+            // the update's footprint must refuse before read-tree can write.
+            let collision = after
+                .untracked
+                .iter()
+                .chain(&after.ignored)
+                .any(|candidate| {
+                    analysis.incoming.iter().any(|file| {
+                        std::iter::once(file.path.as_str())
+                            .chain(file.original_path.as_deref())
+                            .any(|relative| paths_overlap(candidate, relative))
+                    })
+                });
+            if !same_tracked
+                || after.tracked_worktree_fingerprint
+                    != analysis.safety.tracked_worktree_fingerprint
+                || collision
+                || observed_head(path).as_deref() != Some(run.local_commit)
+                || checked_git_stdout(run_git(path, &["symbolic-ref", "HEAD"])?)?
+                    != format!("refs/heads/{}", run.branch)
+                || resolve_commit(path, &run.source_reference)?.as_deref()
+                    != Some(run.source_commit)
+                || git_operation_in_progress(path)?.is_some()
+            {
+                return Err(AppError::new(
+                    if run.operation == HistoryRecoveryOperation::BringInChanges {
+                        AppErrorCode::StaleBringInPlan
+                    } else {
+                        AppErrorCode::StaleGetTeamChangesPlan
+                    },
+                    "The project changed while the merge hooks or signer ran.",
+                )
+                .with_remediation("Review the updated project before combining its changes."));
+            }
+            commit
         }
     };
 
@@ -2875,8 +2984,6 @@ pub(crate) fn start_overlapping_merge_with(
         OverlappingMergeSource::Upstream => {
             let validated =
                 validate_get_team_changes(&path, &session_epoch, &identity, &recovery_reference)?;
-            require_full_checkout(&path)?;
-            require_shared_history(&path, &validated.local_commit, &validated.remote_commit)?;
             let title = merge_message(&validated.target, &validated.branch);
             (
                 validated.branch,
@@ -2932,6 +3039,20 @@ pub(crate) fn start_overlapping_merge_with(
             "Only overlapping saved versions can start a paused merge.",
         )
     })?;
+    if let Some(blocker) = &analysis.blocker {
+        if matches!(
+            blocker.kind,
+            ForecastBlockerKind::PreparedOverlap
+                | ForecastBlockerKind::CarryFailed
+                | ForecastBlockerKind::UntrackedCollision
+        ) {
+            return Err(AppError::new(
+                AppErrorCode::IncomingTrackedChangeCollision,
+                "Local work prevents starting this merge.",
+            )
+            .with_remediation("Save or move the affected work, then review the merge again."));
+        }
+    }
     if analysis.blocker.is_some() || prediction.paths.is_empty() {
         return Err(AppError::new(
             AppErrorCode::UnsupportedMergeSetup,
@@ -2968,16 +3089,7 @@ pub(crate) fn start_overlapping_merge_with(
         .and_then(|listing| clean_merge_entries(&listing, false, &overlapping))
         .is_ok_and(|entries| entries == expected_index)
     };
-    let touches = |candidate: &str| {
-        affected.iter().any(|file| {
-            std::iter::once(file.path.as_str())
-                .chain(file.original_path.as_deref())
-                .any(|relative| paths_overlap(candidate, relative))
-        }) || prediction
-            .paths
-            .iter()
-            .any(|relative| paths_overlap(candidate, relative))
-    };
+    let touches = |candidate: &str| merge_touches(&affected, &prediction.paths, candidate);
     for change in &analysis.safety.tracked {
         if change.index_status != b'.' || change.paths().any(&touches) {
             return Err(AppError::new(
@@ -3443,7 +3555,7 @@ mod tests {
                 side: OverlapSide::Saved,
             })
             .collect::<Vec<_>>();
-        let analysis = Analysis {
+        let mut analysis = Analysis {
             prediction: None,
             kind: IntegrationKind::Merge,
             target_tree: None,
@@ -3468,5 +3580,25 @@ mod tests {
         assert_eq!(forecast.overlap_count as usize, MAX_FORECAST_PATHS + 3);
         assert_eq!(forecast.local_count, 1);
         assert_eq!(forecast.incoming_count, 2);
+        // The UI decides whether Resolve is safe from this bounded evidence.
+        // An unsaved overlap after many saved ones must never be hidden.
+        analysis.overlaps.push(ForecastOverlap {
+            path: "unsaved.txt".into(),
+            side: OverlapSide::Unsaved,
+        });
+        let mixed = analysis.forecast(
+            "abc",
+            &SyncRelation {
+                ahead: 1,
+                behind: 2,
+                diverged: true,
+            },
+        );
+        assert_eq!(mixed.overlaps.len(), MAX_FORECAST_PATHS);
+        assert_eq!(mixed.overlap_count as usize, MAX_FORECAST_PATHS + 4);
+        assert!(mixed
+            .overlaps
+            .iter()
+            .any(|item| item.side == OverlapSide::Unsaved));
     }
 }

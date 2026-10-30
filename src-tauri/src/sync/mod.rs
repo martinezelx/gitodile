@@ -437,11 +437,12 @@ pub(crate) fn parse_project_remotes(output: &str) -> Vec<ProjectRemote> {
 /// rather than guessed from the remote list, which would be wrong the moment a
 /// project has two.
 fn current_upstream_remote(path: &str) -> Option<String> {
-    let head = run_git(path, &["symbolic-ref", "--quiet", "--short", "HEAD"]).ok()?;
+    let head = run_git(path, &["symbolic-ref", "--quiet", "HEAD"]).ok()?;
     if !head.status.success() {
         return None;
     }
-    let branch = git_stdout(&head);
+    let reference = git_stdout(&head);
+    let branch = reference.strip_prefix("refs/heads/")?;
     if branch.is_empty() {
         return None;
     }

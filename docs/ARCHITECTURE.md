@@ -651,6 +651,14 @@ and the execution also prove that with a dry-run two-tree update run against a
 copy of the index, so the question never takes `index.lock` beside other
 reads. The read model relies on the path comparison alone.
 
+Saved-overlap forecasts still classify local work using the provisional
+merge tree's changed paths, rename endpoints and unmerged paths, the same
+footprint initiation checks. Prepared work blocks a paused merge even away
+from that footprint; affected unsaved work is a mixed overlap requiring Save,
+and untracked/ignored collisions block before Resolve is offered.
+The bounded overlap evidence lists unsaved overlaps first so truncation cannot
+hide a Save-first requirement from either dialog.
+
 The plan reads the remote as of the last check under a shared read permit and
 never fetches; the dialog checks the remote in the background only when this
 session's last check is older than a minute. The plan token binds repository
@@ -667,7 +675,12 @@ from the predicted tree with the previous tip and the reviewed remote commit
 as parents, after the project's `pre-merge-commit`, `prepare-commit-msg` and
 `commit-msg` hooks run through `git hook run` against a temporary index of the
 merge result (skipped only when hooks are turned off in Settings), and with
-`commit.gpgSign` honoured. A hook, identity or signing failure changes nothing.
+`commit.gpgSign` honoured. GitOdile applies no file/history update on a hook,
+identity or signing failure. After hooks/signing succeed, execution revalidates
+tracked index/worktree evidence, HEAD, exact branch/source refs, operation
+markers and untracked/ignored collisions before recovery or file/history writes.
+A changed project is stale; unrelated untracked hook output may stay. Combined
+unsaved content captured before a hook edited it is never written over that edit.
 It then creates and verifies recovery (with a snapshot of combined unsaved
 content), hands combined files back to their saved content, runs the narrow
 two-tree update `git read-tree -u -m <old> <new>` and the compare-and-swap
@@ -694,6 +707,12 @@ it block by name, as does a sparse checkout. Its clean execution still refuses o
 `start_overlapping_merge` starts the paused-merge path below. See the 2026-10-29
 amendment to ADR 0030.
 
+Get uses the same sparse-checkout and shared-history guards before analysis
+in both planning and execution. A shallow copy is blocked only when it lacks
+the common ancestor, not merely because it is shallow. Repository discovery
+and current-upstream selection use full symbolic HEAD refs and strip only
+`refs/heads/`, so a same-named tag cannot change the branch/configuration key.
+
 The eager `sync/BringInChangesDialog` owns the branch picker and review, with
 its own typed `BringInPort` and adapter. `list_integration_sources` reads local
 and mapped remote-tracking refs, excludes symbolic refs, the current local
@@ -708,7 +727,9 @@ confirmation of cached knowledge. An old/unknown check runs behind the local
 preview and re-plans before confirmation; a stale execution re-plans without
 retrying. A verified pause is installed in the conflicts controller before
 opening its screen. Uncertain results retain the mutation slot until Close
-and never initiate resolution, abort, retry or publish. App only wires the
+and never initiate resolution, abort, retry or publish. A failed adoption or
+refresh after a verified native update/pause also retains that evidence with
+Close only, rather than offering another execution. App only wires the
 entry callbacks, mutation slot, coordinated refresh and resolver handoff.
 
 Get project changes also uses `BringInPort.startOverlap` with `{kind: "upstream"}`,
@@ -719,6 +740,9 @@ guidance. The upstream check must finish before starting a pause; a failed
 check or deleted upstream blocks it. Replans ignore superseded/closed answers;
 starting a mutation invalidates pending previews, and upstream prop changes
 cannot replace an executing or uncertain outcome.
+Clean Get also keeps its native recovery/unsaved-copy evidence if the
+post-update refresh fails, even with a stale error; it cannot replan, retry
+the integration or enter publishing from that failure.
 App adopts the returned session before the coordinated refresh and navigation
 to the existing resolver. This path never enters the clean Get/publish chain,
 even for Get and publish. A native uncertain result, or an unconfirmed handoff

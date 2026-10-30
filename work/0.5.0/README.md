@@ -14,11 +14,12 @@ The three-pane conflict editor is not part of this version; it is epic
 
 ## Queue
 
-| Queue | Task | Outcome |
-| --- | --- | --- |
-| 01 | [065-4-5](065-4-5-integration-audit.md) | Audit the integration workflow end to end |
+No executable leaf tasks remain in this version's queue. The remaining
+platform/accessibility qualification is recorded in the open epics below.
 
-Done: [065-4-4](../done/065-4-4-get-diverged-overlaps.md), Get project changes
+Done: [065-4-5](../done/065-4-5-integration-audit.md), the complete Windows
+integration audit, traceability matrix and safety fixes;
+[065-4-4](../done/065-4-4-get-diverged-overlaps.md), Get project changes
 hands saved upstream overlaps to the resolver without publishing;
 [065-4-3](../done/065-4-3-bring-in-changes-dialog.md), the branch integration
 dialog, entries and selected-source remote check;
@@ -42,11 +43,14 @@ the merge;
 the whole workflow on Windows.
 
 Epics: [065-4 integrate branches](065-4-integrate-branches.md), split into
-five children, the first four done; [037 resolve overlapping changes](037-guided-conflict-resolution.md),
+five children, all done, blocked on remaining platform/accessibility qualification;
+[037 resolve overlapping changes](037-guided-conflict-resolution.md),
 with [037-6 resolve each file](037-6-resolve-files.md) split into three
 slices, all done. The 037-7 audit passed
-every criterion on Windows; both epics stay open for the macOS and Linux runs
-and a real screen reader, the blocker it records.
+every criterion on Windows; 065-4's final criterion and epic 037 stay open
+for macOS/Linux runtime, a real screen reader and the inherited live
+forced-colour qualification. Windows evidence is not a release-readiness
+claim for those environments.
 
 ## Exit condition
 

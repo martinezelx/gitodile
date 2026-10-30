@@ -1164,7 +1164,7 @@ fn code<T: std::fmt::Debug>(result: Result<T, AppError>) -> AppErrorCode {
     result.expect_err("expected a refusal").code
 }
 
-// About 6 s alone on Windows: one merge is refused, rejected by a hook, by
+// More than 5 s alone on Windows: one merge is refused, rejected by a hook, by
 // signing and for want of an identity before it is finished, and each
 // attempt re-plans as the dialog would.
 #[test]
@@ -1224,6 +1224,34 @@ fn a_merge_is_finished_only_when_resolved_and_failures_keep_the_resolutions() {
         ))),
         AppErrorCode::MissingIdentity
     );
+    // An empty local value overrides a valid inherited identity. It must
+    // block before commit, rather than becoming a generic save/hook failure.
+    for key in ["user.name", "user.email"] {
+        git_ok(&path, &["config", key, ""]);
+        assert_eq!(
+            code(in_test_frame(|| merge::plan_finish_merge_with(
+                &path,
+                &repository,
+                Some(&identity)
+            ))),
+            AppErrorCode::MissingIdentity
+        );
+        git_ok(&path, &["config", "--unset", key]);
+        let config_path = Path::new(&path).join(".git/config");
+        let original_config = fs::read(&config_path).unwrap();
+        let valueless = format!(
+            "{}\n[user]\n{}\n",
+            String::from_utf8_lossy(&original_config),
+            key.strip_prefix("user.").unwrap()
+        );
+        fs::write(&config_path, valueless).unwrap();
+        assert!(!in_test_frame(|| crate::save_version::identity_configured(
+            &path,
+            Some(&identity)
+        ))
+        .unwrap());
+        fs::write(&config_path, original_config).unwrap();
+    }
     assert_eq!(
         code(finish(&path, &identity, true, Some("not-the-plan"))),
         AppErrorCode::StaleConflictSession

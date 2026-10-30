@@ -124,6 +124,18 @@ Because the merge version is still built with `commit-tree`,
 `branch.<name>.mergeOptions` and `merge.ff` play no part here; they matter
 only once a real `git merge` runs for overlaps (ADR 0041 §7, task 065-4-2).
 
+The 2026-10-30 integration audit applies point 5's sparse-checkout and
+shared-history guards to Get's planner and executor too. Get must refuse the
+same unsupported working setup before forecasting or changing files, with
+`unsupported_merge_setup`, `shallow_history` or `no_shared_history` guidance.
+An already-contained upstream still answers `nothing_to_get` without mutation.
+
+The audit's pre-commit review also revalidates tracked work, reviewed refs and
+collisions after merge hooks/signing succeed and before recovery/file/history
+updates. A hook's own edits remain on disk and make the old combination stale;
+unrelated untracked hook output is allowed. This closes the interval in which
+an earlier unsaved-content forecast could overwrite a later hook edit.
+
 ## Consequences
 
 - Overview can say before any click whether getting is direct, needs a merge
