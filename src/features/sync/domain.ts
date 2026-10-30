@@ -160,7 +160,7 @@ export type HistoryRecoveryRecord = {
   recoveryId: string;
   reference: string;
   createdAtMs: number;
-  operation: "get-team-changes";
+  operation: "get-team-changes" | "bring-in-changes";
   ownerId: string;
   branch: string;
   previousCommit: string;
@@ -333,6 +333,36 @@ export function teamSyncStatusesEqual(
 /** How long a check of the remote stays recent enough for Get project
  * changes to open on it without asking the remote again. */
 export const RECENT_REMOTE_CHECK_MS = 60_000;
+
+export type IntegrationSource =
+  | { kind: "localBranch"; name: string }
+  | { kind: "remoteBranch"; remote: string; branch: string };
+
+export type IntegrationSources = { sources: IntegrationSource[]; isTruncated: boolean };
+export type ResolvedSource = { label: string; remote: string | null; branch: string; reference: string; commit: string };
+export type BringInKind = "alreadyContained" | "fastForward" | "merge" | "emptyMerge";
+export type BringInChangesPlan = Omit<GetTeamChangesPlan,
+  "operationKind" | "requiresConfirmation" | "target" | "trackingRef" | "remoteCommit" | "integration" | "forecast"
+> & {
+  operationKind: "read-only" | "history-mutation";
+  requiresConfirmation: boolean;
+  source: ResolvedSource;
+  kind: BringInKind;
+  forecast: IncomingForecast | null;
+};
+export type BringInChangesResult = Omit<GetTeamChangesResult,
+  "target" | "trackingRef" | "integration" | "syncStatus"
+> & { source: ResolvedSource; kind: BringInKind };
+
+export type OverlappingMergeSource = { kind: "branch"; source: IntegrationSource } | { kind: "upstream" };
+export type StartOverlappingMergeResult = {
+  session: import("../conflicts").ConflictSession;
+  recovery: HistoryRecoveryRecord;
+};
+
+export function integrationSourceLabel(source: IntegrationSource): string {
+  return source.kind === "localBranch" ? source.name : `${source.remote}/${source.branch}`;
+}
 
 /** Whether this session asked the remote recently. A cached status (read from
  * this computer's tracking refs) is not a check. */

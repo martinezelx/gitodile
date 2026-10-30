@@ -1897,8 +1897,8 @@ fn apply_integration(
         };
         let head = observed_head(path)
             .ok_or_else(|| uncertain("The resulting HEAD could not be read."))?;
-        let branch = checked_git_stdout(run_git(path, &["symbolic-ref", "--short", "HEAD"])?)?;
-        if head != new_commit || branch != run.branch {
+        let reference = checked_git_stdout(run_git(path, &["symbolic-ref", "HEAD"])?)?;
+        if head != new_commit || reference != branch_ref {
             return Err(uncertain(
                 "The resulting branch or saved version did not match the reviewed target.",
             ));
@@ -2066,11 +2066,174 @@ pub(crate) fn get_team_changes(
 // operation.
 
 /// A branch whose saved versions can be brought into the current one.
-#[derive(serde::Deserialize, Debug, Clone, PartialEq, Eq)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub(crate) enum IntegrationSource {
     LocalBranch { name: String },
     RemoteBranch { remote: String, branch: String },
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct IntegrationSources {
+    sources: Vec<IntegrationSource>,
+    is_truncated: bool,
+}
+
+/// Respect both positive mappings and negative exclusions. Never infer a
+/// remote by splitting a short ref name: remote names can contain slashes.
+fn source_mapping(refspecs: &[String], source_ref: &str) -> Option<String> {
+    if refspecs.iter().any(|spec| {
+        spec.strip_prefix('^').is_some_and(|excluded| {
+            excluded == source_ref
+                || excluded.split_once('*').is_some_and(|(prefix, suffix)| {
+                    source_ref
+                        .strip_prefix(prefix)
+                        .is_some_and(|rest| rest.ends_with(suffix))
+                })
+        })
+    }) {
+        return None;
+    }
+    refspecs
+        .iter()
+        .find_map(|spec| map_fetch_refspec(spec, source_ref))
+        .filter(|reference| {
+            reference.starts_with("refs/") && !reference.chars().any(char::is_control)
+        })
+}
+
+/// Local inventory for the explicit branch picker. The process output is
+/// bounded by the runner; the UI receives at most 5,000 entries and a bound.
+pub(crate) fn list_integration_sources(path: String) -> Result<IntegrationSources, AppError> {
+    let (_repository, _access) =
+        application::authorize_repository(&path, "list_integration_sources", None)?;
+    let remotes = list_configured_remotes(&path)?;
+    let mappings = remotes
+        .iter()
+        .map(|remote| {
+            Ok((
+                remote.info.name.clone(),
+                read_config_values(&path, &format!("remote.{}.fetch", remote.info.name))?,
+            ))
+        })
+        .collect::<Result<Vec<_>, AppError>>()?;
+    let mut args = vec![
+        "for-each-ref".to_string(),
+        "--format=%(refname)%09%(symref)".to_string(),
+        "refs/heads/".to_string(),
+    ];
+    for (_, specs) in &mappings {
+        for spec in specs {
+            if let Some((_, destination)) = spec.split_once(':') {
+                let prefix = destination.split('*').next().unwrap_or(destination);
+                if prefix.starts_with("refs/") && !args.iter().any(|arg| arg == prefix) {
+                    args.push(prefix.to_string());
+                }
+            }
+        }
+    }
+    let output = run_git(&path, &args.iter().map(String::as_str).collect::<Vec<_>>())?;
+    if !output.status.success() {
+        checked_git_stdout(output.clone())?;
+    }
+    // Do not trim: the last record's empty symref is a significant trailing
+    // tab. Never lossily turn a ref's bytes into a different selectable name.
+    let refs = std::str::from_utf8(&output.stdout).map_err(|_| {
+        AppError::new(
+            AppErrorCode::PathEncodingUnsupported,
+            "Some branch names cannot be represented exactly.",
+        )
+    })?;
+    let current_output = run_git(&path, &["symbolic-ref", "--quiet", "HEAD"])?;
+    let current_reference = current_output
+        .status
+        .success()
+        .then(|| git_stdout(&current_output).trim().to_string());
+    let current = current_reference
+        .as_deref()
+        .and_then(|reference| reference.strip_prefix("refs/heads/"));
+    let mut sources = Vec::new();
+    for line in refs.lines() {
+        let Some((reference, symbolic)) = line.split_once('\t') else {
+            continue;
+        };
+        if !symbolic.is_empty() {
+            continue;
+        }
+        if let Some(name) = reference.strip_prefix("refs/heads/") {
+            if current != Some(name) {
+                sources.push(IntegrationSource::LocalBranch {
+                    name: name.to_string(),
+                });
+            }
+        }
+        for (remote, specs) in &mappings {
+            for spec in specs {
+                let positive = spec.strip_prefix('+').unwrap_or(spec);
+                let Some((source, destination)) = positive.split_once(':') else {
+                    continue;
+                };
+                if positive.starts_with('^') {
+                    continue;
+                }
+                let inverse = format!("{destination}:{source}");
+                let Some(source_ref) = map_fetch_refspec(&inverse, reference) else {
+                    continue;
+                };
+                let Some(branch) = source_ref.strip_prefix("refs/heads/") else {
+                    continue;
+                };
+                if source_mapping(specs, &source_ref).as_deref() != Some(reference) {
+                    continue;
+                }
+                let candidate = IntegrationSource::RemoteBranch {
+                    remote: remote.clone(),
+                    branch: branch.to_string(),
+                };
+                if !sources.contains(&candidate) {
+                    sources.push(candidate);
+                }
+            }
+        }
+        if sources.len() > 5_000 {
+            break;
+        }
+    }
+    let is_truncated = sources.len() > 5_000;
+    sources.truncate(5_000);
+    Ok(IntegrationSources {
+        sources,
+        is_truncated,
+    })
+}
+
+/// Explicit remote check only. Plan and execution remain local. The exact
+/// selected source is mapped through its configured refspec, under the common
+/// repository write permit; no upstream is substituted and nothing is pruned.
+pub(crate) fn check_integration_source(
+    path: String,
+    source: IntegrationSource,
+) -> Result<(), AppError> {
+    let (_repository, _access) =
+        application::authorize_repository(&path, "check_integration_source", None)?;
+    let IntegrationSource::RemoteBranch { remote, branch } = &source else {
+        return Ok(());
+    };
+    let resolved = resolve_source(&path, &source, "")?;
+    let specs = read_config_values(&path, &format!("remote.{remote}.fetch"))?;
+    let source_ref = format!("refs/heads/{branch}");
+    let force = specs
+        .iter()
+        .find(|spec| map_fetch_refspec(spec, &source_ref).as_deref() == Some(&resolved.reference))
+        .is_some_and(|spec| spec.starts_with('+'));
+    let refspec = format!(
+        "{}{source_ref}:{}",
+        if force { "+" } else { "" },
+        resolved.reference
+    );
+    super::fetch_remote_target(&path, remote, &refspec)?;
+    Ok(())
 }
 
 /// The source as the plan read it: its ref and the exact commit brought in.
@@ -2192,19 +2355,17 @@ fn resolve_source(
             // The ref the remote's own fetch mapping keeps that branch in,
             // exactly as a check of that remote would update it.
             let source_ref = format!("refs/heads/{branch}");
-            let reference = read_config_values(path, &format!("remote.{remote}.fetch"))?
-                .iter()
-                .find_map(|refspec| map_fetch_refspec(refspec, &source_ref))
-                .filter(|tracking| {
-                    tracking.starts_with("refs/") && !tracking.chars().any(char::is_control)
-                })
-                .ok_or_else(|| {
-                    AppError::new(
-                        AppErrorCode::InvalidRemoteConfiguration,
-                        "This remote's fetch mapping doesn't cover that branch.",
-                    )
-                    .with_remediation("Repair this remote's fetch mapping in Git.")
-                })?;
+            let reference = source_mapping(
+                &read_config_values(path, &format!("remote.{remote}.fetch"))?,
+                &source_ref,
+            )
+            .ok_or_else(|| {
+                AppError::new(
+                    AppErrorCode::InvalidRemoteConfiguration,
+                    "This remote's fetch mapping doesn't cover that branch.",
+                )
+                .with_remediation("Repair this remote's fetch mapping in Git.")
+            })?;
             (Some(remote.clone()), branch.clone(), reference)
         }
     };
@@ -3107,6 +3268,29 @@ pub(crate) fn start_overlapping_merge_with(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn integration_source_mapping_preserves_custom_refs_and_exclusions() {
+        let specs = vec![
+            "+refs/heads/*:refs/remotes/forked/*".to_string(),
+            "^refs/heads/private/*".to_string(),
+            "^refs/heads/hidden".to_string(),
+        ];
+        assert_eq!(
+            source_mapping(&specs, "refs/heads/topic/nested"),
+            Some("refs/remotes/forked/topic/nested".to_string())
+        );
+        assert_eq!(source_mapping(&specs, "refs/heads/private/topic"), None);
+        assert_eq!(source_mapping(&specs, "refs/heads/hidden"), None);
+        assert_eq!(source_mapping(&specs, "refs/tags/topic"), None);
+        assert_eq!(
+            source_mapping(
+                &["refs/heads/topic:refs/cache/picked".to_string()],
+                "refs/heads/topic"
+            ),
+            Some("refs/cache/picked".to_string())
+        );
+    }
 
     #[test]
     fn a_paused_merge_must_also_match_every_automatically_combined_index_entry() {

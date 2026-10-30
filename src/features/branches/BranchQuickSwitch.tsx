@@ -47,6 +47,7 @@ export type BranchQuickSwitchProps = {
   favouriteBranches?: ReadonlySet<string>;
   onToggleFavourite?: (name: string) => void;
   onSwitch: (target: string) => void;
+  onBringIn?: (name: string) => void;
   /** Where a branch created from this control is made. With it, "New branch" and
    * a search that names no branch open a create view inside the popup — the
    * Branches composer's fields and flow, in place of the list — rather than a
@@ -82,6 +83,7 @@ export function BranchQuickSwitch({
   favouriteBranches = new Set<string>(),
   onToggleFavourite,
   onSwitch,
+  onBringIn,
   create,
   onSeeAll,
   menuAnchor,
@@ -302,14 +304,11 @@ export function BranchQuickSwitch({
                 </button>
                 <span className="branches-quick-switch__actions-name" title={actionBranch.name}>{actionBranch.name}</span>
               </div>
-              {/* Stated, not offered: the actions name both ends so the
-                  direction is never in doubt, and carry a `Soon` because the
-                  flows behind them are not built yet. Disabled rather than
-                  hidden, so the shape of what is coming is legible. */}
-              <button className="app-menu__item" type="button" role="menuitem" disabled aria-disabled="true">
+              {/* Bring in opens its preview; rebase and compare stay Soon. */}
+              <button className="app-menu__item" type="button" role="menuitem" disabled={!onBringIn} aria-disabled={!onBringIn} onClick={() => { close(false); onBringIn?.(actionBranch.name); }}>
                 <GitMerge aria-hidden="true" />
                 <span className="branches-quick-switch__actions-label">{t.branchesMergeInto(currentValue)}</span>
-                <span className="branches-quick-switch__soon">{t.branchesSoon}</span>
+                {!onBringIn && <span className="branches-quick-switch__soon">{t.branchesSoon}</span>}
               </button>
               <button className="app-menu__item" type="button" role="menuitem" disabled aria-disabled="true">
                 <GitCommitHorizontal aria-hidden="true" />
@@ -321,7 +320,7 @@ export function BranchQuickSwitch({
                 <span className="branches-quick-switch__actions-label">{t.branchesCompareWith(currentValue)}</span>
                 <span className="branches-quick-switch__soon">{t.branchesSoon}</span>
               </button>
-              <p className="branches-quick-switch__actions-note">{t.branchesActionsSoon}</p>
+              {!onBringIn && <p className="branches-quick-switch__actions-note">{t.branchesActionsSoon}</p>}
             </div>
           ) : (<>
           {/* The branch the project is on, and what is done to it, at the head —

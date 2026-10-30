@@ -684,6 +684,7 @@ function BranchDetail({
   onDelete,
   onOpenHistory,
   onPublish,
+  onBringIn,
   onBack,
   renameEditor,
   settle = null,
@@ -716,6 +717,7 @@ function BranchDetail({
   /** Opens the publish flow, which publishes the active branch — offered on
    * that branch only. */
   onPublish?: () => void;
+  onBringIn?: (name: string) => void;
   onBack: () => void;
   /** The strip in its editing state while this branch is being renamed —
    * `BranchRenameStrip`, owned by the panel — drawn in place of the
@@ -912,6 +914,7 @@ function BranchDetail({
               activeName={activeName}
               mainName={mainName}
               route={history?.route ?? null}
+              onBringIn={onBringIn}
             />
 
             {/* One list, not a card for the latest version and a list of the
@@ -1061,6 +1064,7 @@ export function BranchesPanel({
   peekHistory,
   prefetchHistory,
   onPublish,
+  onBringIn,
   onChanged,
   onSaveVersion,
   onOpenConflicts,
@@ -1105,6 +1109,7 @@ export function BranchesPanel({
   prefetchHistory?: (name: string, tipCommit: string) => void;
   /** Opens the publish flow for the active branch. */
   onPublish?: () => void;
+  onBringIn?: (name: string) => void;
   /** Called after any successful create/switch/delete so the rest of the
    * app (repository facts, working-tree status, selection) can invalidate
    * itself — see `app/App.tsx`'s `handleBranchChanged`. */
@@ -1935,6 +1940,7 @@ export function BranchesPanel({
             onDelete={() => openDialog({ kind: "delete", target: selected.name })}
             onOpenHistory={onOpenHistory}
             onPublish={onPublish}
+            onBringIn={onBringIn}
             onBack={() => setShowNarrowDetail(false)}
             renameEditor={
               renaming === selected.name ? (
@@ -1983,6 +1989,7 @@ export function BranchesPanel({
         onClose={closeContextMenu}
         onCopied={() => setAnnouncement(t.branchesNameCopied)}
         onSwitch={(target) => openDialog({ kind: "switch", target })}
+        onBringIn={onBringIn}
         onRename={startRename}
         onDelete={(target) => openDialog({ kind: "delete", target })}
       />

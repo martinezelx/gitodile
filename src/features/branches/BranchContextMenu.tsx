@@ -13,14 +13,13 @@ export type BranchContextMenuState = ContextMenuAnchor & { branch: Branch };
 
 /** What a right-click on a branch offers, grouped the way other Git
  * clients group a branch's menu: going to it; what it can do with the branch
- * the project is on — merge, rebase, compare, stated but not yet offered;
+ * the project is on — bring in, rebase, compare;
  * renaming it and taking its name away as text; and, apart and last, the one
  * destructive action.
  *
  * Merge, rebase and compare are the quick switch's own three, in its words —
- * each names both ends so the direction is never inferred — disabled and
- * marked `Soon` until their flows exist, rather than hidden (DESIGN.md,
- * Honest affordances). They are offered only for a branch that is not the
+ * each names both ends so the direction is never inferred. Bring in opens
+ * the preview; rebase and compare remain disabled and marked `Soon`. They are offered only for a branch that is not the
  * active one: the active branch has nothing to merge into itself.
  *
  * Availability and the Delete label come from `branchActions`, the one place
@@ -34,6 +33,7 @@ export function BranchContextMenu({
   onClose,
   onCopied,
   onSwitch,
+  onBringIn,
   onRename,
   onDelete,
 }: {
@@ -46,6 +46,7 @@ export function BranchContextMenu({
   onClose: (restoreFocus: boolean) => void;
   onCopied: () => void;
   onSwitch: (name: string) => void;
+  onBringIn?: (name: string) => void;
   onRename: (name: string) => void;
   onDelete: (name: string) => void;
 }): React.JSX.Element | null {
@@ -130,12 +131,13 @@ export function BranchContextMenu({
               className="app-menu__item"
               role="menuitem"
               type="button"
-              disabled
-              aria-disabled="true"
+              disabled={key !== "merge" || !onBringIn}
+              aria-disabled={key !== "merge" || !onBringIn}
+              onClick={key === "merge" && onBringIn ? run(onBringIn) : undefined}
             >
               {icon}
               <span className="branches-quick-switch__actions-label">{label}</span>
-              <span className="branches-quick-switch__soon">{t.branchesSoon}</span>
+              {(key !== "merge" || !onBringIn) && <span className="branches-quick-switch__soon">{t.branchesSoon}</span>}
             </button>
           ))}
           <div className="app-menu__divider" role="separator" />

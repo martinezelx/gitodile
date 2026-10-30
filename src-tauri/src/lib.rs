@@ -268,6 +268,8 @@ pub fn run() {
             ipc::stop_tracking_remote,
             ipc::plan_get_team_changes,
             ipc::get_team_changes,
+            ipc::list_integration_sources,
+            ipc::check_integration_source,
             ipc::plan_bring_in_changes,
             ipc::bring_in_changes,
             ipc::start_overlapping_merge,

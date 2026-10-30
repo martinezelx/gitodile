@@ -1,4 +1,6 @@
 import type {
+  BringInChangesPlan, BringInChangesResult, IntegrationSource, IntegrationSources,
+  OverlappingMergeSource, StartOverlappingMergeResult,
   GetTeamChangesPhase,
   GetTeamChangesPlan,
   GetTeamChangesResult,
@@ -27,4 +29,15 @@ export interface SyncPort {
   /** Local: reads the remote as of the last check, never the network. */
   planGet(query: TeamSyncQuery): Promise<GetTeamChangesPlan>;
   get(request: GetTeamChangesRequest): Promise<GetTeamChangesResult>;
+}
+
+/** Branch integration is separate from the upstream read/cache contract. */
+export interface BringInPort {
+  listSources(query: TeamSyncQuery): Promise<IntegrationSources>;
+  checkSource(query: TeamSyncQuery & { source: IntegrationSource }): Promise<void>;
+  plan(query: TeamSyncQuery & { source: IntegrationSource }): Promise<BringInChangesPlan>;
+  bring(request: GetTeamChangesRequest & { source: IntegrationSource }): Promise<BringInChangesResult>;
+  startOverlap(request: TeamSyncQuery & {
+    source: OverlappingMergeSource; stateToken: string; recoveryReference: string;
+  }): Promise<StartOverlappingMergeResult>;
 }

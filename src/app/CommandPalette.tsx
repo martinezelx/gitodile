@@ -9,6 +9,7 @@ import {
   FolderX,
   GitBranch,
   GitBranchPlus,
+  GitMerge,
   History,
   House,
   Info,
@@ -89,6 +90,8 @@ export function paletteMeta(id: string, t: Translations): Pick<AppCommand, "grou
       return { group: t.paletteGroupProject, icon: <FolderPlus aria-hidden="true" /> };
     case "close-project":
       return { group: t.paletteGroupProject, icon: <FolderX aria-hidden="true" /> };
+    case "bring-in-changes":
+      return { group: t.paletteGroupProject, icon: <GitMerge aria-hidden="true" /> };
     case "new-branch":
       return { group: t.paletteGroupProject, icon: <GitBranchPlus aria-hidden="true" /> };
     case "project-settings":

@@ -1876,3 +1876,16 @@ describe("BranchesPanel", () => {
     expect(detailPanel("main")).toBeInTheDocument();
   });
 });
+
+
+it("routes both the detail and row menu into the current branch's integration preview", async () => {
+  const onBringIn = vi.fn();
+  renderPanel({ onBringIn });
+  const row = screen.getByRole("treeitem", { name: "feature/new-thing" });
+  await userEvent.click(row);
+  await userEvent.click(screen.getByRole("button", { name: /Merge into.*main/ }));
+  expect(onBringIn).toHaveBeenLastCalledWith("feature/new-thing");
+  fireEvent.contextMenu(row, { clientX: 210, clientY: 180 });
+  await userEvent.click(screen.getByRole("menuitem", { name: /Merge into.*main/ }));
+  expect(onBringIn).toHaveBeenCalledTimes(2);
+});

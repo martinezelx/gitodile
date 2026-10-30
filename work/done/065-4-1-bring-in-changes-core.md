@@ -25,7 +25,7 @@ any source commit, not only the configured upstream.
 
 # User outcome
 
-None visible yet; [065-4-3](../0.5.0/065-4-3-bring-in-changes-dialog.md) puts the
+None visible yet; [065-4-3](065-4-3-bring-in-changes-dialog.md) puts the
 commands on screen. Every later step has a tested, stale-safe contract.
 
 # Context

@@ -76,6 +76,10 @@ import {
 import { createStatusController, statusPort, type StatusErrorMapper } from "../features/status";
 import {
   createSyncController,
+  createBringInController,
+  bringInPort,
+  BringInChangesDialog,
+  type IntegrationSource,
   EMPTY_TEAM_SYNC_STATE,
   GetTeamChangesDialog,
   selectTeamSyncState,
@@ -377,6 +381,7 @@ export function App(): React.JSX.Element {
   const [projectRuntime] = useState(() => createProjectRuntime(initialProjectSessionsState));
   const [branchesController] = useState(() => createBranchesController(branchesPort));
   const [historyController] = useState(() => createHistoryController(historyPort));
+  const [bringInController] = useState(() => createBringInController(bringInPort));
   const [conflictsController] = useState(() => createConflictsController(conflictsPort));
   const [repositoryController] = useState(() => createRepositoryController(repositoryPort));
   const [cloneController] = useState(() => createCloneController(clonePort));
@@ -656,6 +661,8 @@ export function App(): React.JSX.Element {
      opens only once that dialog has closed and its operation has finished, or
      the mutation guard would still see the sync running and refuse. */
   const [saveAfterSyncSessionId, setSaveAfterSyncSessionId] = useState<string | null>(null);
+  const [bringInDialog, setBringInDialog] = useState<{ sessionId: string; source: IntegrationSource | null } | null>(null);
+  const bringInSession = bringInDialog ? sessionsState.byId[bringInDialog.sessionId] ?? null : null;
   const [getTeamDialogSessionId, setGetTeamDialogSessionId] = useState<string | null>(null);
   /* Whether Get project changes was asked for on its own or to publish
      afterwards (the remote moved on first). */
@@ -715,6 +722,7 @@ export function App(): React.JSX.Element {
     publishDialogSessionId !== null ||
     saveDialogSessionId !== null ||
     getTeamDialogSessionId !== null ||
+    bringInDialog !== null ||
     activeSession?.operation?.kind === "branch" ||
     activeSession?.operation?.kind === "discard" ||
     activeSession?.operation?.kind === "resolve";
@@ -1277,7 +1285,7 @@ export function App(): React.JSX.Element {
 
   /* Branch changes and resolving an overlapping file take the project's
      mutation slot the same way: refused while another project's runs. */
-  const startLocalOperation = (path: string, kind: "branch" | "resolve"): boolean => {
+  const startLocalOperation = (path: string, kind: "branch" | "resolve" | "sync"): boolean => {
     const session = sessionsState.byId[path];
     if (!session) {
       return false;
@@ -1294,6 +1302,10 @@ export function App(): React.JSX.Element {
     return true;
   };
   const startBranchOperation = (path: string): boolean => startLocalOperation(path, "branch");
+  const openBringIn = (name?: string): void => {
+    if (!activeSession || !startLocalOperation(activeSession.id, "sync")) return;
+    setBringInDialog({ sessionId: activeSession.id, source: name ? { kind: "localBranch", name } : null });
+  };
 
   const finishSessionOperation = (path: string): void => {
     dispatchSessions({ type: "finishOperation", id: path });
@@ -1939,6 +1951,7 @@ export function App(): React.JSX.Element {
     branchesController.close({ projectId: id, sessionEpoch: closingSession.epoch });
     historyController.close({ projectId: id, sessionEpoch: closingSession.epoch });
     conflictsController.close({ projectId: id, sessionEpoch: closingSession.epoch });
+    bringInController.close({ projectId: id, sessionEpoch: closingSession.epoch });
     workDetailController.forget({ projectId: id, sessionEpoch: closingSession.epoch });
     dispatchSessions({ type: "close", id });
     // Closing the active project goes to Home with no project active, the
@@ -2137,6 +2150,9 @@ export function App(): React.JSX.Element {
     ...(project && !hasBlockingDialog
       ? [{ id: "close-project", label: t.commandCloseActiveProject, action: requestCloseActiveProject }]
       : []),
+    ...(project?.headState === "branch" && !hasBlockingDialog ? [{
+      id: "bring-in-changes", label: t.bringInTitle, action: () => openBringIn(),
+    }] : []),
     // Offered only while something is paused: a conflict is not a place.
     ...(project && conflictSession
       ? [{
@@ -3189,6 +3205,7 @@ export function App(): React.JSX.Element {
                             openWorkbench("changes");
                           }}
                           onOpenConflicts={openConflicts}
+                          onBringIn={openBringIn}
                           selfEmail={gitIdentity.identity.email || null}
                           onOpenHistory={(name, commit) => {
                             setHistoryScopeBranchIntent(name);
@@ -3274,6 +3291,7 @@ export function App(): React.JSX.Element {
           favouriteBranches={favouriteBranches}
           onToggleFavouriteBranch={toggleFavouriteBranch}
           teamSync={teamSync}
+          onBringIn={openBringIn}
           onSwitchBranch={(target) => {
             if (projectPath && startBranchOperation(projectPath)) {
               setBranchSwitchTarget(target);
@@ -3418,6 +3436,42 @@ export function App(): React.JSX.Element {
             }
           />
         </Suspense>
+      )}
+
+      {bringInDialog && bringInSession && (
+        <BringInChangesDialog
+          key={`${bringInSession.id}:${bringInSession.epoch}`}
+          controller={bringInController}
+          projectPath={bringInSession.project.path}
+          sessionEpoch={bringInSession.epoch}
+          source={bringInDialog.source}
+          runHooks={runGitHooks}
+          onClose={() => {
+            finishSessionOperation(bringInSession.id);
+            setBringInDialog(null);
+          }}
+          onPhaseChange={(phase) => dispatchSessions({ type: "setOperationPhase", id: bringInSession.id, phase })}
+          onApplied={async () => {
+            dispatchSessions({ type: "setChangesSelection", id: bringInSession.id, selection: EMPTY_CHANGES_SELECTION });
+            await repositoryReads.refreshAfterMutation(projectRuntime, projectRuntime.getSnapshot(), bringInSession.project.path);
+          }}
+          onPaused={async (session) => {
+            await conflictsController.acceptSession({ projectId: bringInSession.id, sessionEpoch: bringInSession.epoch }, session);
+            await repositoryReads.refreshAfterMutation(projectRuntime, projectRuntime.getSnapshot(), bringInSession.project.path);
+            navigateToView("conflicts");
+          }}
+          onSaveVersion={() => {
+            finishSessionOperation(bringInSession.id);
+            setBringInDialog(null);
+            setSaveAfterSyncSessionId(bringInSession.id);
+          }}
+          onOpenConflicts={() => {
+            finishSessionOperation(bringInSession.id);
+            setBringInDialog(null);
+            openConflicts();
+          }}
+          onRevealFile={(path) => { void changesController.revealFile(bringInSession.project.path, bringInSession.epoch, path).catch(() => undefined); }}
+        />
       )}
 
       {getTeamDialogSession && (

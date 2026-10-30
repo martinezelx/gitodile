@@ -513,3 +513,17 @@ describe("BranchQuickSwitch", () => {
     expect(screen.queryByRole("button", { name: /Change branch/ })).not.toBeInTheDocument();
   });
 });
+
+
+it("hands bringing a branch in to its preview, while other integrations remain unavailable", async () => {
+  const onBringIn = vi.fn();
+  render(<LanguageProvider><BranchQuickSwitch snapshot={snapshot} isLoadingSnapshot={false}
+    currentValue="main" canSwitch onSwitch={vi.fn()} onSeeAll={vi.fn()} onBringIn={onBringIn} /></LanguageProvider>);
+  await userEvent.click(screen.getByRole("button", { name: "Change branch (main)" }));
+  await userEvent.click(screen.getByRole("button", { name: /What.*feature\/1.*can do/ }));
+  const merge = screen.getByRole("menuitem", { name: /Merge into.*main/ });
+  expect(merge).toBeEnabled();
+  await userEvent.click(merge);
+  expect(onBringIn).toHaveBeenCalledWith("feature/1");
+  expect(screen.queryByRole("dialog")).toBeNull();
+});

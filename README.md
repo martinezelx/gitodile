@@ -103,6 +103,13 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   combined unsaved content) is kept first, and uncertain local outcomes are
   reported without an automatic repair. Publishing when the remote moved on
   gets, combines and publishes in the same confirmation.
+- **Bring in changes** from another local or remote branch into the current
+  branch, from Branches, the quick switch or the command palette. Review an
+  advance, merge version or empty merge, with recovery before any change;
+  explicitly hand saved overlaps to the existing resolver. Only the selected
+  remote source is checked when its check is unknown or over a minute old;
+  local sources, planning and execution never fetch. Uncertain outcomes offer
+  only Close. Rebase, compare and merging into another branch remain Soon.
 - List, create, switch, rename, and safely delete local branches, with dirty-worktree checks and recovery references where required.
   A branch is only called safe to delete when another local or remote-tracking
   reference already holds its saved work; a published branch can have its remote
@@ -195,7 +202,7 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
 - Return to Projects from More actions or the command palette while projects stay
   open, use recent closed projects, and go Back to the project screen you left.
 
-Not yet implemented: bringing in another local branch, the recovery
+Not yet implemented: the recovery
 center, and setting changes aside. Windows/Linux release qualification also
 remains open. Windows Authenticode and macOS delivery are deliberately deferred
 until after `1.0.0`; see

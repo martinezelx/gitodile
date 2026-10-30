@@ -229,6 +229,9 @@ export function createConflictsController(port: ConflictsPort) {
     },
     refresh,
     mutate,
+    acceptSession(query: ConflictsQuery, session: ConflictSession): Promise<ConflictSession | null> {
+      return mutate(query, async () => session);
+    },
     end,
     readSideDiff,
     checkWorkingFile,

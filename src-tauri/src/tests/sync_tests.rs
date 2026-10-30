@@ -2155,11 +2155,12 @@ fn bringing_in_a_local_branch_fast_forwards_merges_and_records_an_empty_merge() 
     }
 }
 
-// About 5.5 s alone on Windows: the published fixture, a second clone that
-// pushes twice, and one merge.
+// About 18 s alone on Windows: real Git proves the cached source, merge,
+// recovery, exact selected-source fetch, custom mapping and exclusion. The
+// published fixture, second clone and commits cannot be replaced by a parser.
 #[test]
 fn bringing_in_a_remote_branch_reads_its_last_check_and_names_it_like_git() {
-    let (repo, remote, _main) = published_repo_and_remote("bring-in-remote");
+    let (repo, remote, main) = published_repo_and_remote("bring-in-remote");
     set_identity(&repo);
     let other = clone_remote(&remote, "bring-in-remote-other");
     set_identity(&other);
@@ -2170,6 +2171,9 @@ fn bringing_in_a_remote_branch_reads_its_last_check_and_names_it_like_git() {
     let team = remote_branch_sha(&remote, "refs/heads/team").unwrap();
     save_file(&repo, "local.txt", "local work");
     let previous = head(&repo);
+    // Exact HEAD refs must survive an ambiguous short name during planning,
+    // execution verification and source inventory.
+    assert!(git_succeeds(&repo, &["tag", &main]));
     // The remote moves after the last check; nothing here may see it.
     save_file(&other, "later.txt", "later work");
     push(&other, "team");
@@ -2192,6 +2196,7 @@ fn bringing_in_a_remote_branch_reads_its_last_check_and_names_it_like_git() {
         Some("Merge remote-tracking branch 'origin/team'")
     );
     let result = bring_in(&repo, "remote", &source, &plan).unwrap();
+    assert_eq!(result.outcome, GetTeamChangesOutcome::Completed);
     assert_eq!(parents_of_head(&repo), vec![previous, team.clone()]);
     assert_eq!(result.recovery.remote, "origin");
     assert_eq!(
@@ -2221,6 +2226,52 @@ fn bringing_in_a_remote_branch_reads_its_last_check_and_names_it_like_git() {
             code
         );
     }
+
+    // An explicit check must update only the chosen branch through its
+    // configured mapping, never the checked-out branch's upstream.
+    assert!(git_succeeds(
+        &repo,
+        &[
+            "config",
+            "remote.origin.fetch",
+            "+refs/heads/team:refs/remotes/custom/team"
+        ]
+    ));
+    assert!(git_succeeds(
+        &repo,
+        &["update-ref", "refs/remotes/custom/team", &team]
+    ));
+    let inventory =
+        serde_json::to_value(crate::sync::list_integration_sources(repo.clone()).unwrap()).unwrap();
+    assert!(inventory["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value["remote"] == "origin" && value["branch"] == "team"));
+    assert!(!inventory["sources"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|value| value["kind"] == "localBranch" && value["name"] == main));
+    let upstream_before = git_stdout(&test_git(&repo, &["rev-parse", "@{upstream}"]).unwrap());
+    crate::sync::check_integration_source(repo.clone(), source.clone()).unwrap();
+    let checked = plan_bring_in(&repo, "remote", &source).unwrap();
+    assert_eq!(checked.source.reference, "refs/remotes/custom/team");
+    assert_eq!(checked.source.commit, head(&other));
+    assert_eq!(
+        git_stdout(&test_git(&repo, &["rev-parse", "@{upstream}"]).unwrap()),
+        upstream_before
+    );
+    assert!(git_succeeds(
+        &repo,
+        &["config", "--add", "remote.origin.fetch", "^refs/heads/team"]
+    ));
+    assert_eq!(
+        crate::sync::check_integration_source(repo.clone(), source.clone())
+            .unwrap_err()
+            .code,
+        AppErrorCode::InvalidRemoteConfiguration
+    );
 
     for path in [repo, remote, other] {
         let _ = fs::remove_dir_all(path);

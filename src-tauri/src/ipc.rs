@@ -58,7 +58,7 @@ use crate::{
     sync::{
         self, BringInChangesPlan, BringInChangesResult, ConnectRemotePlan, ConnectRemoteResult,
         GetTeamChangesPhase, GetTeamChangesPlan, GetTeamChangesResult, IntegrationSource,
-        OverlappingMergeSource, ProjectRemotes, RemoteDiscovery, RemoteHome,
+        IntegrationSources, OverlappingMergeSource, ProjectRemotes, RemoteDiscovery, RemoteHome,
         StartOverlappingMergeResult, TeamSyncStatus,
     },
     technology::{self, ProjectTechnology},
@@ -1457,6 +1457,35 @@ pub(crate) fn get_team_changes(
                     let _ = on_progress.send(phase);
                 },
             )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn list_integration_sources(
+    path: String,
+    session_epoch: String,
+) -> Result<IntegrationSources, AppError> {
+    report_result(
+        "list_integration_sources",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::list_integration_sources(path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn check_integration_source(
+    path: String,
+    session_epoch: String,
+    source: IntegrationSource,
+) -> Result<(), AppError> {
+    report_result(
+        "check_integration_source",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::check_integration_source(path, source)
         })(),
     )
 }

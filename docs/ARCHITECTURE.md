@@ -693,6 +693,23 @@ it block by name, as does a sparse checkout. Its clean execution still refuses o
 `start_overlapping_merge` starts the paused-merge path below. See the 2026-10-29
 amendment to ADR 0030.
 
+The eager `sync/BringInChangesDialog` owns the branch picker and review, with
+its own typed `BringInPort` and adapter. `list_integration_sources` reads local
+and mapped remote-tracking refs, excludes symbolic refs, the current local
+branch and negative refspecs, refuses lossy names, and bounds its answer at
+5,000 sources; its lists use the existing virtualizer. A check is remembered
+per project epoch and exact source for one minute by `bringInController`.
+`check_integration_source` is an explicit local mutation under the common
+repository write permit: it fetches only the selected remote branch through
+its configured mapping, preserving the force flag and exclusions, without
+pruning or substituting the current upstream. A failed check never enables
+confirmation of cached knowledge. An old/unknown check runs behind the local
+preview and re-plans before confirmation; a stale execution re-plans without
+retrying. A verified pause is installed in the conflicts controller before
+opening its screen. Uncertain results retain the mutation slot until Close
+and never initiate resolution, abort, retry or publish. App only wires the
+entry callbacks, mutation slot, coordinated refresh and resolver handoff.
+
 History-mutation recovery follows
 [ADR 0008](adr/0008-store-history-recovery-as-versioned-hidden-refs.md): the
 previous commit is protected by a create-only ref under

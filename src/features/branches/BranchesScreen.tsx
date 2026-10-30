@@ -16,6 +16,7 @@ export type BranchesScreenProps = {
   onChanged: () => void;
   onSaveVersion: () => void;
   onOpenConflicts?: () => void;
+  onBringIn?: (name: string) => void;
   /** Open History reading this branch, and — when a version is named — with that
    * version selected. Branches' own list of saved versions is a preview of the
    * one History draws in full. */

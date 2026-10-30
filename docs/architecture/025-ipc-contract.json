@@ -131,6 +131,8 @@
     { "name": "stop_tracking_remote", "arguments": ["path", "sessionEpoch"], "response": "TeamSyncStatus" },
     { "name": "plan_get_team_changes", "arguments": ["path", "sessionEpoch"], "response": "GetTeamChangesPlan" },
     { "name": "get_team_changes", "arguments": ["path", "sessionEpoch", "stateToken", "recoveryReference", "runHooks", "onProgress"], "response": "GetTeamChangesResult" },
+    { "name": "list_integration_sources", "arguments": ["path", "sessionEpoch"], "response": "IntegrationSources" },
+    { "name": "check_integration_source", "arguments": ["path", "sessionEpoch", "source"], "response": "void" },
     { "name": "plan_bring_in_changes", "arguments": ["path", "sessionEpoch", "source"], "response": "BringInChangesPlan" },
     { "name": "bring_in_changes", "arguments": ["path", "sessionEpoch", "source", "stateToken", "recoveryReference", "runHooks", "onProgress"], "response": "BringInChangesResult" },
     { "name": "start_overlapping_merge", "arguments": ["path", "sessionEpoch", "source", "stateToken", "recoveryReference"], "response": "StartOverlappingMergeResult" },

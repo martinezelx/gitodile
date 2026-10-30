@@ -957,7 +957,7 @@ pub(crate) fn get_branches(path: String) -> Result<BranchesSnapshot, AppError> {
     let ((symbolic_head, verified_head), main_branch) = in_parallel(
         || {
             (
-                run_git(&path, &["symbolic-ref", "--quiet", "--short", "HEAD"]),
+                run_git(&path, &["symbolic-ref", "--quiet", "HEAD"]),
                 // One verification answers both questions: whether HEAD exists
                 // and which commit it names.
                 run_git(&path, &["rev-parse", "--verify", "HEAD"]),
@@ -969,7 +969,8 @@ pub(crate) fn get_branches(path: String) -> Result<BranchesSnapshot, AppError> {
     let branch = symbolic_head
         .status
         .success()
-        .then(|| git_stdout(&symbolic_head));
+        .then(|| git_stdout(&symbolic_head))
+        .and_then(|reference| reference.strip_prefix("refs/heads/").map(str::to_string));
     let current_commit = verified_head
         .status
         .success()
@@ -3021,14 +3022,20 @@ mod tests {
         git_init(&path);
         write_and_commit(&path, "a.txt", "one\n", "first");
 
+        let current = current_branch(&path);
         let status = git_command(&path)
             .args(["branch", "feature"])
             .status()
             .expect("run git branch feature");
         assert!(status.success());
+        assert!(git_command(&path)
+            .args(["tag", &current])
+            .status()
+            .unwrap()
+            .success());
 
         let snapshot = get_branches(path.clone()).expect("discovery should succeed");
-        assert_eq!(snapshot.branch, Some(current_branch(&path)));
+        assert_eq!(snapshot.branch, Some(current));
         assert_eq!(snapshot.branches.len(), 2);
         let active = snapshot
             .branches
