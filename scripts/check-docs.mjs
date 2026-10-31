@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { taskDirectoryErrors, versionFolderPattern } from "./work-layout.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ignoredDirectories = new Set([".agents", ".git", "dist", "node_modules", "target"]);
@@ -53,7 +54,7 @@ for (const file of markdownFiles) {
 const taskIds = new Map();
 const taskRecords = [];
 const workRoot = path.join(root, "work");
-const versionFolder = /^\d+\.\d+\.\d+$/;
+const versionFolder = versionFolderPattern;
 const laterFolder = "after-1.0";
 const allowedStatuses = (area) =>
   area === "done" ? ["done"] : area === laterFolder ? ["planned", "blocked"] : ["active", "blocked"];
@@ -71,9 +72,7 @@ for (const area of taskAreas) {
   if (area !== "done" && !fs.existsSync(path.join(directory, "README.md"))) {
     errors.push(`work/${area}/ needs a README.md stating its goal and exit condition`);
   }
-  for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-    if (entry.isDirectory()) errors.push(`work/${area}/${entry.name}/ nests tasks; keep each folder flat`);
-  }
+  errors.push(...taskDirectoryErrors(workRoot, area));
   for (const file of collectMarkdownFiles(directory)) {
     if (path.basename(file) === "README.md") continue;
     const source = fs.readFileSync(file, "utf8");

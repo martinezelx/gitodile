@@ -2619,6 +2619,12 @@ Minimum expectations:
 - reduced-motion support;
 - minimum comfortable pointer target sizes.
 
+In a short viewport (including native WebView zoom), Overlapping changes
+keeps its existing list/detail panes and lets the sheet scroll past the
+compact navigation and wrapped header. The list and the two-side reading
+area retain a minimum of four `--strip-height` units, so virtualization
+still has a viewport and keyboard focus can reveal every file action.
+
 **Focus is one colour in the field's own shape.** A button, a checkbox or a
 row takes a 2px `--focus-ring` outline. A field that hides the outline shows
 focus with the same colour on the edge it already has: a capsule or a framed
@@ -2671,6 +2677,10 @@ read rather than questions to answer and keep their identity shell. The shell
 exists because the dialogs had drifted to seven widths, four paddings, borders
 on some and not others, and three different headers; a new dialog takes the
 shell and a size, never a width of its own.
+
+The shell is a named `dialog` or `alertdialog` with its own heading. Its
+header is a neutral container, so an overlay outside `main` does not add a
+second application-wide banner to screen-reader landmark navigation.
 
 The documents still read as the same family: What's new and the shortcut
 sheet share the `s` width, the 28px inset and the header below (a 40px glyph

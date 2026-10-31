@@ -1,0 +1,23 @@
+{
+  "forced": true,
+  "systemMotion": true,
+  "rootAttributes": [
+    [
+      "lang",
+      "es"
+    ],
+    [
+      "data-reduced-motion",
+      "true"
+    ],
+    [
+      "data-theme",
+      "gitodile-dark"
+    ]
+  ],
+  "moving": 0,
+  "selectionStyle": {
+    "outline": "rgb(26, 235, 255) solid 1.6px",
+    "border": "rgb(255, 255, 255)"
+  }
+}

@@ -54,7 +54,7 @@ Already delivered:
   mutation planning, invalidation, and architecture checks.
 
 The release-oriented audit of this baseline is complete. Task
-[`065-1`](../work/done/065-1-core-workflow-audit.md) owns the capability matrix,
+[`065-1`](../work/done/0.1.0/065-1-core-workflow-audit.md) owns the capability matrix,
 hermetic journeys, Windows desktop evidence, and remaining platform limits.
 
 ## GitHub Desktop reference cut
@@ -99,7 +99,7 @@ permanent references and do not change when work moves between versions.
 ### Public distribution — delivered
 
 - **065-9: Signed application updates** is closed
-  ([epic 065-9](../work/done/065-9-signed-application-updates.md), 2026-09-16):
+  ([epic 065-9](../work/done/0.3.0/065-9-signed-application-updates.md), 2026-09-16):
   contracts, install protection, the native updater and its interface, signed
   builds, merge-driven releases, public publishing and the release-notes
   automation are on `main` and proven by public releases, all on one update
@@ -140,7 +140,7 @@ save a change, and verify the result in History.
 
 ### Gate 2 — Complete collaboration and overlaps (`0.5.0`)
 
-- **037: Resolve overlapping changes.** At GitHub Desktop level: understand
+- **037 (implementation completed 2026-10-31): Resolve overlapping changes.** At GitHub Desktop level: understand
    each overlap, keep one side per file or edit it in the user's editor, mark
    it resolved or reset it, then finish or abort the merge with a plan, all on
    a durable snapshot. It first supports an externally started merge (a
@@ -149,15 +149,19 @@ save a change, and verify the result in History.
    itself become sessions. A paused rebase, cherry-pick, revert or stash apply
    left by another tool is detected and explained read-only, never resolved.
    The three-pane editor is epic 206 after `1.0.0` (decided 2026-10-27).
-- **065-4: Integrate branches and diverged project changes.** Add previewed
+- **065-4 (implementation completed 2026-10-31): Integrate branches and diverged project changes.** Add previewed
    local/remote-branch merge and diverged upstream integration. All initiation,
    clean and paused outcomes are implemented and Windows-audited in
-   [065-4-5](../work/done/065-4-5-integration-audit.md); overlaps use task 037's
-   existing resolver. The epic remains open for macOS/Linux runtime and
-   accessibility qualification, alongside task 037's inherited gaps.
+   [065-4-5](../work/done/0.5.0/065-4-5-integration-audit.md); overlaps use task 037's
+   existing resolver. Accepted [ADR 0042](adr/0042-propose-platform-qualification-carryover-for-050.md)
+   closes this implementation phase together with 037 and 037-6. The original
+   unchecked external qualification remains with 065-8 (Linux) and 065-10
+   (macOS), linked through the [carryover matrix](../work/assets/0.5.0-closure/closure-audit.md).
 
-Exit condition: both the clean and conflicting collaboration paths can finish
-without a terminal. Rebase and force push remain excluded.
+Implementation exit condition met: both the clean and conflicting collaboration
+paths can finish without a terminal. Rebase and force push remain excluded.
+The accepted qualification carryover does not authorize a release or start
+Gate 3.
 
 ### Gate 3 — Make safety visible and reusable (`0.6.0`)
 
@@ -195,9 +199,9 @@ see [Design seeds in `1.0.0`](#design-seeds-in-100).
    ([ADR 0017](adr/0017-console-git-commands-by-permission-tier.md)); changes
    are previewed and, unless the person turns that off, confirmed
    ([ADR 0028](adr/0028-console-runs-changes-without-a-read-only-mode.md),
-   [task 134](../work/done/134-project-git-console.md),
-   [epic 138](../work/done/138-console-git-commands.md),
-   [task 149](../work/done/149-single-console-mode.md)). History and
+   [task 134](../work/done/0.3.0/134-project-git-console.md),
+   [epic 138](../work/done/0.3.0/138-console-git-commands.md),
+   [task 149](../work/done/0.4.0/149-single-console-mode.md)). History and
    destructive commands are
    [task 139](../work/0.6.0/139-console-history-and-destructive-commands.md).
 - **065-8: Release hardening and distribution.** Run the complete workflow

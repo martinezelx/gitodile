@@ -215,14 +215,17 @@ until after `1.0.0`; see
 The dependency-ordered `1.0.0` plan is in the
 [`roadmap`](docs/ROADMAP.md), with approved acceptance criteria under
 [`work/`](work/README.md) version folders and the completed core-workflow evidence in
-[`task 065-1`](work/done/065-1-core-workflow-audit.md), clone evidence in
-[`task 065-2`](work/done/065-2-clone-remote-project.md), and local-creation
-evidence in [`task 065-3`](work/done/065-3-create-local-project.md).
+[`task 065-1`](work/done/0.1.0/065-1-core-workflow-audit.md), clone evidence in
+[`task 065-2`](work/done/0.1.0/065-2-clone-remote-project.md), and local-creation
+evidence in [`task 065-3`](work/done/0.1.0/065-3-create-local-project.md).
 The branch/upstream integration audit and its Windows evidence are in
-[`065-4-5`](work/done/065-4-5-integration-audit.md); macOS/Linux runtime
-and real assistive-technology qualification remain open.
+[`065-4-5`](work/done/0.5.0/065-4-5-integration-audit.md); macOS/Linux runtime
+qualification remains open. Its
+[closure follow-up](work/assets/0.5.0-closure/closure-audit.md) adds Windows
+NVDA speech-generation, live forced-colour/reduced-motion emulation and native
+zoom evidence; this does not qualify other WebViews or platforms.
 The completed History implementation and its validation are recorded in
-[`task 015`](work/done/015-history-timeline.md).
+[`task 015`](work/done/0.1.0/015-history-timeline.md).
 
 ## Publication checks
 
@@ -240,7 +243,7 @@ SHA and dispatches the candidate build. Direct pushes and manual tags cannot
 authorize a release. See
 [ADR 0010](docs/adr/0010-distribute-signed-app-updates-through-public-github-releases.md),
 [ADR 0019](docs/adr/0019-publish-updates-through-one-channel.md)
-and [task 065-9](work/done/065-9-signed-application-updates.md); the evidence and OS-signing work still
+and [task 065-9](work/done/0.3.0/065-9-signed-application-updates.md); the evidence and OS-signing work still
 open is tracked by [task 065-9-13](work/0.7.0/065-9-13-updater-evidence-and-os-signing.md).
 The native updater lifecycle and its visual controls are implemented in
 Settings → Updates. The current release matrix enables only Windows x86-64

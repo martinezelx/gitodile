@@ -1,0 +1,36 @@
+{
+  "date": "2026-10-31",
+  "branch": "release/0.5.0",
+  "baseCommit": "73714cc67650d2b994e57082e2e70a021d8feb0d",
+  "gate": {
+    "command": "pnpm run check",
+    "exitCode": 0,
+    "frontendFiles": 163,
+    "frontendPassed": 1883,
+    "frontendSeconds": 57.0,
+    "rustPassed": 693,
+    "rustIgnored": 1,
+    "rustSeconds": 153.58,
+    "ignored": "hosting_access::tests::secure_store_roundtrip: explicit real credential-store qualification",
+    "credentialIntegrationPassed": 2,
+    "credentialIntegrationSeconds": 4.45
+  },
+  "sourceHashes": [
+    {
+      "path": "src/shared/ui/dialog.tsx",
+      "sha256": "657841682d954307504c968b900eb0a3575b229f68fc16cedd4223d0436ad105"
+    },
+    {
+      "path": "src/shared/ui/Dialog.test.tsx",
+      "sha256": "3325214baf075ea0ab060d6997c4e640a95e2b732b680623501db09e39e465e1"
+    },
+    {
+      "path": "src/features/conflicts/conflicts.css",
+      "sha256": "c1dc0131db8c13f031165411a4a1a2d00bd9a978a07e50a8beeb2e6d7c1368f7"
+    }
+  ],
+  "finalDocumentationGate": {
+    "command": "pnpm run check:docs",
+    "exitCode": 0
+  }
+}

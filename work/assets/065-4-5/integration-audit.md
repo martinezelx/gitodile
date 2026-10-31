@@ -1,6 +1,6 @@
 # Integration audit — 2026-10-30
 
-Windows audit of [065-4](../../0.5.0/065-4-integrate-branches.md), on the
+Windows audit of [065-4](../../done/0.5.0/065-4-integrate-branches.md), on the
 existing `release/0.5.0`, starting at `42ad19f`. This is evidence, not a new
 workflow specification. ADR [0030](../../../docs/adr/0030-forecast-and-combine-project-changes.md)
 and [0041](../../../docs/adr/0041-conflict-sessions-and-their-recovery.md)
@@ -50,7 +50,7 @@ Named tests identify behavior rather than a transient line number.
 | 5. Handoff preserves roles; no automatic stage/resolve/abort/commit/publish | **Passed.** Desktop main/topic and main/origin-main, all initiation entries, restart, explicit Keep/Mark/Finish/Stop. Get-and-publish left the remote unchanged at pause and after Finish; only a separate explicit Publish was attempted. App shell test in [App.projects](../../../src/app/App.projects.test.tsx) checks adoption before navigation without Get/Publish. B/G check exact workflow token/recovery and uncertain handoffs. |
 | 6. Hooks/signing/identity/credentials/rejection/uncertainty truthful and bounded | **Windows passed with synthetic credentials.** Desktop hook rejection and failed signing kept prepared resolutions, empty local identity now blocks planning, rejected local remote kept work. C `a_merge_is_finished_only_when_resolved_and_failures_keep_the_resolutions`; R `merge_version_failures_and_overlaps_leave_the_project_untouched` and `an_upstream_overlap_uses_gets_token_and_finishes_through_commit_hooks`. Credential helper integration tests use fake secrets/private process pipes; no real hosting login/store qualification is claimed. |
 | 7. Linked worktrees serialize shared mutations and refresh correct content/refs | **Windows passed.** Quick-switch initiation/abort changed only linked files and used that worktree's start/snapshot/recovery owner. Main checkout kept its HEAD and dirty/untracked bytes. R `a_linked_worktree_owns_its_overlap_without_changing_the_main_worktree`; [repository access tests](../../../src-tauri/src/repository_access.rs) prove common-directory exclusion and writer fairness; [read coordinator tests](../../../src/features/repository/readCoordinator.test.ts) prove worktree/shared invalidation scopes. |
-| 8. Full repository/frontend/accessibility/platform tests, IPC/docs, aggregate gate | **Windows checks recorded in the task; platform criterion remains open.** Keyboard/focus/locale/theme desktop evidence below; typed IPC and architecture checks run in the aggregate gate. macOS/Linux runtime, real screen reader and inherited live forced-colour qualification remain unrun, as in [037-7](../../done/037-7-conflict-workflow-audit.md) and [ADR 0006](../../../docs/adr/0006-defer-macos-and-linux-runtime-validation.md). No current CI or non-Windows success is claimed by this local audit. |
+| 8. Full repository/frontend/accessibility/platform tests, IPC/docs, aggregate gate | **Windows checks recorded in the task; platform criterion remains open.** Keyboard/focus/locale/theme desktop evidence below; typed IPC and architecture checks run in the aggregate gate. macOS/Linux runtime, real screen reader and inherited live forced-colour qualification remain unrun, as in [037-7](../../done/0.5.0/037-7-conflict-workflow-audit.md) and [ADR 0006](../../../docs/adr/0006-defer-macos-and-linux-runtime-validation.md). No current CI or non-Windows success is claimed by this local audit. |
 
 ## Desktop outcome matrix
 
@@ -189,8 +189,15 @@ and the pre-update unsaved copy. The harness was unmounted and dev stopped.
 
 ## Remaining qualification
 
+Historical at the 2026-10-30 audit. The
+[0.5.0 closure follow-up](../0.5.0-closure/closure-audit.md) adds actual Windows
+NVDA speech output, active forced-colour/motion emulation and native zoom,
+with two accessibility fixes. External runtime qualification remains unrun;
+the follow-up records the maintainer-accepted ADR 0042 carryover and
+implementation-phase closure. Their external test criteria stay unchecked.
+
 The implementation and Windows audit passed the final gate recorded in
-[065-4-5](../../done/065-4-5-integration-audit.md). Epic 065-4's
+[065-4-5](../../done/0.5.0/065-4-5-integration-audit.md). Epic 065-4's
 last criterion remains open for macOS/Linux runtime and accessibility evidence,
 including the resolver's inherited real-screen-reader/forced-colour gap.
 ADR 0006 owns that platform limitation; release hardening must run it on actual

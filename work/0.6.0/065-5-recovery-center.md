@@ -82,7 +82,7 @@ restored.
 - `src-tauri/src/recovery.rs`
 - `docs/adr/0007-store-discard-recovery-in-worktree-git-metadata.md`
 - `docs/adr/0008-store-history-recovery-as-versioned-hidden-refs.md`
-- `work/0.5.0/037-guided-conflict-resolution.md`
+- `work/done/0.5.0/037-guided-conflict-resolution.md`
 - `work/0.6.0/064-set-changes-aside-safely.md`
 
 # Dependencies

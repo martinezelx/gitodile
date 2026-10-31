@@ -42,19 +42,19 @@ provider adapters are deferred; generic Git remote URL access remains available.
 Milestones, in dependency order:
 
 - [x] Browser connection and cached account status (original task 148).
-- [x] Avatars and targeted sign-out ([148-1](../done/148-1-github-avatar-and-sign-out.md)).
-- [x] Saved account rows and shared gh switching ([148-2](../done/148-2-github-account-rows-and-switching.md)).
-- [x] Shared accounts and project-scoped Git access ([148-3](../done/148-3-shared-accounts-and-git-access.md)).
-- [x] Native GitHub token connections ([148-9](../done/148-9-github-token-connections.md)).
-- [x] GitHub repository discovery and clone handoff ([148-5](../done/148-5-provider-repository-browser.md)).
-- [x] GitLab.com accounts/access and browser extension ([148-4](../done/148-4-gitlab-accounts.md)).
-- [x] GitHub Enterprise Server and GitLab Self-Managed hosts ([148-10](../done/148-10-enterprise-and-self-managed-hosts.md)).
+- [x] Avatars and targeted sign-out ([148-1](../done/0.4.0/148-1-github-avatar-and-sign-out.md)).
+- [x] Saved account rows and shared gh switching ([148-2](../done/0.4.0/148-2-github-account-rows-and-switching.md)).
+- [x] Shared accounts and project-scoped Git access ([148-3](../done/0.4.0/148-3-shared-accounts-and-git-access.md)).
+- [x] Native GitHub token connections ([148-9](../done/0.4.0/148-9-github-token-connections.md)).
+- [x] GitHub repository discovery and clone handoff ([148-5](../done/0.4.0/148-5-provider-repository-browser.md)).
+- [x] GitLab.com accounts/access and browser extension ([148-4](../done/0.4.0/148-4-gitlab-accounts.md)).
+- [x] GitHub Enterprise Server and GitLab Self-Managed hosts ([148-10](../done/0.4.0/148-10-enterprise-and-self-managed-hosts.md)).
 - [ ] Bitbucket Cloud token connections and repository discovery ([148-11](148-11-bitbucket-token-connections.md)).
-- [x] Azure Repos Services organization/PAT connections ([148-13](../done/148-13-azure-repos-token-connections.md)).
-- [x] Profile pictures for every hosting account, kept apart from the project icon and the GitOdile profile ([148-14](../done/148-14-hosting-account-profile-pictures.md)).
+- [x] Azure Repos Services organization/PAT connections ([148-13](../done/0.4.1/148-13-azure-repos-token-connections.md)).
+- [x] Profile pictures for every hosting account, kept apart from the project icon and the GitOdile profile ([148-14](../done/0.4.1/148-14-hosting-account-profile-pictures.md)).
 - [ ] Pull/merge requests: list/details/create/checks and safe branch opening ([148-6](148-6-pull-request-screen.md)).
 - [ ] Actions/CI: runs/status/logs and planned rerun/cancel/dispatch ([148-7](148-7-actions-and-ci-screen.md)).
-- [x] Read-only gh/glab shortcuts in the project console ([148-12](../done/148-12-console-gh-and-glab-shortcuts.md)).
+- [x] Read-only gh/glab shortcuts in the project console ([148-12](../done/0.4.0/148-12-console-gh-and-glab-shortcuts.md)).
 - [ ] Deferred provider scope: Bitbucket Cloud browser authorization ([148-8](148-8-bitbucket-accounts.md)); outside the current completion gate.
 - [ ] Subsequent scope: GitOdile-owned GitHub authorization, with browser sign-in independent of gh (see below).
 
@@ -157,7 +157,7 @@ used, without copying a token or changing Git credentials.
 
 # Context
 
-The user approved this follow-up to [task 146](../done/146-github-cli-and-tooling-settings.md)
+The user approved this follow-up to [task 146](../done/0.4.0/146-github-cli-and-tooling-settings.md)
 on 2026-10-03 and explicitly requested immediate implementation. Work uses the
 existing release/0.3.1 branch. The task took the first queue position while active;
 existing queued work retained its relative order.
@@ -307,8 +307,8 @@ the dry run does not run the project's pre-push hook or publish changes.
 The user approved finishing GitHub connection and discovery before GitLab, and
 explicitly excluded PR/Actions screens from this closure. Native token access
 and the clone repository browser are implemented in
-[148-9](../done/148-9-github-token-connections.md) and
-[148-5](../done/148-5-provider-repository-browser.md), under
+[148-9](../done/0.4.0/148-9-github-token-connections.md) and
+[148-5](../done/0.4.0/148-5-provider-repository-browser.md), under
 [ADR 0023](../../docs/adr/0023-add-native-github-tokens-and-repository-discovery.md).
 
 `pnpm run check` passed: 1,228 frontend tests, production build, architecture and
@@ -390,7 +390,7 @@ are now complete for the accepted scope. GitLab 148-4 is next in the active
 queue; PR/Actions 148-6/148-7 remain later work. The epic itself stays active.
 ## GitLab integration closure — 2026-10-05
 
-The owner accepted and closed [148-4](../done/148-4-gitlab-accounts.md) after
+The owner accepted and closed [148-4](../done/0.4.0/148-4-gitlab-accounts.md) after
 real Windows token discovery/private cloning and browser-account qualification.
 GitHub and GitLab integration are complete for the accepted scope; PR/Actions
 148-6/148-7 remain in the active queue. Platform qualification limits and review
@@ -399,7 +399,7 @@ results are recorded in the completed GitLab task.
 ## Corporate hosts (2026-10-06)
 
 The user requested GitHub Enterprise Server and GitLab Self-Managed accounts
-alongside the public hosts. New child [148-10](../done/148-10-enterprise-and-self-managed-hosts.md)
+alongside the public hosts. New child [148-10](../done/0.4.0/148-10-enterprise-and-self-managed-hosts.md)
 generalizes the fixed-host registry, account IDs, token namespaces, helper and
 clone checks into host-scoped provider instances. It takes queue position 01,
 ahead of PRs/Actions, so those screens consume the same instances; every other
@@ -438,7 +438,7 @@ was verified by component tests rather than in the running app.
 
 ## Company servers closed and Bitbucket tokens queued (2026-10-06)
 
-The owner closed [148-10](../done/148-10-enterprise-and-self-managed-hosts.md)
+The owner closed [148-10](../done/0.4.0/148-10-enterprise-and-self-managed-hosts.md)
 with real company-server qualification recorded as unavailable. The user then
 approved Bitbucket Cloud through native API tokens, as GitHub and GitLab tokens
 work. New child [148-11](148-11-bitbucket-token-connections.md) owns that scope
@@ -463,4 +463,4 @@ The owner asked for gh/glab commands in the project console. Typed gh/glab
 lines would need a classifier of their own (`api`, `extension`, `alias` and
 `auth token` run programs, reach anything or print secrets), so the first step
 is a closed set of read-only shortcuts using the CLI's own login:
-[148-12](../done/148-12-console-gh-and-glab-shortcuts.md), completed on 2026-10-07 together with the provider row in the console welcome.
+[148-12](../done/0.4.0/148-12-console-gh-and-glab-shortcuts.md), completed on 2026-10-07 together with the provider row in the console welcome.

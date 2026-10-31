@@ -1,0 +1,39 @@
+# Completed work — 0.5.0
+
+16 completed task records. IDs, parent relationships, completion dates
+and accepted deferred criteria are preserved.
+
+## Version evidence
+
+These tasks belong to `release/0.5.0`, after preparation commit `53ec2bb`.
+The implementation and audit children are retained at `73714cc`; the three
+parent epics closed on 2026-10-31 under accepted
+[ADR 0042](../../../docs/adr/0042-propose-platform-qualification-carryover-for-050.md).
+Their external qualification criteria remain unchecked. Task 212 was completed
+ahead of the queue in this same version. This archive records completed
+implementation, not publication of 0.5.0. See the
+[version closeout](../../0.5.0/README.md) and
+[qualification matrix](../../assets/0.5.0-closure/closure-audit.md).
+
+## Tasks
+
+| ID | Completed | Task |
+| --- | --- | --- |
+| 037 | 2026-10-31 | [Resolve overlapping changes at GitHub Desktop level, safely](037-guided-conflict-resolution.md) |
+| 037-1 | 2026-10-28 | [Establish conflict truth and durable recovery](037-1-conflict-domain-and-recovery.md) |
+| 037-3 | 2026-10-28 | [Add the read-only conflict workspace](037-3-read-only-conflict-workspace.md) |
+| 037-5 | 2026-10-29 | [Complete or abort a conflicted merge safely](037-5-complete-or-abort-merge.md) |
+| 037-6 | 2026-10-31 | [Resolve each overlapping file by side or in the user's editor](037-6-resolve-files.md) |
+| 037-6-1 | 2026-10-29 | [Choose a side, mark resolved and reset a file in Rust](037-6-1-resolution-core.md) |
+| 037-6-2 | 2026-10-29 | [Put the resolve actions on the overlapping-changes screen](037-6-2-resolution-actions-ui.md) |
+| 037-6-3 | 2026-10-29 | [Open overlapping files in the user's editor and block the hard classes](037-6-3-editor-and-hard-classes.md) |
+| 037-7 | 2026-10-29 | [Audit the complete conflict workflow](037-7-conflict-workflow-audit.md) |
+| 065-4 | 2026-10-31 | [Integrate branches and diverged project changes safely](065-4-integrate-branches.md) |
+| 065-4-1 | 2026-10-29 | [Plan and bring in another branch's changes in Rust](065-4-1-bring-in-changes-core.md) |
+| 065-4-2 | 2026-10-30 | [Turn overlaps into a paused merge that task 037 resolves](065-4-2-pause-on-overlaps.md) |
+| 065-4-3 | 2026-10-30 | [Bring in changes from another branch on screen](065-4-3-bring-in-changes-dialog.md) |
+| 065-4-4 | 2026-10-30 | [Resolve a diverged upstream's overlaps from Get project changes](065-4-4-get-diverged-overlaps.md) |
+| 065-4-5 | 2026-10-30 | [Audit the integration workflow end to end](065-4-5-integration-audit.md) |
+| 212 | 2026-10-29 | [Fit the status bar's project initials and mark Markdown changes by bar and tint](212-status-bar-avatar-and-markdown-change-signs.md) |
+
+Archive organization and assignment rules are in [work/README.md](../../README.md).

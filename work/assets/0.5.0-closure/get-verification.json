@@ -1,0 +1,9 @@
+{
+  "head": "d60ce3c58c57ca715c18e18b6b16e33aa5532c6d",
+  "headUnchanged": true,
+  "incoming": "8ef486316e2d97e81b314be655dcdd7540e9753e",
+  "remote": "8ef486316e2d97e81b314be655dcdd7540e9753e",
+  "notes": "separate unsaved\n",
+  "stages": "100644 41586e656185c9e2d873aba57ba5b616f613d4ed 1\t\"ni\\303\\261o con espacio.txt\"\n100644 5b3e0e6ce672e8b0b606acc680678a6cbcd2e8f6 2\t\"ni\\303\\261o con espacio.txt\"\n100644 8cec70d98bb66bb04e94db1b04c27ca791f6c2a3 3\t\"ni\\303\\261o con espacio.txt\"\n100644 df967b96a579e45a18b8251732d16804b2e56a55 1\tstory.txt\n100644 5b9023a315ae79fd8cbe9e8c3a6f8053f0ed3ddb 2\tstory.txt\n100644 9566806731ad115fdfbd5dc756c622aeb7198b23 3\tstory.txt",
+  "refs": "refs/gitodile/recovery/v1/conflict/worktree-1f5962a2ce9803c8/merge-78945555c64eb03d4f24d2c6\nrefs/gitodile/recovery/v1/get-team-changes/worktree-1f5962a2ce9803c8/1793393895073-2136-4-0"
+}

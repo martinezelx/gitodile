@@ -1,0 +1,83 @@
+NVDA 2026.3 portable, isolated config; silence synthesizer. Functional speech-generation transcript, not an acoustic recording.
+Only selected GitOdile fixture utterances are retained.
+
+IO - speech.speech.speak (21:49:00.217) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'clickable', 'main landmark', 'Overlapping files', 'navigation landmark', 'list', 'with 3 items', 'niño con espacio.txt', 'Both sides changed it', 'button', 'current']
+IO - speech.speech.speak (21:49:05.358) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'What each side changed in niño con espacio.txt', 'region', 'Resolve niño con espacio.txt', 'grouping', 'Keep “main”', 'toggle button', 'not pressed']
+IO - speech.speech.speak (21:49:11.883) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Keep the version on “main”?', 'grouping', 'Cancel', 'button']
+IO - speech.speech.speak (21:49:15.060) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Keep “main”', 'button']
+IO - speech.speech.speak (21:49:21.638) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'niño con espacio.txt', 'heading', 'level 2']
+IO - speech.speech.speak (21:49:21.808) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), "Kept “main” in niño con espacio.txt. It isn't marked resolved yet. "]
+IO - speech.speech.speak (21:49:39.452) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Resolve niño con espacio.txt', 'grouping', 'Mark resolved', 'button']
+IO - speech.speech.speak (21:49:43.896) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Mark this file resolved?', 'grouping', 'Mark resolved', 'button']
+IO - speech.speech.speak (21:49:57.310) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Mark this file resolved?', 'grouping', 'Mark resolved', 'button']
+IO - speech.speech.speak (21:50:01.808) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'niño con espacio.txt', 'heading', 'level 2']
+IO - speech.speech.speak (21:50:01.950) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'niño con espacio.txt is marked resolved. 1 file still overlaps. ']
+IO - speech.speech.speak (21:50:17.233) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Resolve niño con espacio.txt', 'grouping', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:50:17.544) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Reset this file…', '1 of 1', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:50:21.341) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Reset this file?', 'dialog', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:50:21.383) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Reset this file?', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:50:40.236) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'niño con espacio.txt', 'heading', 'level 2']
+IO - speech.speech.speak (21:50:40.393) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'niño con espacio.txt is back to how the merge left it. ']
+IO - speech.speech.speak (21:51:52.972) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Lo que cambió cada lado en niño con espacio.txt', 'region', '¿Quedarse con la versión de «main»?', 'grouping', LangChangeCommand ('es'), 'Cancelar', LangChangeCommand ('en'), 'button']
+IO - speech.speech.speak (21:52:00.480) - MainThread (27812):
+Speaking [LangChangeCommand ('es'), 'niño con espacio.txt', LangChangeCommand ('en'), 'heading', 'level 2']
+IO - speech.speech.speak (21:52:00.657) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Te quedaste con «main» en niño con espacio.txt. Aún no está marcado como resuelto. ']
+IO - speech.speech.speak (21:52:47.441) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Resolver niño con espacio.txt', 'grouping', LangChangeCommand ('es'), 'Marcar resuelto', LangChangeCommand ('en'), 'button', 'unavailable']
+IO - speech.speech.speak (21:52:48.141) - MainThread (27812):
+Speaking [LangChangeCommand ('es'), 'niño con espacio.txt', LangChangeCommand ('en'), 'heading', 'level 2']
+IO - speech.speech.speak (21:52:48.212) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'niño con espacio.txt está marcado como resuelto. Queda 1 archivo solapado. ']
+IO - speech.speech.speak (21:52:57.115) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Terminar la combinación', 'dialog', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:52:57.214) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Terminar la combinación', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:53:02.874) - MainThread (27812):
+Speaking [LangChangeCommand ('es'), 'Terminar la combinación', LangChangeCommand ('en'), 'button']
+IO - speech.speech.speak (21:53:12.977) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'alert', 'Un hook de Git rechazó esta versión. Revisa su salida y reintenta.', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:53:23.630) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Terminar la combinación', 'dialog', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:53:23.632) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'button', LangChangeCommand ('es'), 'Terminar la combinación']
+IO - speech.speech.speak (21:54:20.204) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Bring in changes', 'dialog', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:54:20.232) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Bring in changes', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:57:08.878) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Bring in changes', 'dialog', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:57:08.959) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Bring in changes', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:57:30.069) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Stop combining?', 'dialog', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:57:30.132) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Stop combining?', CancellableSpeech (still valid)]
+IO - speech.speech.speak (21:57:30.185) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'button', 'unavailable', 'Stop combining']
+IO - speech.speech.speak (21:57:35.372) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'Stop combining', 'button']
+IO - speech.speech.speak (21:58:23.483) - MainThread (27812):
+Speaking [LangChangeCommand ('es'), 'Resolver en GitOdile', LangChangeCommand ('en'), 'button']
+IO - speech.speech.speak (21:58:55.618) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'get', 'grouping', 'Cambiar el icono del proyecto', 'button', LangChangeCommand ('es'), 'get', LangChangeCommand ('en'), 'heading', 'level 1', 'Abrir la carpeta del proyecto', 'button', 'Ajustes de get', 'button', LangChangeCommand ('es'), 'remote', LangChangeCommand ('en'), 'out of grouping', 'region', LangChangeCommand ('es'), '2 archivos tienen cambios que se solapan', LangChangeCommand ('en'), 'heading', 'level 2', LangChangeCommand ('es'), 'Elige qué se queda en cada parte. No se guarda nada hasta que termines.', 'Resolver solapamientos', LangChangeCommand ('en'), 'button', 'out of region', 'region', LangChangeCommand ('es'), 'Historial reciente', LangChangeCommand ('en'), 'heading', 'level 2', LangChangeCommand ('es'), 'Ver todo', LangChangeCommand ('en'), 'button', 'list', LangChangeCommand ('es'), 'origin', '1 versión nueva', 'Traer', LangChangeCommand ('en'), 'button', 'Ahora: 2 archivos con cambios que se solapan — 2 necesitan atención, 1 editado. Revisar cambios', 'button', 'out of list', 'Versiones guardadas recientes', 'list', LangChangeCommand ('es'), 'En este ordenador', LangChangeCommand ('en'), 'list', 'Abrir «Current» en Historial — Rama main — Sin publicar', 'button', 'Publicar hasta aquí: Current', 'button', 'out of list', LangChangeCommand ('es'), 'Publicado', LangChangeCommand ('en'), 'Abrir «Base» en Historial', 'button', LangChangeCommand ('es'), 'Aquí empezó el proyecto', LangChangeCommand ('en'), 'out of list', 'out of region', 'region', LangChangeCommand ('es'), 'Lo que vas a decidir', LangChangeCommand ('en'), 'heading', 'level 2', LangChangeCommand ('es'), 'Resolver solapamientos', LangChangeCommand ('en'), 'button', LangChangeCommand ('es'), '2 archivos', 'con partes que se solapan', LangChangeCommand ('en'), 'list', 'Revisar niño con espacio.txt', 'button', 'Revisar story.txt']
+IO - speech.speech.speak (21:59:05.857) - MainThread (27812):
+Speaking [LangChangeCommand ('en'), 'clickable', 'main landmark', LangChangeCommand ('es'), 'Cambios que se solapan', LangChangeCommand ('en'), 'heading', 'level 1', LangChangeCommand ('es'), 'Volver', LangChangeCommand ('en'), 'button', LangChangeCommand ('es'), 'La combinación de «origin/main» en «main» está en pausa·2 de 2 archivos aún se solapan', LangChangeCommand ('en'), 'Leyendo los cambios que se solapan…', 'button', 'unavailable', LangChangeCommand ('es'), 'Abandonar la combinación…', LangChangeCommand ('en'), 'button', LangChangeCommand ('es'), 'Terminar la combinación…', LangChangeCommand ('en'), 'button', 'unavailable', 'Marca todos los archivos como resueltos para terminar la combinación', LangChangeCommand ('es'), 'Marca todos los archivos como resueltos para terminar la combinación', LangChangeCommand ('en'), 'Archivos que se solapan', 'navigation landmark', 'Filtrar archivos que se solapan', 'edit', 'Filtrar archivos', ' ', 'list', LangChangeCommand ('es'), 'Aún se solapan · 2', 'niño con espacio.txt', 'Los dos lados lo cambiaron', LangChangeCommand ('en'), 'button', 'current', LangChangeCommand ('es'), 'story.txt', 'Los dos lados lo cambiaron', LangChangeCommand ('en'), 'button', 'out of list', ' ', 'Lo que cambió cada lado en niño con espacio.txt', 'region', LangChangeCommand ('es'), 'niño con espacio.txt', LangChangeCommand ('en'), 'heading', 'level 2', LangChangeCommand ('es'), 'Los dos lados lo cambiaron', LangChangeCommand ('en'), 'Resolver niño con espacio.txt', 'grouping', LangChangeCommand ('es'), 'Quedarse con «main»', LangChangeCommand ('en'), 'toggle button', 'unavailable', 'not pressed', LangChangeCommand ('es'), 'Quedarse con «origin/main»', LangChangeCommand ('en'), 'toggle button', 'unavailable', 'not pressed', LangChangeCommand ('es'), 'Abrir en el editor', LangChangeCommand ('en'), 'button', 'unavailable', LangChangeCommand ('es'), 'Marcar resuelto', LangChangeCommand ('en'), 'button', 'unavailable', 'out of grouping', 'region', LangChangeCommand ('es'), 'Lo que cambió «main»', LangChangeCommand ('en'), 'heading', 'level 3', LangChangeCommand ('es'), '1Eliminada:base unicode', '1Añadida:current unicode', LangChangeCommand ('en'), ' ', 'out of region', 'region', LangChangeCommand ('es'), 'Lo que cambió «origin/main»', LangChangeCommand ('en'), 'heading', 'level 3', LangChangeCommand ('es'), '1Eliminada:base unicode', '1Añadida:incoming unicode', LangChangeCommand ('en'), ' ']

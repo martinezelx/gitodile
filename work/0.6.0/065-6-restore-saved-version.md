@@ -77,8 +77,8 @@ with different consequences and recovery.
 
 # Relevant files
 
-- `work/done/015-history-timeline.md`
-- `work/0.5.0/037-guided-conflict-resolution.md`
+- `work/done/0.1.0/015-history-timeline.md`
+- `work/done/0.5.0/037-guided-conflict-resolution.md`
 - `src-tauri/src/recovery.rs`
 - `src-tauri/src/save_version.rs`
 - `src-tauri/src/sync.rs`

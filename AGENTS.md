@@ -335,8 +335,8 @@ Keep durable facts in one place and link to them instead of copying them:
 - `docs/ARCHITECTURE.md`: current architecture and extension rules.
 - `docs/adr/`: decision rationale and alternatives.
 - `work/`: approved scope and execution history, organized as one folder per
-  planned version, `after-1.0/` and a flat `done/`; never the sole home of a
-  durable architecture rule.
+  planned version, `after-1.0/` and completed-version folders under `done/`;
+  never the sole home of a durable architecture rule.
 
 `PRODUCT.md` is a compact design-tooling brief; do not expand it into a second
 product strategy. Numbered files under `docs/architecture/` are historical
@@ -346,8 +346,12 @@ When moving a task, keep its relative links valid. Task IDs are unique and
 permanent; a child may use its parent's ID plus a suffix such as `010-1`.
 IDs identify work and do not encode current priority. Active non-epic tasks use
 the `queue` field, contiguous inside their version folder, for execution order;
-epics leave queueing to their suffixed children. Files in `work/done/` require
-`status: done` and a completion date. See `work/README.md`.
+epics leave queueing to their suffixed children. Completed tasks go in
+`work/done/<X.Y.Z>/`, flat inside their version with a README index, and require
+`status: done` and a completion date. Older records not yet migrated may remain
+directly in `work/done/`; verify their version rather than guessing from IDs,
+modification dates or a late administrative move. See `work/README.md` and
+[ADR 0043](docs/adr/0043-archive-completed-work-by-delivery-version.md).
 
 ## Agent workflow
 

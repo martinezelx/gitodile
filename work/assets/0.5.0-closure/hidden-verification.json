@@ -1,0 +1,8 @@
+{
+  "sameStages": true,
+  "hiddenResolver": {
+    "hidden": true,
+    "inert": true
+  },
+  "exposedResolverHeadings": 0
+}

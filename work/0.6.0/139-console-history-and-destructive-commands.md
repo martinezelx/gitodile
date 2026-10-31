@@ -18,7 +18,7 @@ completed:
 Waits for the Recovery Center of
 [task 065-5](065-5-recovery-center.md): the recovery
 points this task creates must be visible and restorable there. It was the
-third child of [epic 138](../done/138-console-git-commands.md), taken out on
+third child of [epic 138](../done/0.3.0/138-console-git-commands.md), taken out on
 2026-09-29 so that epic closes with the read-only console (138-1) and advanced
 mode for local and remote changes (138-2). The open decision recorded below
 must be settled before this task is picked up.
@@ -45,7 +45,7 @@ and the Recovery Center can bring the work back.
 Implements section 5 of
 [ADR 0017](../../docs/adr/0017-console-git-commands-by-permission-tier.md)
 on the advanced mode and plans of
-[138-2](../done/138-2-advanced-mode-local-and-remote-changes.md). Recovery reuses the
+[138-2](../done/0.3.0/138-2-advanced-mode-local-and-remote-changes.md). Recovery reuses the
 ADR 0008/0016 hidden-ref protocol and the ADR 0007 discard store.
 
 # Scope
@@ -107,9 +107,9 @@ ADR 0008/0016 hidden-ref protocol and the ADR 0007 discard store.
 
 # Dependencies
 
-[138-2](../done/138-2-advanced-mode-local-and-remote-changes.md) and the Recovery
+[138-2](../done/0.3.0/138-2-advanced-mode-local-and-remote-changes.md) and the Recovery
 Center inventory of [task 065-5](065-5-recovery-center.md).
-Rebase conflicts hand over to [task 037](../0.5.0/037-guided-conflict-resolution.md)
+Rebase conflicts hand over to [task 037](../done/0.5.0/037-guided-conflict-resolution.md)
 once it exists; until then a conflicted rebase is stopped and left for the
 user with its recovery point.
 

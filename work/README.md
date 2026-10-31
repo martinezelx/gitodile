@@ -14,13 +14,42 @@ commit references remain historical; Git history preserves their original text.
   `README.md` with the version's goal, queue and exit condition.
 - `after-1.0/` — approved tasks deliberately scheduled after `1.0.0`, `planned`
   or `blocked`, with no queue position, and a `README.md` listing them.
-- `done/` — completed tasks kept as a lightweight project history. It stays
-  flat; it is not split by version.
+- `done/<X.Y.Z>/` — completed tasks grouped by their delivery version, flat
+  within each version, with a README index and the version-assignment evidence.
+  The `done/README.md` indexes the archive. All currently completed records,
+  including 0.1.x through 0.5.x, have been migrated; the archive root holds no
+  loose tasks. Do not add new completed records outside their version folder.
 - `templates/task.md` — template for new task files.
 
 The version plan and the reason for this layout are in
 [`docs/ROADMAP.md`](../docs/ROADMAP.md) and
-[ADR 0039](../docs/adr/0039-position-gitodile-for-humans-and-their-agents.md).
+[ADR 0039](../docs/adr/0039-position-gitodile-for-humans-and-their-agents.md),
+with the completed-version archive amendment in
+[ADR 0043](../docs/adr/0043-archive-completed-work-by-delivery-version.md).
+
+## Assigning a completed version
+
+Use the task's explicit version scope and retained version README, then the
+release tags/history that show its completed delivery. A record's last edit,
+completion date or first appearance in `done/` alone is not a release boundary:
+207 belongs to 0.4.1 despite a late move after 0.5.0 preparation; 142/143 closed
+the 0.3.0 release and do not become 0.4.0 work because their paperwork landed
+later. A provisional branch/version that was never released is not a separate
+archive for changes ultimately delivered in a later release.
+
+Historical 0.2.x uses the canonical `0.2.N` names retained in tags/notes under
+ADR 0019, even when the tagged package still contains `0.2.0-preview.N`.
+An untagged preparation or an intermediate tag without a newly completed
+record does not require an empty task folder. The version indexes distinguish
+completed-phase snapshots from earlier prototypes and validation receipts;
+neither an archive folder nor a done phase proves package qualification.
+
+Each archived version's README records the evidence used. IDs, parent IDs,
+completion dates, checked/deferred criteria and retained assets are preserved;
+assets stay in `work/assets/`, and all incoming/outgoing links are repaired.
+An epic belongs to the version that completes it; its children can be archived
+under different versions. A candidate's implementation can be complete without
+the version having been published, as in 0.5.0 under ADR 0042.
 
 ## Task naming
 
@@ -61,59 +90,59 @@ top-level ID after the current plan is `213`. Epic 206 owns tasks 037-2 and
 
 The status bar's project initials and the Markdown change marks (bar and
 tint, no sign) are fixed in
-[212](done/212-status-bar-avatar-and-markdown-change-signs.md), completed
+[212](done/0.5.0/212-status-bar-avatar-and-markdown-change-signs.md), completed
 ahead of the queue at the user's request.
 
 Overlapping wrapped diff lines and the code font the diff never drew in are
-fixed in [205](done/205-diff-row-overlap-and-code-font.md), completed ahead of
+fixed in [205](done/0.4.1/205-diff-row-overlap-and-code-font.md), completed ahead of
 the queue at the user's request.
 
-Its follow-up, [203](done/203-settings-navigation-and-organization-refinement.md),
+Its follow-up, [203](done/0.4.1/203-settings-navigation-and-organization-refinement.md),
 refines Navigation, adds Language & region, folds Line endings into Git, groups
 the rail and unifies picker selection, completed ahead of the queue at the
 user's request.
 
 The Settings visual review, hosting-account wording and development-only
 GitOdile demo controls are scoped in
-[202](done/202-settings-visual-review-and-demo-account.md), completed ahead of
+[202](done/0.4.1/202-settings-visual-review-and-demo-account.md), completed ahead of
 the queue at the user's request. It records the reference captures, iterative
 visual review, final code fixes and passing aggregate validation.
 
 The Markdown document preview in Changes is tracked in
-[198](done/198-markdown-preview-in-changes.md), implemented ahead of the queue
+[198](done/0.4.1/198-markdown-preview-in-changes.md), implemented ahead of the queue
 at the user's request.
 
 Its rendered before/after comparison follow-up is
-[199](done/199-rendered-markdown-changes.md).
-The single-document refinement is [200](done/200-unified-rendered-markdown-diff.md).
+[199](done/0.4.1/199-rendered-markdown-changes.md).
+The single-document refinement is [200](done/0.4.1/200-unified-rendered-markdown-diff.md).
 Navigation and bounded oversized-document excerpts are tracked in
-[201](done/201-markdown-change-navigation-and-excerpts.md).
+[201](done/0.4.1/201-markdown-change-navigation-and-excerpts.md).
 
 Deliberate notification reading and persistent silent history are complete in
-[197](done/197-silent-notification-inbox.md), including the compact bulk-read
+[197](done/0.4.1/197-silent-notification-inbox.md), including the compact bulk-read
 glyph and aligned row controls. Sound remains deferred by explicit user request.
 
 The development-only GitOdile account sign-in mock is complete in
-[140](done/140-account-sign-in-screens-and-mock.md). It preserves the supplied
+[140](done/0.4.1/140-account-sign-in-screens-and-mock.md). It preserves the supplied
 HTML reference and implementation analysis under `assets/140-account-sign-in/`;
 real authentication and browser pages remain separate future work.
 
 The combined screen-entry motion, folder-view defaults and initial-selection
-refinement is [195](done/195-calm-screen-entry-motion.md).
+refinement is [195](done/0.4.1/195-calm-screen-entry-motion.md).
 
 The completed branch vocabulary refactor and expanded pre-commit review are recorded in
-[194](done/194-use-branches-throughout-project.md), including the bilingual
+[194](done/0.4.0/194-use-branches-throughout-project.md), including the bilingual
 inventory, current stored format, historical material and validation evidence.
 
 The current GitHub/GitLab epic is [148](after-1.0/148-connect-github-account.md). Its
 original browser connection and completed follow-ups remain historical evidence;
 the expanded epic tracks shared access, discovery, PRs and Actions separately.
 GitHub integration is complete: browser/CLI plus native tokens
-([148-9](done/148-9-github-token-connections.md)) and repository discovery
-([148-5](done/148-5-provider-repository-browser.md)). GitLab/glab is also complete
-([148-4](done/148-4-gitlab-accounts.md)). Corporate hosts (GitHub Enterprise
+([148-9](done/0.4.0/148-9-github-token-connections.md)) and repository discovery
+([148-5](done/0.4.0/148-5-provider-repository-browser.md)). GitLab/glab is also complete
+([148-4](done/0.4.0/148-4-gitlab-accounts.md)). Corporate hosts (GitHub Enterprise
 Server and GitLab Self-Managed) are complete in
-[148-10](done/148-10-enterprise-and-self-managed-hosts.md). Bitbucket Cloud token
+[148-10](done/0.4.0/148-10-enterprise-and-self-managed-hosts.md). Bitbucket Cloud token
 connections and discovery are implemented in
 [148-11](after-1.0/148-11-bitbucket-token-connections.md), which waits only for
 real-account qualification in `after-1.0/`. The PR and checks
@@ -138,7 +167,10 @@ authorization ([148-8](after-1.0/148-8-bitbucket-accounts.md)) wait in
    explain why, and leave it in its version folder; renumber that folder's
    queue so it stays contiguous.
 7. Before completion, run `pnpm run check` and record the results honestly.
-8. When complete, check the acceptance criteria, add implementation notes, set `status: done`, add `completed`, and move the file to `done/`.
+8. When complete, check satisfied acceptance criteria, add implementation notes,
+   set `status: done`, add `completed`, and move the file to `done/<X.Y.Z>/`.
+   Add it to that version's README, preserving any explicitly accepted deferred
+   criteria as unchecked with their receiving owner and ADR.
 
 ## Agent rules
 
@@ -150,10 +182,11 @@ authorization ([148-8](after-1.0/148-8-bitbucket-accounts.md)) wait in
 - Never mark an acceptance criterion complete unless it is actually satisfied.
 - Never claim checks passed unless they were executed successfully.
 - Keep durable product or architectural knowledge in `docs/`; task files should record execution-specific context.
-- Do not delete completed task files. Move them to `done/`.
+- Do not delete completed task files. Move them to `done/<X.Y.Z>/`.
 - Keep relative Markdown links valid after moving a task; `check:docs` enforces
   links, folder/status consistency, a README in every version folder, flat
-  folders, completion dates, unique IDs, valid parents, and a unique
+  planned folders and completed-version folders, completion dates, unique IDs,
+  valid parents, and a unique
   contiguous queue per version folder.
 
 ## Status values
@@ -163,6 +196,6 @@ Use exactly one of:
 - `active` — scheduled in a version folder;
 - `blocked` — in a version folder or `after-1.0/`, with the blocker documented;
 - `planned` — approved in `after-1.0/`, not scheduled yet;
-- `done` — completed, in `done/`.
+- `done` — completed, in `done/<X.Y.Z>/` (or the legacy `done/` root pending migration).
 
 Backlog ideas do not require frontmatter until promoted into a task.

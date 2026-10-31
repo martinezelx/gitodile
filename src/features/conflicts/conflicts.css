@@ -248,6 +248,19 @@
   .conflicts-side + .conflicts-side { border-inline-start: 0; border-top: 1px solid var(--border-subtle); }
 }
 
+/* At high zoom the compact navigation and wrapped header can fill the
+   viewport. Keep a bounded reading area and let the sheet scroll instead
+   of shrinking the virtualized list or the side diffs to zero. */
+@media (max-height: 620px) {
+  .workspace--conflicts { overflow-y: auto; }
+  .conflicts-view { flex: 1 0 auto; }
+  .conflicts-layout,
+  .conflicts-detail__sides { min-height: calc(var(--strip-height) * 4); }
+  /* min-height alone lets the virtual list's total size become its viewport. */
+  .conflicts-layout { height: calc(var(--strip-height) * 4); flex-basis: calc(var(--strip-height) * 4); }
+  .conflicts-detail { overflow-x: hidden; overflow-y: auto; }
+}
+
 @media (forced-colors: active) {
   .conflicts-notice { outline: 1px solid CanvasText; outline-offset: -1px; }
   .conflicts-file--active { outline: 2px solid Highlight; outline-offset: -2px; }

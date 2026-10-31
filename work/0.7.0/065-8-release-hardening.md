@@ -49,13 +49,18 @@ macOS portion for `1.0.0`: real macOS delivery is now post-1.0.
   reproducible CI provenance and artifact hashes. Record Windows Authenticode
   as deferred and keep macOS absent from the supported matrix.
 - Qualify the updater and publication pipeline delivered by
-  [epic 065-9](../done/065-9-signed-application-updates.md) against the final signed
+  [epic 065-9](../done/0.3.0/065-9-signed-application-updates.md) against the final signed
   artifacts: signature verification, failure behavior, reinstall instructions,
   and no repository mutation during update. The accepted strategy is in
   [ADR 0010](../../docs/adr/0010-distribute-signed-app-updates-through-public-github-releases.md).
 - Complete versioning, release notes, privacy/security/support docs, install and
   uninstall behavior, crash/log locations, known limitations, and upgrade tests.
 - Run an independent final safety audit and the aggregate repository gate.
+- Own the Linux qualification carried from epics 037, 037-6 and 065-4 by
+  [ADR 0042](../../docs/adr/0042-propose-platform-qualification-carryover-for-050.md).
+  Run the task-023 protocol and the retained conflict/integration matrices
+  against real WebKitGTK, filesystem and Orca environments; preserve exact
+  original-criterion traceability in the [carryover matrix](../assets/0.5.0-closure/closure-audit.md).
 
 # Out of scope
 
@@ -64,6 +69,15 @@ macOS portion for `1.0.0`: real macOS delivery is now post-1.0.
 - Telemetry, accounts, or a mandatory update service.
 
 # Acceptance criteria
+
+- [ ] Linux qualification carried from
+      [037](../done/0.5.0/037-guided-conflict-resolution.md),
+      [037-6](../done/0.5.0/037-6-resolve-files.md) and
+      [065-4](../done/0.5.0/065-4-integrate-branches.md) passes the task-023 and
+      conflict/integration protocols in the carryover matrix, with actual
+      artifact/commit, hardware, OS/desktop, Git, WebView and assistive-tech
+      versions and per-criterion results. Their phase closure is not evidence
+      that these tests ran.
 
 - [ ] The independent offline updater-key backup required by
       `docs/release/signed-builds.md` exists, passed a restore test, and its
@@ -110,6 +124,9 @@ macOS portion for `1.0.0`: real macOS delivery is now post-1.0.
 - Support claims follow actual packaged-artifact evidence.
 - Tauri updater signing, update safety, and recovery are correctness requirements.
 - ADR 0011 defers Authenticode and macOS delivery until after `1.0.0`.
+- 2026-10-31: the maintainer accepted ADR 0042's Linux carryover from the
+  completed `0.5.0` implementation phase. This records a future release gate;
+  it does not start this task or change its queue position.
 
 # Implementation notes
 

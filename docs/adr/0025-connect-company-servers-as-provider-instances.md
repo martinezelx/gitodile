@@ -5,7 +5,7 @@
 
 ## Context
 
-Task [148-10](../../work/done/148-10-enterprise-and-self-managed-hosts.md)
+Task [148-10](../../work/done/0.4.0/148-10-enterprise-and-self-managed-hosts.md)
 adds GitHub Enterprise Server and GitLab Self-Managed (including GitLab
 Dedicated) beside github.com and gitlab.com. ADRs
 [0022](0022-share-provider-accounts-and-scope-git-access.md),

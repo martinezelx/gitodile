@@ -17,7 +17,7 @@ parent: "206"
 # Moved after 1.0.0 (2026-10-27)
 
 `1.0.0` resolves conflicts at GitHub Desktop level (epic
-[037](../0.5.0/037-guided-conflict-resolution.md)). This task now belongs to
+[037](../done/0.5.0/037-guided-conflict-resolution.md)). This task now belongs to
 epic [206](206-three-way-conflict-editor.md), the three-way editor after
 `1.0.0`. It keeps its permanent ID. It consumes epic 037's session, snapshot
 and stale-state contracts instead of defining them; re-read it against what
@@ -70,9 +70,9 @@ snapshot and stale-state contract.
 # Relevant files
 
 - [Epic 206](206-three-way-conflict-editor.md)
-- [Epic 037](../0.5.0/037-guided-conflict-resolution.md)
-- [037-1](../done/037-1-conflict-domain-and-recovery.md)
-- [037-6](../0.5.0/037-6-resolve-files.md)
+- [Epic 037](../done/0.5.0/037-guided-conflict-resolution.md)
+- [037-1](../done/0.5.0/037-1-conflict-domain-and-recovery.md)
+- [037-6](../done/0.5.0/037-6-resolve-files.md)
 
 # Dependencies
 

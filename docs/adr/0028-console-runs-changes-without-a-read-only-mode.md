@@ -3,7 +3,7 @@
 - Status: accepted
 - Date: 2026-10-06
 - Replaces: section 4 of [ADR 0017](0017-console-git-commands-by-permission-tier.md)
-- Implemented by: [task 149](../../work/done/149-single-console-mode.md)
+- Implemented by: [task 149](../../work/done/0.4.0/149-single-console-mode.md)
 
 ## Context
 
@@ -72,7 +72,7 @@ anyway.
 - Release qualification covers one setting, not two.
 - gh and glab are a separate question with the same boundary. They start as a
   closed set of safe shortcuts
-  ([task 148-12](../../work/done/148-12-console-gh-and-glab-shortcuts.md)).
+  ([task 148-12](../../work/done/0.4.0/148-12-console-gh-and-glab-shortcuts.md)).
   Typing arbitrary gh or glab lines would need a classifier of its own.
 
 ## Alternatives considered

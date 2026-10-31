@@ -1,0 +1,500 @@
+{
+  "axe-forced-initial": {
+    "engine": {
+      "name": "axe-core",
+      "version": "4.14.0"
+    },
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+      "windowWidth": 1180,
+      "windowHeight": 760,
+      "orientationAngle": 0,
+      "orientationType": "landscape-primary"
+    },
+    "violations": [
+      {
+        "id": "color-contrast",
+        "impact": "serious",
+        "tags": [
+          "cat.color",
+          "wcag2aa",
+          "wcag143",
+          "TTv5",
+          "TT13.c",
+          "EN-301-549",
+          "EN-9.1.4.3",
+          "ACT",
+          "RGAAv4",
+          "RGAA-3.2.1"
+        ],
+        "nodes": [
+          {
+            "target": [
+              ".rail-nav > .rail-item:nth-child(1) > .rail-item__label"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".rail-nav > .rail-item:nth-child(2) > .rail-item__label"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".rail-nav > .rail-item:nth-child(3) > .rail-item__label"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".rail-nav > .rail-item:nth-child(4) > .rail-item__label"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".rail-item--more > .rail-item__label"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".ghost-button"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".conflicts-header__title"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 12.8pt (17px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".conflicts-header__summary > span:nth-child(1)"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".conflicts-header__summary > span:nth-child(2)"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".conflicts-header__actions > .secondary-button"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".conflicts-list__group"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "span[title=\"niño con espacio.txt\"]"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".conflicts-file--active > .conflicts-file__details > .conflicts-file__description"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "span[title=\"story.txt\"]"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "li[data-index=\"2\"] > .conflicts-file > .conflicts-file__details > .conflicts-file__description"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".conflicts-detail__name"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".conflicts-detail__shape"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.22 (foreground color: #625d58, background color: #000000, font size: 8.3pt (11px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "button[data-action=\"keep-current\"] > .conflicts-actions__label"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "button[data-action=\"keep-incoming\"] > .conflicts-actions__label"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "button[data-action=\"open\"]"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "#conflicts-side-current > span"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "section[aria-labelledby=\"conflicts-side-current\"] > .conflicts-side__diff > pre > code > .diff-row[data-index=\"0\"] > .diff-line--deletion.diff-line > .diff-line__content"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.31 (foreground color: #a83a32, background color: #000000, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "section[aria-labelledby=\"conflicts-side-current\"] > .conflicts-side__diff > pre > code > .diff-row[data-index=\"1\"] > .diff-line--addition.diff-line > .diff-line__content"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.33 (foreground color: #3f6a3b, background color: #000000, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "#conflicts-side-incoming > span"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "section[aria-labelledby=\"conflicts-side-incoming\"] > .conflicts-side__diff > pre > code > .diff-row[data-index=\"0\"] > .diff-line--deletion.diff-line > .diff-line__content"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.31 (foreground color: #a83a32, background color: #000000, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              "section[aria-labelledby=\"conflicts-side-incoming\"] > .conflicts-side__diff > pre > code > .diff-row[data-index=\"1\"] > .diff-line--addition.diff-line > .diff-line__content"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 3.33 (foreground color: #3f6a3b, background color: #000000, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".status-bar__project-name"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".branch-selector__value"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          },
+          {
+            "target": [
+              ".status-bar__sync > span:nth-child(2)"
+            ],
+            "summary": "Fix any of the following:\n  Element has insufficient color contrast of 1.2 (foreground color: #1c1917, background color: #000000, font size: 9.8pt (13px), font weight: normal). Expected contrast ratio of 4.5:1"
+          }
+        ]
+      },
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "tags": [
+          "cat.semantics",
+          "wcag21a",
+          "wcag253",
+          "EN-301-549",
+          "EN-9.2.5.3",
+          "RGAAv4",
+          "RGAA-6.1.5"
+        ],
+        "nodes": [
+          {
+            "target": [
+              ".status-bar__project"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              ".branch-selector"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          }
+        ]
+      }
+    ],
+    "passes": 40,
+    "incomplete": [
+      "aria-prohibited-attr",
+      "color-contrast",
+      "label-content-name-mismatch"
+    ]
+  },
+  "axe-bring-light": {
+    "engine": {
+      "name": "axe-core",
+      "version": "4.14.0"
+    },
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+      "windowWidth": 1180,
+      "windowHeight": 760,
+      "orientationAngle": 0,
+      "orientationType": "landscape-primary"
+    },
+    "violations": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "tags": [
+          "cat.semantics",
+          "wcag21a",
+          "wcag253",
+          "EN-301-549",
+          "EN-9.2.5.3",
+          "RGAAv4",
+          "RGAA-6.1.5"
+        ],
+        "nodes": [
+          {
+            "target": [
+              "#branch-main"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              "#branches-group-bucket\\:in-progress"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              "#branch-topic"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              "button[aria-label=\"Open “Incoming” in History\"]"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              ".branches-recent__open[aria-label=\"Open “Base” in History\"]"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              ".status-bar__project"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              ".branch-selector"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          }
+        ]
+      },
+      {
+        "id": "landmark-no-duplicate-banner",
+        "impact": "moderate",
+        "tags": [
+          "cat.semantics",
+          "best-practice"
+        ],
+        "nodes": [
+          {
+            "target": [
+              ".window-titlebar"
+            ],
+            "summary": "Fix any of the following:\n  Document has more than one banner landmark"
+          }
+        ]
+      },
+      {
+        "id": "landmark-unique",
+        "impact": "moderate",
+        "tags": [
+          "cat.semantics",
+          "best-practice"
+        ],
+        "nodes": [
+          {
+            "target": [
+              ".window-titlebar"
+            ],
+            "summary": "Fix any of the following:\n  The landmark must have a unique aria-label, aria-labelledby, or title to make landmarks distinguishable"
+          }
+        ]
+      }
+    ],
+    "passes": 43,
+    "incomplete": [
+      "aria-prohibited-attr",
+      "color-contrast",
+      "label-content-name-mismatch"
+    ]
+  },
+  "axe-bring-after": {
+    "engine": {
+      "name": "axe-core",
+      "version": "4.14.0"
+    },
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+      "windowWidth": 1180,
+      "windowHeight": 760,
+      "orientationAngle": 0,
+      "orientationType": "landscape-primary"
+    },
+    "violations": [
+      {
+        "id": "label-content-name-mismatch",
+        "impact": "serious",
+        "tags": [
+          "cat.semantics",
+          "wcag21a",
+          "wcag253",
+          "EN-301-549",
+          "EN-9.2.5.3",
+          "RGAAv4",
+          "RGAA-6.1.5"
+        ],
+        "nodes": [
+          {
+            "target": [
+              "#branch-main"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              "#branches-group-bucket\\:in-progress"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              "#branch-topic"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              "button[aria-label=\"Open “Incoming” in History\"]"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              ".branches-recent__open[aria-label=\"Open “Base” in History\"]"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              ".status-bar__project"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          },
+          {
+            "target": [
+              ".branch-selector"
+            ],
+            "summary": "Fix any of the following:\n  Text inside the element is not included in the accessible name"
+          }
+        ]
+      }
+    ],
+    "passes": 44,
+    "incomplete": [
+      "aria-prohibited-attr",
+      "color-contrast",
+      "label-content-name-mismatch"
+    ]
+  },
+  "axe-get-dark": {
+    "engine": {
+      "name": "axe-core",
+      "version": "4.14.0"
+    },
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+      "windowWidth": 1180,
+      "windowHeight": 760,
+      "orientationAngle": 0,
+      "orientationType": "landscape-primary"
+    },
+    "violations": [],
+    "passes": 21,
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  "axe-abort-light": {
+    "engine": {
+      "name": "axe-core",
+      "version": "4.14.0"
+    },
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+      "windowWidth": 1180,
+      "windowHeight": 760,
+      "orientationAngle": 0,
+      "orientationType": "landscape-primary"
+    },
+    "violations": [],
+    "passes": 21,
+    "incomplete": []
+  },
+  "axe-resolver-final": {
+    "engine": {
+      "name": "axe-core",
+      "version": "4.14.0"
+    },
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+      "windowWidth": 1180,
+      "windowHeight": 760,
+      "orientationAngle": 0,
+      "orientationType": "landscape-primary"
+    },
+    "violations": [],
+    "passes": 25,
+    "incomplete": [
+      "color-contrast"
+    ]
+  },
+  "axe-zoom-final": {
+    "engine": {
+      "name": "axe-core",
+      "version": "4.14.0"
+    },
+    "environment": {
+      "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36 Edg/156.0.0.0",
+      "windowWidth": 590,
+      "windowHeight": 380,
+      "orientationAngle": 0,
+      "orientationType": "landscape-primary"
+    },
+    "violations": [],
+    "passes": 21,
+    "incomplete": [
+      "color-contrast"
+    ]
+  }
+}

@@ -13,7 +13,7 @@ Mac app has one. macOS also gives every app a menu bar at the top of the
 screen, where its users look for About, Settings and Quit, and through which
 ⌘C, ⌘V and ⌘A reach text fields.
 
-Task [204](../../work/done/204-native-macos-window-chrome.md) compared two
+Task [204](../../work/done/0.4.1/204-native-macos-window-chrome.md) compared two
 fixes in a mockup: moving the overflow menu to the right of the titlebar, or
 moving its entries into the macOS menu bar. Cross-platform desktop apps
 (Slack, Spotify, Notion, Claude desktop) take the second route.

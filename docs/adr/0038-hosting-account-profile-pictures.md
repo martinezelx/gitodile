@@ -5,7 +5,7 @@
 
 ## Context
 
-[Task 148-1](../../work/done/148-1-github-avatar-and-sign-out.md) gave GitHub
+[Task 148-1](../../work/done/0.4.0/148-1-github-avatar-and-sign-out.md) gave GitHub
 accounts connected through gh a picture. It was a fixed CDN URL derived from the
 verified account id, downloaded by a credential-free client and kept in memory
 only. Every other connection showed the person glyph: glab, and GitHub, GitLab,

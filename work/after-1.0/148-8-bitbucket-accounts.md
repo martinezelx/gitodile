@@ -27,11 +27,11 @@ when cloning or transferring a project's changes over HTTPS.
 # Context
 
 On 2026-10-04 the user approved separating GitLab and Bitbucket after the
-feasibility review. GitLab retains [148-4](../done/148-4-gitlab-accounts.md).
+feasibility review. GitLab retains [148-4](../done/0.4.0/148-4-gitlab-accounts.md).
 The user subsequently limited the current milestone to GitHub/gh and GitLab/glab.
 This permanent child ID is retained but removed from the active queue; it no
 longer blocks repository discovery, PRs or CI for the two approved providers.
-Reuse [148-3](../done/148-3-shared-accounts-and-git-access.md)'s registry, catalog,
+Reuse [148-3](../done/0.4.0/148-3-shared-accounts-and-git-access.md)'s registry, catalog,
 picker, persistent project bindings and Git helper instead of duplicating them.
 
 # Scope
@@ -91,7 +91,7 @@ picker, persistent project bindings and Git helper instead of duplicating them.
 # Dependencies
 
 Completed foundation 148-3; future implementation follows
-[148-4](../done/148-4-gitlab-accounts.md).
+[148-4](../done/0.4.0/148-4-gitlab-accounts.md).
 Resolve authorization prerequisites before promising a working browser flow.
 
 # Blocker / deferred scope
