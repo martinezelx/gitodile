@@ -206,6 +206,10 @@ project; the epoch identifies one open incarnation. Responses and watcher
 events must match both so work started before close cannot populate a reopened
 project.
 
+Repository identity refreshes use `refreshProject`, which updates only an
+existing session with the same epoch. They never change the active project or
+reopen a closed one. `open` is reserved for an explicit project-opening action.
+
 Runtime instances are passed explicitly. There is no ambient current-project
 store. Selectors are narrow and preserve identity when their selected value is
 unchanged.

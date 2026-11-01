@@ -100,11 +100,11 @@ export function createRepositoryReadCoordinator(
   const refreshAll = async (runtime: ProjectRuntime, state: ProjectSessionsState, path: string): Promise<void> => {
     const query = queryFor(state, path);
     if (!query) return;
-    // Identity first, and awaited: every subscriber's snapshot is scoped to the
-    // project this dispatch establishes.
+    // Refresh identity before dependent snapshots, without selecting the
+    // project: this also runs for inactive sessions and may finish after a switch.
     try {
       const project = await repository.open({ selectedPath: path, sessionEpoch: query.sessionEpoch });
-      runtime.dispatch({ type: "open", project });
+      runtime.dispatch({ type: "refreshProject", project });
     } catch {
       // Preserve the last truthful identity; other scoped reads still run.
     }
@@ -123,7 +123,7 @@ export function createRepositoryReadCoordinator(
     if (!query) return;
     try {
       const project = await repository.open({ selectedPath: path, sessionEpoch: query.sessionEpoch });
-      runtime.dispatch({ type: "open", project });
+      runtime.dispatch({ type: "refreshProject", project });
     } catch {
       // Preserve the last truthful identity; the working-tree read is still useful.
     }

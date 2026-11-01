@@ -98,6 +98,7 @@ export const initialProjectSessionsState: ProjectSessionsState = {
 
 export type ProjectSessionsAction =
   | { type: "open"; project: RepositoryInfo }
+  | { type: "refreshProject"; project: RepositoryInfo }
   | { type: "restore"; projects: RepositoryInfo[]; activeId: string | null }
   | { type: "activate"; id: string }
   | { type: "close"; id: string }
@@ -237,6 +238,17 @@ export function projectSessionsReducer(
   action: ProjectSessionsAction,
 ): ProjectSessionsState {
   switch (action.type) {
+    case "refreshProject": {
+      const id = action.project.path;
+      const session = state.byId[id];
+      // Background discovery refreshes facts only. It cannot activate a
+      // project, reopen a closed one, or update a newer incarnation.
+      if (!actionMatchesEpoch(session, action.project.sessionEpoch)) return state;
+      return {
+        ...state,
+        byId: { ...state.byId, [id]: { ...session, project: action.project } },
+      };
+    }
     case "open": {
       const id = action.project.path;
       const existing = state.byId[id];

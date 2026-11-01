@@ -52,6 +52,27 @@ describe("projectSessionsReducer", () => {
     expect(state.byId["/a"].project.branch).toBe("feature");
   });
 
+  it("refreshes facts without changing the active project, its view or the session order", () => {
+    let state = projectSessionsReducer(initialProjectSessionsState, { type: "open", project: makeProject("/a") });
+    state = projectSessionsReducer(state, { type: "open", project: makeProject("/b") });
+    state = projectSessionsReducer(state, { type: "navigate", id: "/b", view: "conflicts" });
+    const active = state.byId["/b"];
+    const next = projectSessionsReducer(state, { type: "refreshProject", project: makeProject("/a", { branch: "feature" }) });
+    expect(next.activeId).toBe("/b");
+    expect(next.order).toBe(state.order);
+    expect(next.byId["/b"]).toBe(active);
+    expect(next.byId["/a"].project.branch).toBe("feature");
+    const home = projectSessionsReducer(state, { type: "close", id: "/b" });
+    expect(projectSessionsReducer(home, { type: "refreshProject", project: makeProject("/a") }).activeId).toBeNull();
+  });
+
+  it.each(["closed", "reopened"] as const)("ignores a late identity refresh after a project was %s", (kind) => {
+    let state = projectSessionsReducer(initialProjectSessionsState, { type: "open", project: makeProject("/a") });
+    state = projectSessionsReducer(state, { type: "close", id: "/a" });
+    if (kind === "reopened") state = projectSessionsReducer(state, { type: "open", project: makeProject("/a", { sessionEpoch: "new" }) });
+    expect(projectSessionsReducer(state, { type: "refreshProject", project: makeProject("/a", { branch: "stale" }) })).toBe(state);
+  });
+
   it("restores every project and the stored active one in a single transition", () => {
     const state = projectSessionsReducer(initialProjectSessionsState, {
       type: "restore",
