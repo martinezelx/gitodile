@@ -6,16 +6,18 @@ import {
   CheckCircle2,
   CircleAlert,
   Copy,
+  Flag,
   GitBranch,
   Split,
   TriangleAlert,
+  Undo2,
 } from "lucide-react";
 
 import { useLanguage, type Translations } from "../../i18n";
 import { DiffResultView, type FileDiff } from "../changes";
 import { isAppError, localizeAppError } from "../../shared/i18n";
 import {
-  RefreshIconButton,
+  AutomaticUpdatesNotice,
   SearchBox,
   TextPlaceholder,
   autoHideScrollbarProps,
@@ -23,6 +25,7 @@ import {
   useToast,
 } from "../../shared/ui";
 import { FileResolution, type ResolutionSlot } from "./FileResolution";
+import { ConflictFilterChips, ConflictFilterPanel } from "./ConflictFilters";
 import { useActiveConflictsState } from "./hooks";
 import { AbortMergeDialog, FinishMergeDialog } from "./MergeDialogs";
 import type { ConflictsController, ConflictsViewMemory } from "./controller";
@@ -49,6 +52,8 @@ export type ConflictsScreenProps = {
   controller: ConflictsController;
   projectPath: string;
   sessionEpoch: string;
+  watcherState: "starting" | "watching" | "off" | "unavailable";
+  onOpenSettings: () => void;
   onBack: () => void;
   onGoToOverview: () => void;
   /** Another change to this project is running: the file actions wait. */
@@ -147,6 +152,8 @@ export function ConflictsScreen({
   controller,
   projectPath,
   sessionEpoch,
+  watcherState,
+  onOpenSettings,
   onBack,
   onGoToOverview,
   isProjectBusy,
@@ -171,7 +178,7 @@ export function ConflictsScreen({
 
   const session = state.session;
   const names = session ? sideLabels(session.operation, t) : null;
-  const visible = useMemo(() => filterConflictFiles(session?.files ?? [], memory.search), [session, memory.search]);
+  const visible = useMemo(() => filterConflictFiles(session?.files ?? [], memory.search, memory.filters), [session, memory.search, memory.filters]);
   const rows = useMemo<Row[]>(() => {
     const { open, resolved } = groupConflictFiles(visible);
     const result: Row[] = [];
@@ -203,19 +210,21 @@ export function ConflictsScreen({
     <div className="conflicts-view" aria-busy={state.isLoading}>
       <h1 className="visually-hidden">{t.conflictsTitle}</h1>
       <header className="conflicts-header">
-        <button type="button" className="ghost-button conflicts-header__back" onClick={onBack}>
+        <button type="button" className="ghost-button conflicts-header__back" onClick={onBack} aria-label={t.conflictsBack} data-tooltip={t.conflictsBack}>
           <ArrowLeft aria-hidden="true" />
-          {t.conflictsBack}
         </button>
         <div className="conflicts-header__text">
           <p className="conflicts-header__title" aria-hidden="true">{t.conflictsTitle}</p>
           {session && (
             <p className="conflicts-header__summary">
-              <span>{operationSummary(session.operation, t)}</span>
+              {session.operation.kind === "merge" && session.operation.supported && names ? <>
+                <span aria-label={operationSummary(session.operation, t)}>{t.conflictsMergeDirection(names.incoming, names.current)}</span>
+                <span>{t.conflictsMergePaused}</span>
+              </> : <span>{operationSummary(session.operation, t)}</span>}
               {session.operation.step && (
                 <span>{t.conflictsStep(session.operation.step.current, session.operation.step.total)}</span>
               )}
-              <span>
+              <span className="visually-hidden">
                 {/* A partial listing knows neither the total nor whether
                     the files past it still overlap. */}
                 {!session.listingComplete
@@ -227,12 +236,6 @@ export function ConflictsScreen({
             </p>
           )}
         </div>
-        <RefreshIconButton
-          label={t.conflictsRefresh}
-          busyLabel={t.conflictsLoading}
-          busy={state.isLoading}
-          onClick={refresh}
-        />
         {session && (
           <SessionEndActions
             session={session}
@@ -285,6 +288,23 @@ export function ConflictsScreen({
         </section>
       ) : null}
 
+      {session !== undefined && !state.error && (watcherState === "off" || watcherState === "unavailable") && (
+        <div className="conflicts-updates">
+          <AutomaticUpdatesNotice
+            title={watcherState === "off" ? t.automaticUpdatesOffTitle : t.automaticUpdatesUnavailableTitle}
+            description={t.automaticUpdatesOutdatedDescription}
+            updateLabel={t.automaticUpdatesUpdateNow}
+            updateAriaLabel={t.conflictsRefresh}
+            updatingLabel={t.automaticUpdatesUpdating}
+            updatingAriaLabel={t.conflictsLoading}
+            busy={state.isLoading || isProjectBusy}
+            settingsLabel={t.automaticUpdatesOpenSettings}
+            onUpdate={refresh}
+            onOpenSettings={onOpenSettings}
+          />
+        </div>
+      )}
+
       {session === null ? (
         <div className="conflicts-empty">
           <div className="empty-state empty-state--success">
@@ -309,8 +329,10 @@ export function ConflictsScreen({
                   placeholder={t.conflictsSearchPlaceholder}
                   ariaLabel={t.conflictsSearchAriaLabel}
                   clearLabel={t.commonClearSearch}
+                  trailing={<ConflictFilterPanel files={session.files} filters={memory.filters} onChange={(filters) => update({ filters, scrollTop: 0 })} t={t} />}
                 />
               </div>
+              <ConflictFilterChips filters={memory.filters} onChange={(filters) => update({ filters, scrollTop: 0 })} t={t} />
               <FileList
                 rows={rows}
                 selectedPath={selected?.path ?? null}
@@ -367,9 +389,8 @@ function ConflictsLoading({ t, onBack }: { t: Translations; onBack: () => void }
     <div className="conflicts-view" aria-busy="true">
       <h1 className="visually-hidden">{t.conflictsTitle}</h1>
       <header className="conflicts-header">
-        <button type="button" className="ghost-button conflicts-header__back" onClick={onBack}>
+        <button type="button" className="ghost-button conflicts-header__back" onClick={onBack} aria-label={t.conflictsBack} data-tooltip={t.conflictsBack}>
           <ArrowLeft aria-hidden="true" />
-          {t.conflictsBack}
         </button>
         <div className="conflicts-header__text" role="status" aria-label={t.conflictsLoading}>
           <p className="conflicts-header__title" aria-hidden="true">{t.conflictsTitle}</p>
@@ -460,20 +481,23 @@ function SessionEndActions({
   return (
     <div className="conflicts-header__actions">
       {actions.abort && (
-        <button type="button" className="secondary-button" disabled={isProjectBusy} onClick={() => onEnd("abort")}>
-          {t.conflictsAbort}
+        <button type="button" className="secondary-button secondary-button--sm" aria-label={t.conflictsAbort} data-tooltip={t.conflictsAbort} disabled={isProjectBusy} onClick={() => onEnd("abort")}>
+          <Undo2 aria-hidden="true" />
+          {t.conflictsAbortShort}
         </button>
       )}
       {actions.finish !== "hidden" && (
         <button
           type="button"
-          className="primary-button"
+          className="primary-button primary-button--sm"
+          aria-label={t.conflictsFinish}
           disabled={isProjectBusy || actions.finish !== "allowed"}
           aria-describedby={actions.finish === "files-left" ? "conflicts-finish-reason" : undefined}
-          data-tooltip={actions.finish === "files-left" ? t.conflictsFinishFilesLeft : undefined}
+          data-tooltip={actions.finish === "files-left" ? t.conflictsFinishFilesLeft : t.conflictsFinish}
           onClick={() => onEnd("finish")}
         >
-          {t.conflictsFinish}
+          <Flag aria-hidden="true" />
+          {t.conflictsFinishShort}
         </button>
       )}
       {actions.finish === "files-left" && (
@@ -673,16 +697,18 @@ function FileDetail({
         <ArrowLeft aria-hidden="true" />
         {t.conflictsBackToList}
       </button>
-      <header className="conflicts-detail__header">
-        <div className="conflicts-detail__title">
-          <h2 className="conflicts-detail__path" ref={headingRef} tabIndex={-1}>
-            <span className="conflicts-detail__name">{name}</span>
-            {dir && <span className="conflicts-detail__dir">{dir}</span>}
-          </h2>
-          <p className="conflicts-detail__shape">{fileDescription(file, names, t)}</p>
-        </div>
-      </header>
       <FileResolution
+        header={
+          <header className="conflicts-detail__header">
+            <div className="conflicts-detail__title">
+              <h2 className="conflicts-detail__path" ref={headingRef} tabIndex={-1}>
+                <span className="conflicts-detail__name">{name}</span>
+                {dir && <span className="conflicts-detail__dir">{dir}</span>}
+              </h2>
+              <p className="conflicts-detail__shape">{fileDescription(file, names, t)}</p>
+            </div>
+          </header>
+        }
         controller={controller}
         query={query}
         session={session}
@@ -715,6 +741,9 @@ function FileDetail({
             file={file}
             side={side}
             name={names[side]}
+            roleLabel={session.operation.kind === "merge" && session.operation[side].name
+              ? (side === "current" ? t.conflictsCurrentRole : t.conflictsIncomingRole)
+              : (side === "current" ? t.conflictsCurrentFallback : t.conflictsIncomingFallback)}
             isDiscarding={discarding === side}
             onReadAgain={onReadAgain}
             t={t}
@@ -734,6 +763,7 @@ function SideChanges({
   file,
   side,
   name,
+  roleLabel,
   isDiscarding,
   onReadAgain,
   t,
@@ -744,6 +774,7 @@ function SideChanges({
   file: ConflictFile;
   side: ConflictSideName;
   name: string;
+  roleLabel: string;
   /** A pending choice would replace what this side changed. */
   isDiscarding: boolean;
   onReadAgain: () => void;
@@ -795,9 +826,10 @@ function SideChanges({
       className={`conflicts-side${hasDiff ? " conflicts-side--diff" : ""}${isDiscarding ? " conflicts-side--discarding" : ""}`}
       aria-labelledby={headingId}
     >
-      <h3 className="conflicts-side__heading" id={headingId}>
+      <h3 className="conflicts-side__heading" id={headingId} aria-label={isDiscarding ? `${t.conflictsSideChanged(name)} · ${t.conflictsWillBeReplaced}` : t.conflictsSideChanged(name)}>
         <GitBranch aria-hidden="true" />
-        <span>{t.conflictsSideChanged(name)}</span>
+        <span data-tooltip={name}>{name}</span>
+        {!isDiscarding && <span className="conflicts-side__role">{roleLabel}</span>}
         {isDiscarding && <span className="conflicts-side__discarding">{t.conflictsWillBeReplaced}</span>}
       </h3>
       {limitation ? (

@@ -294,6 +294,10 @@ function Dialogs(): React.JSX.Element {
             { icon: <GitBranch />, text: "Its versions stay in the project's history." },
             { icon: <ShieldCheck />, text: "A copy is kept, so you can undo it.", safe: true },
           ]} />
+          <details className="app-dialog__details">
+            <summary>Technical details</summary>
+            <pre>Reference: refs/heads/feature/login</pre>
+          </details>
           <div className="dialog-actions">
             <button type="button" className="secondary-button">Cancel</button>
             <button type="button" className="danger-button"><Trash2 aria-hidden="true" />Delete branch</button>

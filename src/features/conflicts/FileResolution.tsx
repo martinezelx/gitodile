@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Check,
   CircleAlert,
-  Ellipsis,
   FileX,
   FolderOpen,
+  GitBranch,
   LoaderCircle,
   RotateCcw,
   ShieldCheck,
@@ -19,8 +19,6 @@ import {
   Dialog,
   DialogBanner,
   DialogFacts,
-  handlePopupMenuKeyDown,
-  useAnchoredPopup,
   useModalFocus,
 } from "../../shared/ui";
 import type { ConflictsController } from "./controller";
@@ -98,6 +96,7 @@ function markCommand(file: ConflictFile): string {
 }
 
 export function FileResolution({
+  header,
   controller,
   query,
   session,
@@ -112,6 +111,7 @@ export function FileResolution({
   onReadAgain,
   t,
 }: {
+  header: React.ReactNode;
   controller: ConflictsController;
   query: ConflictsQuery;
   session: ConflictSession;
@@ -130,14 +130,12 @@ export function FileResolution({
   onAnnounce: (announcement: string) => void;
   onReadAgain: () => void;
   t: Translations;
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const [ask, setAsk] = useState<Ask | null>(null);
   const [running, setRunning] = useState<Running | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [resetDialog, setResetDialog] = useState<ResetDialogState | null>(null);
   const [opening, setOpening] = useState(false);
-  /** The file and session state it was opened in, until an edit moves it. */
-  const [opened, setOpened] = useState<{ path: string; stateToken: string } | null>(null);
   /** The last marker check, with the file and token it was asked for. */
   const [check, setCheck] = useState<{ path: string; stateToken: string; result: WorkingFileCheck } | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -315,7 +313,6 @@ export function FileResolution({
     try {
       await controller.port.openFile({ ...query, filePath: now.path, stateToken: read.stateToken });
       if (!mounted.current) return;
-      setOpened({ path: now.path, stateToken: read.stateToken });
       onAnnounce(t.conflictsAnnounceOpened(now.path));
     } catch (error) {
       const code = errorCode(error);
@@ -358,7 +355,13 @@ export function FileResolution({
 
   const block = fileBlock(file);
   const hasBar = actions.choices.length > 0 || actions.canOpen || actions.canMarkResolved || actions.canReset;
-  if (!hasBar && !problem && !block) return null;
+  if (!hasBar && !problem && !block) {
+    return (
+      <div className="conflicts-filebar">
+        <div className="conflicts-filebar__identity">{header}</div>
+      </div>
+    );
+  }
 
   const keptName = kept ? keptSide(kept) : null;
   const checked = check && check.path === file.path && check.stateToken === session.stateToken ? check.result.markers : null;
@@ -371,117 +374,131 @@ export function FileResolution({
         : checked.kind === "none"
           ? t.conflictsNoMarkersLeft
           : t.conflictsMarkersUnknown(checked.limit);
-  const isOpenedHere = opened !== null && opened.path === file.path && opened.stateToken === session.stateToken;
   const status = isResolved
-    ? t.conflictsStateResolved
+    ? null
     : keptName
       ? t.conflictsKeptStatus(names[keptName])
       : kept === "delete"
         ? t.conflictsDeletedStatus
-        : (markerStatus ?? (isOpenedHere ? t.conflictsOpenedStatus : null));
+        : markerStatus;
   const statusWarns = !isResolved && !kept && checked?.kind === "found";
   const waiting = isProjectBusy && !running;
 
   return (
     <div className="conflicts-resolution">
-      {ask ? (
-        <AskRow
-          ask={ask}
-          file={file}
-          names={names}
-          askRef={askRef}
-          onCancel={() => closeAsk(ask.kind === "choice" ? ask.choice : "mark")}
-          onChoose={(choice) => void choose(choice)}
-          onMark={(options) => {
-            if (ask.kind === "explain") rememberMarkResolvedExplanation();
-            void mark(options);
-          }}
-          t={t}
-        />
-      ) : hasBar ? (
-        <div
-          ref={barRef}
-          className="conflicts-actions"
-          role="group"
-          aria-label={t.conflictsActionsAriaLabel(file.path)}
-          aria-busy={running !== null}
-        >
-          {/* Only when there is something to say: an empty line would still
-              take its share of the bar and push the buttons off the right. */}
-          {waiting ? (
-            <p className="conflicts-actions__status" role="status">{t.conflictsBusyNote}</p>
+      <div className="conflicts-filebar">
+        <div className="conflicts-filebar__identity">
+          {header}
+          {!ask && hasBar && (waiting ? (
+            <p className="conflicts-filebar__status" role="status">{t.conflictsBusyNote}</p>
           ) : status ? (
-            <p className={`conflicts-actions__status${statusWarns ? " conflicts-actions__status--warning" : ""}`}>
+            <p className={`conflicts-filebar__status${statusWarns ? " conflicts-filebar__status--warning" : ""}`}>
               {statusWarns && <TriangleAlert aria-hidden="true" />}
-              {status}
+              <span>{status}</span>
             </p>
-          ) : null}
-          <div className="conflicts-actions__buttons">
-            {actions.choices.map((choice) => {
-              const isKept = kept === choice;
-              const side = keptSide(choice);
-              const label = side ? t.conflictsKeep(names[side]) : t.conflictsDelete;
-              return (
-                <button
-                  key={choice}
-                  type="button"
-                  className="secondary-button secondary-button--sm"
-                  data-action={choice}
-                  aria-pressed={isKept}
-                  disabled={disabled}
-                  onClick={() => askChoice(choice)}
-                >
-                  {running === choice ? (
-                    <LoaderCircle className="icon--spinning" aria-hidden="true" />
-                  ) : isKept ? (
-                    <Check aria-hidden="true" />
-                  ) : choice === "delete" ? (
-                    <Trash2 aria-hidden="true" />
-                  ) : null}
-                  <span className="conflicts-actions__label">{label}</span>
-                </button>
-              );
-            })}
-            {actions.canOpen && (
-              <button
-                type="button"
-                className="secondary-button secondary-button--sm"
-                data-action="open"
-                disabled={disabled || opening}
-                aria-busy={opening}
-                onClick={() => void open()}
-              >
-                {opening ? (
-                  <LoaderCircle className="icon--spinning" aria-hidden="true" />
-                ) : (
-                  <SquareArrowOutUpRight aria-hidden="true" />
-                )}
-                {t.conflictsOpenInEditor}
-              </button>
-            )}
-            {actions.canReset && (
-              <MoreMenu
-                disabled={disabled}
-                isRunning={running === "reset"}
-                onReset={() => setResetDialog({ contentNotKept: false, error: null })}
-                t={t}
-              />
-            )}
-            {actions.canMarkResolved && (
-              <button
-                type="button"
-                className="primary-button primary-button--sm"
-                data-action="mark"
-                disabled={disabled}
-                onClick={startMark}
-              >
-                {running === "mark" ? <LoaderCircle className="icon--spinning" aria-hidden="true" /> : <Check aria-hidden="true" />}
-                {t.conflictsMarkResolved}
-              </button>
-            )}
-          </div>
+          ) : null)}
         </div>
-      ) : null}
+        {ask ? (
+          <AskRow
+            ask={ask}
+            file={file}
+            names={names}
+            askRef={askRef}
+            onCancel={() => closeAsk(ask.kind === "choice" ? ask.choice : "mark")}
+            onChoose={(choice) => void choose(choice)}
+            onMark={(options) => {
+              if (ask.kind === "explain") rememberMarkResolvedExplanation();
+              void mark(options);
+            }}
+            t={t}
+          />
+        ) : hasBar ? (
+          <div
+            ref={barRef}
+            className="conflicts-actions"
+            role="group"
+            aria-label={t.conflictsActionsAriaLabel(file.path)}
+            aria-busy={running !== null}
+          >
+            <div className="conflicts-actions__buttons">
+              {actions.choices.some((choice) => keptSide(choice) !== null) && (
+                <span className="conflicts-actions__context">{t.conflictsKeepFrom}</span>
+              )}
+              {actions.choices.map((choice) => {
+                const isKept = kept === choice;
+                const side = keptSide(choice);
+                const label = side ? t.conflictsKeep(names[side]) : t.conflictsDelete;
+                return (
+                  <button
+                    key={choice}
+                    type="button"
+                    className={`secondary-button secondary-button--sm${choice === "delete" ? " conflicts-icon-action conflicts-icon-action--danger" : ""}`}
+                    data-action={choice}
+                    aria-label={label}
+                    data-tooltip={label}
+                    aria-pressed={isKept}
+                    disabled={disabled}
+                    onClick={() => askChoice(choice)}
+                  >
+                    {running === choice ? (
+                      <LoaderCircle className="icon--spinning" aria-hidden="true" />
+                    ) : isKept ? (
+                      <Check aria-hidden="true" />
+                    ) : choice === "delete" ? (
+                      <Trash2 aria-hidden="true" />
+                    ) : <GitBranch aria-hidden="true" />}
+                    {side && <span className="conflicts-actions__label">{names[side]}</span>}
+                  </button>
+                );
+              })}
+              {actions.canOpen && (
+                <button
+                  type="button"
+                  className="secondary-button secondary-button--sm conflicts-icon-action"
+                  data-action="open"
+                  aria-label={t.conflictsOpenInEditor}
+                  data-tooltip={t.conflictsOpenInEditor}
+                  disabled={disabled || opening}
+                  aria-busy={opening}
+                  onClick={() => void open()}
+                >
+                  {opening ? (
+                    <LoaderCircle className="icon--spinning" aria-hidden="true" />
+                  ) : (
+                    <SquareArrowOutUpRight aria-hidden="true" />
+                  )}
+                </button>
+              )}
+              {actions.canReset && (
+                <button
+                  type="button"
+                  className="secondary-button secondary-button--sm conflicts-icon-action"
+                  data-action="reset"
+                  aria-label={t.conflictsResetMenu}
+                  data-tooltip={t.conflictsResetMenu}
+                  disabled={disabled}
+                  onClick={() => setResetDialog({ contentNotKept: false, error: null })}
+                >
+                  {running === "reset" ? <LoaderCircle className="icon--spinning" aria-hidden="true" /> : <RotateCcw aria-hidden="true" />}
+                </button>
+              )}
+              {actions.canMarkResolved && (
+                <button
+                  type="button"
+                  className="primary-button primary-button--sm conflicts-icon-action"
+                  data-action="mark"
+                  aria-label={t.conflictsMarkResolved}
+                  data-tooltip={t.conflictsMarkResolved}
+                  disabled={disabled}
+                  onClick={startMark}
+                >
+                  {running === "mark" ? <LoaderCircle className="icon--spinning" aria-hidden="true" /> : <Check aria-hidden="true" />}
+                </button>
+              )}
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {block && (
         <BlockNotice
@@ -576,8 +593,8 @@ function AskRow({
         answers = (
           <>
             {cancel(true)}
-            <button type="button" className="danger-button danger-button--sm" onClick={() => onChoose(ask.choice)}>
-              {t.conflictsKeep(keptName)}
+            <button type="button" className="danger-button danger-button--sm" aria-label={t.conflictsKeep(keptName)} data-tooltip={t.conflictsKeep(keptName)} onClick={() => onChoose(ask.choice)}>
+              <span className="conflicts-actions__label">{t.conflictsKeep(keptName)}</span>
             </button>
           </>
         );
@@ -657,66 +674,6 @@ function AskRow({
         </div>
       </div>
       <div className="conflicts-ask__answers">{answers}</div>
-    </div>
-  );
-}
-
-function MoreMenu({
-  disabled,
-  isRunning,
-  onReset,
-  t,
-}: {
-  disabled: boolean;
-  isRunning: boolean;
-  onReset: () => void;
-  t: Translations;
-}): React.JSX.Element {
-  const [open, setOpen] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const close = (restoreFocus: boolean): void => {
-    setOpen(false);
-    if (restoreFocus) triggerRef.current?.focus();
-  };
-  const { containerRef, popupRef } = useAnchoredPopup(open, triggerRef, close, "selected-menu-item");
-  return (
-    <div className="conflicts-more" ref={containerRef}>
-      <button
-        ref={triggerRef}
-        type="button"
-        className="secondary-button secondary-button--sm conflicts-more__trigger"
-        data-action="more"
-        aria-label={t.conflictsMoreActions}
-        data-tooltip={t.conflictsMoreActions}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        disabled={disabled}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {isRunning ? <LoaderCircle className="icon--spinning" aria-hidden="true" /> : <Ellipsis aria-hidden="true" />}
-      </button>
-      {open && (
-        <div
-          ref={popupRef}
-          className="app-menu conflicts-more__popup"
-          role="menu"
-          aria-label={t.conflictsMoreActions}
-          tabIndex={-1}
-          onKeyDown={(event) => handlePopupMenuKeyDown(event, popupRef.current, () => close(true))}
-        >
-          <button
-            className="app-menu__item app-menu__item--danger"
-            role="menuitem"
-            type="button"
-            onClick={() => {
-              close(true);
-              onReset();
-            }}
-          >
-            <RotateCcw aria-hidden="true" />{t.conflictsResetMenu}
-          </button>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 import type { FileDiff } from "../changes";
 import type { ProjectRuntime } from "../../runtime/project/runtime";
-import type { ConflictSession, WorkingFileCheck } from "./domain";
+import { NO_CONFLICT_FILTERS, type ConflictFilters, type ConflictSession, type WorkingFileCheck } from "./domain";
 import type { ConflictSideDiffQuery, ConflictsPort, ConflictsQuery } from "./port";
 
 export type ConflictsState = {
@@ -55,12 +55,14 @@ export type ConflictsViewMemory = {
   selectedPath: string | null;
   search: string;
   scrollTop: number;
+  filters: ConflictFilters;
 };
 
 export const INITIAL_VIEW_MEMORY: ConflictsViewMemory = Object.freeze({
   selectedPath: null,
   search: "",
   scrollTop: 0,
+  filters: NO_CONFLICT_FILTERS,
 });
 
 export type ConflictsController = ReturnType<typeof createConflictsController>;

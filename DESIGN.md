@@ -2751,7 +2751,10 @@ says what stays safe last, in the success tone. It is never a grid of titled
 cards: four cards of equal weight made "nothing is deleted" read like "sign-in"
 and the dialog like a feature page. Mechanism — temporary folders, refs,
 tokens, `.git/config`, a HEAD — goes behind a `Technical details` disclosure,
-if anywhere. Consequences are facts too, never a bulleted list of their own,
+if anywhere. Disclosure headings in dialogs are controls: the default arrow cursor,
+non-selectable label and primary text on hover. Their expanded content stays
+selectable, and native keyboard toggling and visible focus are preserved.
+Consequences are facts too, never a bulleted list of their own,
 and so is a note that says what stays safe ("A copy is kept, so you can undo
 it"): it is the safe fact, last.
 
@@ -3694,7 +3697,7 @@ that refuse to act because something is paused lead to it, and Back returns
 to where the reader came from. It is the Changes pairing — a file list panel
 and a reading panel edge to edge at `--panel-column`, the same one-column
 list/detail switch below 1024px — under one header band that names what is
-paused with real branch names, its step and how many files still overlap.
+paused with real branch names and its step, with progress in the file groups.
 A merge GitOdile will resolve needs no card: the header already says what is
 paused, and a "you can look around safely" card said the same thing on every
 visit. An operation it cannot finish gets one `warning` card — nothing is
@@ -3706,9 +3709,17 @@ technical details of their own: stage modes and object IDs answered no
 question a reader of this screen asks.
 Each row says the overlap in words ("Deleted on “main”"), never by colour
 alone. The reading panel's strip carries the file's name and the overlap in words.
-Under it both sides show at once as two equal columns, the way IntelliJ IDEA puts the two
-versions either side of a merge — "What “main” changed" on the left, "What
-“feature” changed" on the right, each a heading with a branch glyph over a
+The list's SearchBox carries the same FilterPanel trigger, active count and
+removable chips as Changes and History: pending/resolved status and actual
+filename extensions intersect the text search. They filter the cached listing
+only and are remembered per project session. The extension choices are bounded
+by virtualization; arrows, Home/End and Tab can reach every checkbox, including
+one outside the currently painted range. A filtered count never becomes
+the session's total or enables Finish; partial listings remain explicitly partial.
+
+Under the file strip both sides show at once as two equal columns, the way IntelliJ IDEA puts the two
+versions either side of a merge — the actual branch on the left and the incoming
+branch on the right, each named with its role and a branch glyph over a
 diff in a scroller of its own. The overlap is the two of them together; a
 picker between them hid half of it. The columns are the layout, so there is
 no reading-mode picker: each side is one unified column, and below 720px the
@@ -3719,14 +3730,29 @@ the common base with the Changes diff renderer; a side with nothing to
 compare as text (deleted, a link, a submodule, a changed kind) says so in a
 sentence instead of drawing an empty diff.
 
-**A file's actions sit in one bar under its strip**, the Changes toolbar's
-place under its list: on the left what the file holds now ("Kept “main” ·
-not marked resolved yet"), on the right Keep “main”, Keep “feature” — each
-side named by its branch — Delete where a side deleted the path, Open in
-editor, a `⋯` menu holding Reset, and Mark resolved last as the solid primary.
+**The file's identity and actions share one compact strip**, at the existing
+panel-strip scale, wrapping into regions when names or available width need
+it. The name and overlap stay on the left; a shared “Keep version from” label
+introduces the branch-name buttons, each with a branch glyph (a check when
+selected) and its full Keep action in the tooltip and accessible name.
+Mark resolved is a circular
+primary check with its localized tooltip and accessible name; its confirmation
+keeps a visible action label. Delete, Open in editor and Reset are its small circular secondary siblings, named
+by localized tooltips and accessible labels. Delete uses the danger ink and
+still asks for confirmation; Reset opens its existing confirmation directly.
+Feedback such as "Kept “main” · not marked resolved yet", marker warnings and
+busy explanations belong under the file identity, outside the button group.
+Resolved is stated once in the file description, with no duplicate above the
+Reset button. Long branch names and explanations wrap within their region;
+branch-choice labels truncate with the full accessible name and tooltip.
+Side headings use the inner-strip scale and retain the full
+"What this branch changed" description for assistive technology. The screen
+header keeps the real merge direction and its paused state; progress lives in
+the pending/resolved list groups and remains available to screen readers.
 Open in editor opens the file in the application its type opens in and asks
-nothing, since it changes nothing; the left of the bar then says the file is
-open and that GitOdile looks again when it is saved. Once an edit comes back
+nothing, since it changes nothing. Success is announced to assistive technology
+without adding a persistent message or moving controls in the file strip.
+Once an edit comes back
 the left says what it left — overlapping parts still marked (in words, with a
 `warning` glyph), none, or why GitOdile cannot look (not text, UTF-16) — and
 Mark resolved still asks before taking a file with markers. A type the system
@@ -3759,9 +3785,16 @@ cannot spell — gets one `warning` notice in the same place saying what to do
 instead, with the step GitOdile can take toward it (Show in folder, or Open
 project folder for a name it cannot spell) and Read again.
 
+The header has no permanent Refresh action: repository invalidations already
+refresh the cached conflict session. If watching is off or unavailable, the
+same AutomaticUpdatesNotice as Changes offers a focused update and Settings;
+read errors and stale-file notices retain their contextual retry/read actions.
+
 **Finishing and stopping are the session's actions**, at the end of the header
-band after Refresh: Stop combining… as a `secondary-button`, Finish
-combining… last as the solid primary. Finish stays visible while files still
+band: Stop… with `Undo2` as a `secondary-button`, Finish… with `Flag`
+last as the solid primary. Full Stop/Finish combining names stay in their
+accessible names and tooltips. The flag distinguishes the session's finish
+from branch glyphs and the file's resolved check. Finish stays visible while files still
 overlap, disabled with the reason as its description and tooltip, and both
 hold while another change to the project runs. Neither is Back, which only
 leaves. Finish is the Save version dialog's sibling: `m` in the `local` tone

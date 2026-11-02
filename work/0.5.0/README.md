@@ -14,8 +14,15 @@ The three-pane conflict editor is not part of this version; it is epic
 
 ## Queue
 
-No active or blocked tasks remain in this version's queue. The maintainer
-closed the implementation phase on 2026-10-31 under
+| Queue | Task | Scope |
+| --- | --- | --- |
+| 01 | [213 — Frontend flow and visual review](213-frontend-flow-and-visual-review.md) | Approved resolver refinements implemented; complete the remaining frontend review. Backend assumed correct; temporary HTML previews removed after approval. |
+
+The maintainer requested this additional frontend review on 2026-10-31 after
+closing the original implementation phase. The original implementation closure
+remains historical evidence; task 213 must finish separately.
+
+The maintainer closed the implementation phase on 2026-10-31 under
 [ADR 0042](../../docs/adr/0042-propose-platform-qualification-carryover-for-050.md).
 The [closure matrix](../assets/0.5.0-closure/closure-audit.md) maps the exact
 criteria, Windows evidence and external qualification formally carried to

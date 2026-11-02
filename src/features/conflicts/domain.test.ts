@@ -4,6 +4,8 @@ import {
   discardedSide,
   fileActions,
   fileBlock,
+  conflictExtension,
+  filterConflictFiles,
   keptChoice,
   needsMarkerCheck,
   sessionActions,
@@ -14,6 +16,28 @@ import {
 
 const A = "1".repeat(40);
 const B = "2".repeat(40);
+
+describe("conflict list filters", () => {
+  const files = [
+    file({ path: "src/Editor.TS", state: "markedResolved" }),
+    file({ path: "docs/guide.md", state: "editedOutside" }),
+    file({ path: "notes.txt" }),
+    file({ path: ".gitignore" }),
+  ];
+  it.each([
+    ["", "all", [], [0, 1, 2, 3]],
+    [" EDITOR ", "resolved", ["ts"], [0]],
+    ["", "pending", ["md", "txt"], [1, 2]],
+    ["", "resolved", ["md"], []],
+    ["docs", "pending", [], [1]],
+    ["", "all", [""], [3]],
+  ] as const)("intersects search %s, status %s and types %s", (query, status, extensions, expected) => {
+    expect(filterConflictFiles(files, query, { status, extensions: [...extensions] })).toEqual(expected.map((index) => files[index]));
+  });
+  it("uses the basename, not dots in parent directories, and handles extensionless names", () => {
+    expect(["dir.with.dot/README", ".gitignore", "file.", "src/Editor.TS"].map(conflictExtension)).toEqual(["", "", "", "ts"]);
+  });
+});
 
 function file(overrides: Partial<ConflictFile>): ConflictFile {
   return {

@@ -171,10 +171,27 @@ export function groupConflictFiles(files: readonly ConflictFile[]): {
   return { open, resolved };
 }
 
-export function filterConflictFiles(files: readonly ConflictFile[], query: string): ConflictFile[] {
+export type ConflictFilters = {
+  status: "all" | "pending" | "resolved";
+  extensions: string[];
+};
+
+export const NO_CONFLICT_FILTERS: ConflictFilters = { status: "all", extensions: [] };
+
+/** Extension is a name-based filter, not a claim that a file is readable text. */
+export function conflictExtension(path: string): string {
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const dot = name.lastIndexOf(".");
+  return dot > 0 && dot < name.length - 1 ? name.slice(dot + 1).toLocaleLowerCase() : "";
+}
+
+export function filterConflictFiles(files: readonly ConflictFile[], query: string, filters: ConflictFilters = NO_CONFLICT_FILTERS): ConflictFile[] {
   const needle = query.trim().toLocaleLowerCase();
-  if (!needle) return [...files];
-  return files.filter((file) => file.path.toLocaleLowerCase().includes(needle));
+  return files.filter((file) =>
+    file.path.toLocaleLowerCase().includes(needle)
+    && (filters.status === "all" || (file.state === "markedResolved") === (filters.status === "resolved"))
+    && (filters.extensions.length === 0 || filters.extensions.includes(conflictExtension(file.path))),
+  );
 }
 
 /** The name a side is called by in the reader's text: the branch or tag, else

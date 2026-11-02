@@ -67,7 +67,8 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   with a partial-preview notice and gaps; full text modes remain available.
 - Resolve a paused merge, whoever started it, on the **Overlapping changes**
   screen (from Overview, Changes or the command palette): see what each branch
-  changed in every file, keep one whole side, delete, or open the file in its
+  changed in every file, narrow the cached list by pending/resolved state and
+  file extension, keep one whole side, delete, or open the file in its
   own application, then mark it resolved or reset it to the original overlap.
   Finish or stop the merge through a plan; a snapshot taken before the first
   change keeps what each action replaces. A paused rebase, cherry-pick, revert
@@ -83,7 +84,7 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   says what goes with it before it does.
 - Receive live, debounced repository updates without exposing raw filesystem
   paths to the frontend, or turn watching off — in which case Changes, History,
-  and Branches disclose that their local snapshot may be out of date and offer a
+  Branches, and Overlapping changes disclose that their local snapshot may be out of date and offer a
   focused update.
 - Save all or selected changes as a version with a title and description. The
   flow is planned and revalidated in Rust, preserves Git hooks and signing, and

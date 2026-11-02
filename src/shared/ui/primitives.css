@@ -1865,6 +1865,10 @@ input.docked-composer__field:focus { border-color: var(--focus-ring); background
 /* The actions stay on the right when the row has no note to its left. */
 .app-dialog__foot > .dialog-actions { margin-left: auto; }
 .app-dialog__details > summary { width: fit-content; color: var(--text-secondary-color); font-size: var(--text-label); }
+.app-dialog summary,
+.app-dialog__details > summary { cursor: default; user-select: none; }
+.app-dialog summary:hover,
+.app-dialog__details > summary:hover { color: var(--text-primary-color); }
 .app-dialog__details pre {
   margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-3); border-radius: var(--radius-item);
   background: var(--surface-code); font-family: var(--font-mono); font-size: var(--text-label);

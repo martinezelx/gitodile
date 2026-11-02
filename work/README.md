@@ -85,7 +85,7 @@ and 038 predate that convention, so their already-permanent child IDs remain
 
 Reserved IDs without their own task file are still burned: `062` was folded
 into task 057 and `196` into task 195 by explicit request. The next unused
-top-level ID after the current plan is `213`. Epic 206 owns tasks 037-2 and
+top-level ID after the current plan is `214`. Epic 206 owns tasks 037-2 and
 037-4, which kept their IDs when they moved out of epic 037 on 2026-10-27.
 
 The status bar's project initials and the Markdown change marks (bar and
@@ -150,6 +150,12 @@ screens ([148-6](after-1.0/148-6-pull-request-screen.md),
 [148-7](after-1.0/148-7-actions-and-ci-screen.md)) and Bitbucket browser
 authorization ([148-8](after-1.0/148-8-bitbucket-accounts.md)) wait in
 `after-1.0/`.
+
+The additional frontend-only review of the completed 0.5.0 implementation is
+[213](0.5.0/213-frontend-flow-and-visual-review.md). It treats the backend as
+correct and keeps new runtime evidence separate from historical captures.
+Its temporary HTML previews were removed after design approval; the task
+retains the implementation and validation record.
 
 ## Workflow
 

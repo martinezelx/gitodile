@@ -12,12 +12,16 @@
   border-bottom: 1px solid var(--border-subtle);
 }
 .conflicts-header__back svg { width: var(--icon-control); height: var(--icon-control); }
+.conflicts-header__back { width: var(--control-height-sm); min-height: var(--control-height-sm); padding: 0; border-radius: var(--radius-round); }
+.conflicts-updates { margin: var(--space-3) var(--space-3) 0; }
 .conflicts-header__text { flex: 1 1 18rem; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
 .conflicts-header__title { margin: 0; font-size: var(--text-title); font-weight: var(--weight-strong); }
 .conflicts-header__summary {
   margin: 0; display: flex; flex-wrap: wrap; column-gap: var(--space-2);
-  color: var(--text-secondary-color); font-size: var(--text-body);
+  color: var(--text-secondary-color); font-size: var(--text-label);
+  overflow-wrap: anywhere;
 }
+.conflicts-header__summary > span { min-width: 0; max-width: 100%; }
 .conflicts-header__summary > span + span::before { content: "·"; margin-inline-end: var(--space-2); }
 /* Finish and stop at the end of the band: the session's own actions, apart
    from each file's bar. They wrap under the text rather than squeeze it. */
@@ -37,7 +41,7 @@
 .conflicts-notice--warning > svg { color: var(--status-warning); }
 .conflicts-notice--danger > svg { color: var(--status-danger); }
 .conflicts-notice--danger { outline: 1px solid var(--status-danger); outline-offset: -1px; }
-.conflicts-notice__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.conflicts-notice__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); overflow-wrap: anywhere; }
 .conflicts-notice__body > strong { font-size: var(--text-body); font-weight: var(--weight-strong); }
 .conflicts-notice__body > p {
   margin: 0; color: var(--text-secondary-color); font-size: var(--text-body); line-height: var(--leading-normal);
@@ -81,16 +85,22 @@
 /* The panes start right under the header's hairline; only a notice between
    them needs its own room and a rule of its own under it. */
 .conflicts-view > .conflicts-notice ~ .conflicts-layout,
+.conflicts-view > .conflicts-updates ~ .conflicts-layout,
 .conflicts-view > .conflicts-partial ~ .conflicts-layout { margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
 .conflicts-list {
   min-height: 0; display: flex; flex-direction: column; border-inline-end: 1px solid var(--border-subtle);
 }
 .conflicts-list__toolbar {
+  position: relative;
   display: flex; align-items: center; gap: var(--space-2);
   flex: 0 0 auto; height: var(--strip-height);
   padding: 0 var(--space-3);
 }
 .conflicts-list__toolbar > * { flex: 1; min-width: 0; }
+.conflicts-filter-types { overflow-y: auto; min-width: 0; }
+.conflicts-filter-types__rows { position: relative; }
+.conflicts-filter-types__row { position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: center; }
+.conflicts-filter-types__row > * { width: 100%; }
 .conflicts-list__placeholder { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }
 .conflicts-list__scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; margin: 0 var(--space-2) var(--space-2); }
 .conflicts-list__rows { position: relative; list-style: none; margin: 0; padding: 0; }
@@ -134,9 +144,8 @@
 }
 .conflicts-detail__back svg { width: var(--icon-control); height: var(--icon-control); }
 .conflicts-detail__header {
-  flex: 0 0 auto; min-width: 0; display: flex; align-items: center; gap: var(--space-3);
-  min-height: var(--strip-height); padding: var(--space-2) var(--space-4) var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+  min-width: 0; display: flex; align-items: center; gap: var(--space-3);
+  padding: 0;
 }
 .conflicts-detail__title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .conflicts-detail__path {
@@ -146,55 +155,60 @@
 .conflicts-detail__dir {
   margin-inline-start: var(--space-2); color: var(--text-secondary-color); font-size: var(--text-caption); font-weight: var(--weight-normal);
 }
-.conflicts-detail__shape { margin: 0; color: var(--text-secondary-color); font-size: var(--text-caption); }
-/* The file's actions (task 037-6-2): a bar under the strip, as the Changes
-   toolbar sits under its list's strip. What the file holds now on the left,
-   the choices on the right with Mark resolved, the constructive one, last. */
+.conflicts-detail__shape { margin: 0; color: var(--text-secondary-color); font-size: var(--text-caption); overflow-wrap: anywhere; }
+/* One file strip: identity and status on the left, choices on the right.
+   Status never participates in the button group's wrapping. Mark resolved,
+   the constructive action, stays last. */
 .conflicts-resolution { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; }
+.conflicts-filebar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-4); min-width: 0;
+  min-height: var(--strip-height); padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.conflicts-filebar__identity { flex: 1 1 12rem; min-width: 0; }
 .conflicts-resolution > .conflicts-notice { margin: var(--space-3) var(--space-4); }
 .conflicts-actions {
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); min-width: 0;
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+  flex: 0 1 auto; justify-content: flex-end; margin-inline-start: auto;
 }
-.conflicts-actions__status {
-  flex: 1 1 12rem; min-width: 0; margin: 0;
+.conflicts-filebar__status {
+  min-width: 0; margin: var(--space-1) 0 0; overflow-wrap: anywhere;
   color: var(--text-secondary-color); font-size: var(--text-label); line-height: var(--leading-normal);
 }
 /* Markers left after an edit outside GitOdile: said in words and a glyph,
    not by colour alone. */
-.conflicts-actions__status--warning { display: flex; align-items: center; gap: var(--space-1); color: var(--text-primary-color); }
-.conflicts-actions__status--warning > svg { width: var(--icon-meta); height: var(--icon-meta); flex-shrink: 0; color: var(--status-warning); }
+.conflicts-filebar__status--warning { display: flex; align-items: flex-start; gap: var(--space-1); color: var(--text-primary-color); }
+.conflicts-filebar__status--warning > svg { width: var(--icon-meta); height: var(--icon-meta); flex-shrink: 0; color: var(--status-warning); }
+.conflicts-filebar__status > span { min-width: 0; }
 .conflicts-actions__buttons {
   display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); min-width: 0;
   margin-inline-start: auto;
 }
 .conflicts-actions__label { min-width: 0; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conflicts-actions__buttons > button:not(.conflicts-icon-action) { min-width: 0; max-width: 100%; }
+.conflicts-actions__context { color: var(--text-secondary-color); font-size: var(--text-label); }
 .conflicts-actions .secondary-button[aria-pressed="true"] {
   border-color: var(--text-secondary-color);
   background: color-mix(in srgb, var(--text-primary-color) var(--tint-selected), var(--surface-control));
 }
-.conflicts-more { position: relative; display: inline-flex; flex-shrink: 0; }
-.conflicts-more__trigger { width: var(--control-height-sm); min-width: var(--control-height-sm); padding: 0; justify-content: center; border-radius: var(--radius-round); }
-.conflicts-more__trigger svg { width: var(--icon-control); height: var(--icon-control); }
-.conflicts-more .app-menu__item--danger,
-.conflicts-more .app-menu__item--danger svg { color: var(--status-danger); }
+.conflicts-icon-action { width: var(--control-height-sm); min-width: var(--control-height-sm); padding-inline: 0; border-radius: var(--radius-round); }
+.conflicts-icon-action--danger { color: var(--status-danger); }
 
 /* A question asked in the bar's place, the forget row of Restore at the
    width of the panel: the tone of what it risks, the answers on the right. */
 .conflicts-ask {
   display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-4); min-width: 0;
-  padding: var(--space-3) var(--space-4);
-  border-bottom: 1px solid var(--border-subtle);
+  flex: 1 0 100%; padding: var(--space-3); border-radius: var(--radius-item);
 }
 .conflicts-ask--danger { background: color-mix(in srgb, var(--status-danger) var(--tint-fill), transparent); }
 .conflicts-ask--warning { background: color-mix(in srgb, var(--status-warning) var(--tint-fill), transparent); }
 .conflicts-ask__question { flex: 1 1 20rem; min-width: 0; display: flex; align-items: flex-start; gap: var(--space-3); }
 .conflicts-ask__question > svg { width: var(--icon-nav); height: var(--icon-nav); flex-shrink: 0; color: var(--status-warning); }
-.conflicts-ask__text { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-body); line-height: var(--leading-normal); }
+.conflicts-ask__text { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-body); line-height: var(--leading-normal); overflow-wrap: anywhere; }
 .conflicts-ask__text > strong { font-weight: var(--weight-strong); }
 .conflicts-ask__body { color: var(--text-secondary-color); }
-.conflicts-ask__answers { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-inline-start: auto; }
+.conflicts-ask__answers { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-inline-start: auto; min-width: 0; max-width: 100%; }
+.conflicts-ask__answers > button { min-width: 0; max-width: 100%; }
 .conflicts-ask .conflicts-details__commands code { display: block; }
 
 /* The side a pending choice would replace: dimmed, and said in words in its
@@ -215,13 +229,14 @@
 .conflicts-side + .conflicts-side { border-inline-start: 1px solid var(--border-subtle); }
 .conflicts-side__heading {
   flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2); margin: 0;
-  padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--border-subtle);
+  min-height: var(--strip-height-inner); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--border-subtle);
   font-size: var(--text-body); font-weight: var(--weight-strong);
 }
 .conflicts-side__heading svg { width: var(--icon-row); height: var(--icon-row); flex-shrink: 0; color: var(--text-secondary-color); }
 .conflicts-side__heading > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conflicts-side__role { flex-shrink: 0; margin-inline-start: auto; color: var(--text-secondary-color); font-size: var(--text-caption); font-weight: var(--weight-normal); }
 .conflicts-detail__note {
-  margin: var(--space-4); color: var(--text-secondary-color); font-size: var(--text-body); line-height: var(--leading-normal);
+  margin: var(--space-4); color: var(--text-secondary-color); font-size: var(--text-body); line-height: var(--leading-normal); overflow-wrap: anywhere;
 }
 .conflicts-detail__note--inline { margin-block: var(--space-2) 0; font-size: var(--text-label); }
 .conflicts-side__diff { flex: 1; min-height: 0; display: flex; flex-direction: column; }

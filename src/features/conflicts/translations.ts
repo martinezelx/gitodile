@@ -3,6 +3,14 @@
    the operation, the stages, the objects and the exact Git commands. */
 export interface ConflictsTranslations {
   conflictsTitle: string;
+  conflictsMergeDirection: (incoming: string, current: string) => string;
+  conflictsMergePaused: string;
+  conflictsCurrentRole: string;
+  conflictsIncomingRole: string;
+  conflictsFilterStatus: string;
+  conflictsFilterAll: string;
+  conflictsFilterPending: string;
+  conflictsFilterResolved: string;
   conflictsBack: string;
   conflictsRefresh: string;
   conflictsLoading: string;
@@ -84,9 +92,11 @@ export interface ConflictsTranslations {
   conflictsReadAgain: string;
   conflictsActionsAriaLabel: (path: string) => string;
   conflictsKeep: (side: string) => string;
+  conflictsKeepFrom: string;
+  conflictsAbortShort: string;
+  conflictsFinishShort: string;
   conflictsDelete: string;
   conflictsMarkResolved: string;
-  conflictsMoreActions: string;
   conflictsResetMenu: string;
   conflictsKeptStatus: (side: string) => string;
   conflictsDeletedStatus: string;
@@ -126,7 +136,6 @@ export interface ConflictsTranslations {
   conflictsAnnounceResolved: (path: string, remaining: number) => string;
   conflictsAnnounceReset: (path: string) => string;
   conflictsOpenInEditor: string;
-  conflictsOpenedStatus: string;
   conflictsAnnounceOpened: (path: string) => string;
   conflictsCheckingMarkers: string;
   conflictsMarkersLeft: (blocks: number) => string;

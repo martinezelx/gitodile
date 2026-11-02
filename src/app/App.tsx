@@ -3256,6 +3256,8 @@ export function App(): React.JSX.Element {
                           controller={conflictsController}
                           projectPath={project.path}
                           sessionEpoch={activeSession?.epoch ?? ""}
+                          watcherState={activeWatcherState}
+                          onOpenSettings={() => openSettings("general")}
                           onBack={goBack}
                           onGoToOverview={() => navigateToView("overview")}
                           isProjectBusy={isActiveOperationRunning}

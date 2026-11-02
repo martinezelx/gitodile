@@ -68,7 +68,7 @@ const unchanged = (path: string): FileDiff => ({ kind: "unchanged", path, origin
 async function renderScreen(
   value: ConflictSession | null,
   readSideDiff = vi.fn<ConflictsPort["readSideDiff"]>(async (request) => unchanged(request.filePath)),
-  { mutations = {}, isProjectBusy = false }: { mutations?: Partial<ConflictsPort>; isProjectBusy?: boolean } = {},
+  { mutations = {}, isProjectBusy = false, watcherState = "watching" }: { mutations?: Partial<ConflictsPort>; isProjectBusy?: boolean; watcherState?: "starting" | "watching" | "off" | "unavailable" } = {},
 ) {
   const readSession = vi.fn<ConflictsPort["readSession"]>().mockResolvedValue(value);
   const controller = createConflictsController({
@@ -91,6 +91,7 @@ async function renderScreen(
   const onGoToOverview = vi.fn();
   const onBack = vi.fn();
   const onPublish = vi.fn();
+  const onOpenSettings = vi.fn();
   const slot = {
     onOperationStart: vi.fn(() => true),
     onOperationFinish: vi.fn(),
@@ -106,6 +107,8 @@ async function renderScreen(
             controller={controller}
             projectPath={query.projectId}
             sessionEpoch={query.sessionEpoch}
+            watcherState={watcherState}
+            onOpenSettings={onOpenSettings}
             onBack={onBack}
             onGoToOverview={onGoToOverview}
             isProjectBusy={isProjectBusy}
@@ -117,7 +120,7 @@ async function renderScreen(
       </LanguageProvider>
     </StrictMode>,
   );
-  return { readSession, readSideDiff, onGoToOverview, onBack, onPublish, slot };
+  return { readSession, readSideDiff, onGoToOverview, onBack, onPublish, onOpenSettings, slot };
 }
 
 const appError = (code: string) => ({ code, message: "English text", remediation: null });
@@ -129,6 +132,58 @@ const EXPECTED = {
 const CHOICES = ["keep-current", "keep-incoming", "mark-resolved"] as const;
 
 describe("ConflictsScreen", () => {
+  it.each((["off", "unavailable"] as const).flatMap((watcherState) =>
+    [true, false].map((hasSession) => ({ watcherState, hasSession })),
+  ))("offers a contextual update and settings when automatic updates are $watcherState (paused: $hasSession)", async ({ watcherState, hasSession }) => {
+    const user = userEvent.setup();
+    const { readSession, onOpenSettings } = await renderScreen(hasSession ? session({}, [conflict("a.txt")]) : null, undefined, { watcherState });
+    if (!hasSession) readSession.mockResolvedValueOnce(session({}, [conflict("new-overlap.txt")]));
+    await user.click(screen.getByRole("button", { name: "Read the overlapping changes again" }));
+    await waitFor(() => expect(readSession).toHaveBeenCalledTimes(2));
+    if (!hasSession) expect(await screen.findByRole("button", { name: /new-overlap.txt/ })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Turn on automatic updates" }));
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+
+  // A 1,000-type fixture is needed to exercise focus outside the mounted
+  // virtual range; a small list cannot catch a lost final checkbox.
+  it("keeps a large extension picker bounded and reaches its final checkbox by keyboard", async () => {
+    const user = userEvent.setup();
+    await renderScreen(session({}, Array.from({ length: 1000 }, (_, index) => conflict(`file.type${String(index).padStart(4, "0")}`))));
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    const first = screen.getByRole("checkbox", { name: /\.type0000/ });
+    first.focus();
+    await user.keyboard("{End}");
+    const last = await screen.findByRole("checkbox", { name: /\.type0999/ });
+    await waitFor(() => expect(document.activeElement).toBe(last));
+    expect(screen.getAllByRole("checkbox").length).toBeLessThan(30);
+    await user.keyboard(" ");
+    expect((last as HTMLInputElement).checked).toBe(true);
+  });
+
+  // Shared popup + chips + virtual list + cache integration under StrictMode;
+  // the filter combinations themselves are tested without React in domain.test.
+  it("filters cached files by status and extension without rereading or changing the session", async () => {
+    const user = userEvent.setup();
+    const { readSession } = await renderScreen(session({}, [
+      conflict("src/login.ts"),
+      conflict("docs/guide.md", { state: "markedResolved" }),
+    ]));
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    await user.click(screen.getByRole("radio", { name: "Resolved" }));
+    const list = screen.getByRole("navigation", { name: "Overlapping files" });
+    expect(within(list).queryByRole("button", { name: /login.ts/ })).toBeNull();
+    expect(within(list).getByRole("button", { name: /guide.md/ })).toBeTruthy();
+    await user.click(screen.getByRole("checkbox", { name: /\.ts/ }));
+    expect(within(list).getByText("No file matches.")).toBeTruthy();
+    await user.keyboard("{Escape}");
+    await user.click(screen.getByRole("button", { name: "Remove the .ts filter" }));
+    expect(within(list).getByRole("button", { name: /guide.md/ })).toBeTruthy();
+    expect(readSession).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole("button", { name: "Read the overlapping changes again" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Finish combining…" })).toHaveProperty("disabled", true);
+  });
+
   it("explains a paused merge read-only and shows what both sides changed", async () => {
     const user = userEvent.setup();
     const { readSession, readSideDiff } = await renderScreen(session({}, [
@@ -136,7 +191,7 @@ describe("ConflictsScreen", () => {
       conflict("README.md", { shape: "deleted-by-current", current: null }),
     ]));
 
-    expect(screen.getByText("Combining “feature” into “main” is paused")).toBeTruthy();
+    expect(screen.getByLabelText("Combining “feature” into “main” is paused")).toBeTruthy();
     // A merge needs no card of its own: the header says what is paused.
     expect(screen.queryByText("GitOdile can't finish this yet")).toBeNull();
     expect(screen.getByRole("heading", { name: "What “main” changed" })).toBeTruthy();
@@ -201,7 +256,7 @@ describe("ConflictsScreen", () => {
     const keep = screen.getByRole("button", { name: "Keep “feature”" });
     await user.click(keep);
     expect(screen.getByText("What “main” changed in this file is replaced. A copy is kept, so you can reset the file.")).toBeTruthy();
-    expect(within(screen.getByRole("heading", { name: /What “main” changed/ })).getByText("Will be replaced")).toBeTruthy();
+    expect(within(screen.getByRole("heading", { name: /What “main” changed.*Will be replaced/ })).getByText("Will be replaced")).toBeTruthy();
     await user.keyboard("{Escape}");
     expect(keepSide).not.toHaveBeenCalled();
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole("button", { name: "Keep “feature”" })));
@@ -256,8 +311,7 @@ describe("ConflictsScreen", () => {
       .mockResolvedValueOnce(session({}, [{ ...file, state: "unresolved", allowedActions: [...CHOICES] }]));
     await renderScreen(session({}, [file]), undefined, { mutations: { resetFile } });
 
-    await user.click(screen.getByRole("button", { name: "More actions for this file" }));
-    await user.click(screen.getByRole("menuitem", { name: "Reset this file…" }));
+    await user.click(screen.getByRole("button", { name: "Reset this file…" }));
     const dialog = screen.getByRole("dialog", { name: "Reset this file?" });
     await user.click(within(dialog).getByRole("button", { name: "Reset file" }));
     expect(resetFile).toHaveBeenLastCalledWith(expect.objectContaining({ filePath: "a.txt", stagesOnly: false }));
@@ -294,10 +348,13 @@ describe("ConflictsScreen", () => {
       .mockRejectedValueOnce(appError("conflict_action_unavailable"));
     const revealFile = vi.fn<ConflictsPort["revealFile"]>().mockResolvedValue(undefined);
     const { slot, readSession } = await renderScreen(session({}, [file]), undefined, { mutations: { openFile, revealFile } });
+    const actionBar = screen.getByRole("group", { name: "Resolve a.txt" });
+    const actionText = actionBar.textContent;
 
     await user.click(screen.getByRole("button", { name: "Open in editor" }));
     expect(openFile).toHaveBeenLastCalledWith({ ...query, filePath: "a.txt", stateToken: "token" });
-    expect(await screen.findByText("Opened in its app · GitOdile looks at it again when you save")).toBeTruthy();
+    expect(await screen.findByText("Opened a.txt. Opening it doesn't resolve it.")).toBeTruthy();
+    expect(actionBar.textContent).toBe(actionText);
     // Opening is not a change to the project: no slot, no refresh.
     expect(slot.onOperationStart).not.toHaveBeenCalled();
 
