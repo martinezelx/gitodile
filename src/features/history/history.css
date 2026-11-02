@@ -630,8 +630,6 @@
 .history-detail--state { align-items: center; justify-content: center; padding: 28px; color: var(--text-secondary-color); text-align: center; }
 .history-detail--state > svg { width: var(--icon-tile); height: var(--icon-tile); margin-bottom: var(--space-3); color: var(--status-danger); }
 .history-detail--state h2, .history-detail--state p { margin: 0 0 var(--space-3); }
-.history-detail__loading-title { padding: 20px var(--space-5); border-bottom: 1px solid var(--border-subtle); }
-.history-detail__loading-title h2 { margin: 0; }
 /* The detail's first read: the meta line, then the changed files, where the
    loaded detail puts them. */
 .history-detail__placeholder { flex: 1; display: grid; align-content: start; gap: var(--space-3); padding: 20px var(--space-5); }

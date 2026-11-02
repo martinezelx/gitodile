@@ -274,8 +274,14 @@ function TimelinePlaceholder({ label }: { label: string }): React.JSX.Element {
   );
 }
 
-/** A version's detail while it is read: the line under the title, then its
- * changed files. The title itself is real whenever the version is known. */
+/** The version strip before any version is known: its subject's place, at
+ * the strip's own height and type size, so the subject lands where it waited. */
+function StripPlaceholder(): React.JSX.Element {
+  return <header className="history-detail__strip" aria-hidden="true"><h2 className="history-detail__strip-title"><TextPlaceholder width="52%" /></h2></header>;
+}
+
+/** A version's detail while it is read: the line under the strip, then its
+ * changed files. The strip itself is real whenever the version is known. */
 function DetailPlaceholder({ label }: { label?: string }): React.JSX.Element {
   return (
     <LoadingPlaceholder label={label} className="history-detail__placeholder">
@@ -787,8 +793,10 @@ function ChangedFiles({ rows, inFolders, selectedPath, formats, onSelect, onTogg
 const NO_COLLAPSED_FOLDERS: ReadonlySet<string> = new Set();
 const filePath = (file: HistoryFileChange): string => file.path;
 
-function HistoryDetailStrip({ detail, formats, currentBranch, selfEmail, actions, detailsOpen, onToggleDetails }: {
-  detail: SavedVersionDetail;
+function HistoryDetailStrip({ version, formats, currentBranch, selfEmail, actions, detailsOpen, onToggleDetails }: {
+  /** The timeline's summary is enough: the strip reads nothing the detail adds,
+   * so it is drawn whole while the detail is still being read. */
+  version: SavedVersionSummary;
   formats: LocaleFormats;
   /** `HEAD`'s own branch, so a branch action can say where the project already is. */
   currentBranch: string | null;
@@ -799,7 +807,6 @@ function HistoryDetailStrip({ detail, formats, currentBranch, selfEmail, actions
   onToggleDetails: () => void;
 }): React.JSX.Element {
   const { t } = useLanguage();
-  const version = detail.version;
   const title = versionTitle(version, t);
   const isSelf = isSelfAuthor(version.author, selfEmail);
   // When, as the timeline row says it: relative, the exact date on hover.
@@ -1542,7 +1549,10 @@ function HistoryDetail({ state, formats, selfEmail, actions, onSelectFile, onRet
     if (state.selectedFilePath) revealFile(state.selectedFilePath);
   }, [revealFile, state.selectedFilePath]);
 
-  if (state.detail.isLoading) return <section className="history-detail history-detail--loading" aria-labelledby={selectedVersion ? "history-detail-title" : undefined} aria-busy="true">{selectedVersion && <div className="history-detail__loading-title"><h2 id="history-detail-title">{versionTitle(selectedVersion, t)}</h2></div>}<DetailPlaceholder label={t.historyDetailLoading} /></section>;
+  const strip = (version: SavedVersionSummary): React.JSX.Element => <HistoryDetailStrip version={version} formats={formats} currentBranch={state.snapshot?.branch ?? null} selfEmail={selfEmail} actions={actions} detailsOpen={detailsOpen} onToggleDetails={() => setDetailsOpen((open) => !open)} />;
+  // The strip the loaded detail opens with, already at its size, so the read
+  // only fills in what is under it.
+  if (state.detail.isLoading) return <section className="history-detail history-detail--loading" aria-labelledby={selectedVersion ? "history-detail-title" : undefined} aria-busy="true"><div className="history-detail__card">{selectedVersion ? strip(selectedVersion) : <StripPlaceholder />}<DetailPlaceholder label={t.historyDetailLoading} /></div></section>;
   if (state.detail.error) return <section className="history-detail history-detail--state" role="alert"><CircleAlert /><h2>{t.historyDetailError}</h2><button className="secondary-button" type="button" onClick={onRetryDetail}>{t.historyRetry}</button></section>;
   const detail = state.detail.detail;
   if (!detail) return <section className="history-detail history-detail--state"><p>{t.historySelectFilePrompt}</p></section>;
@@ -1622,15 +1632,7 @@ function HistoryDetail({ state, formats, selfEmail, actions, onSelectFile, onRet
         and the diff that is always the working surface — the way Changes reads.
         The back button stays outside the card; it leaves rather than acts. */}
     <div className="history-detail__card">
-      <HistoryDetailStrip
-        detail={detail}
-        formats={formats}
-        currentBranch={state.snapshot?.branch ?? null}
-        selfEmail={selfEmail}
-        actions={actions}
-        detailsOpen={detailsOpen}
-        onToggleDetails={() => setDetailsOpen((open) => !open)}
-      />
+      {strip(detail.version)}
       {detailsOpen && <HistoryDetails detail={detail} formats={formats} comparison={comparison} fileCount={fileCount} />}
       <div className="history-workspace history-workspace--diff" role="region" aria-label={t.historyFilesAriaLabel}>
         {/* One toolbar across the whole card, the file search having stepped
@@ -1806,8 +1808,7 @@ export function HistoryPanel({ tabs, controller, query, state, watcherState, act
     timeline: <TimelinePlaceholder label={t.historyLoading} />,
     detail: (
       <section className="history-detail history-detail--loading">
-        <div className="history-detail__loading-title"><h2><TextPlaceholder width="52%" /></h2></div>
-        <DetailPlaceholder />
+        <div className="history-detail__card"><StripPlaceholder /><DetailPlaceholder /></div>
       </section>
     ),
   });
