@@ -926,9 +926,36 @@
 .diff-hunk__marker--static { display: block; padding: var(--space-1) var(--space-4); }
 .diff-line { display: grid; grid-template-columns: 48px 16px 1fr; align-items: baseline; padding-right: var(--space-4); }
 .diff-line__number { padding: 0 var(--space-2); text-align: right; color: var(--text-secondary-color); opacity: var(--opacity-muted); font-size: var(--text-caption); user-select: none; }
-.diff-line__sign { text-align: center; user-select: none; }
+/* Reuse Markdown's bar-and-tint language in the existing gutter. Stretch
+   across wrapped and empty lines without changing the virtualizer's geometry. */
+.diff-line__marker { display: flex; justify-content: center; align-self: stretch; user-select: none; }
+.diff-line--addition .diff-line__marker::before,
+.diff-split-cell--addition .diff-line__marker::before { content: ""; border-inline-start: 3px solid var(--diff-added); }
+.diff-line--deletion .diff-line__marker::before,
+.diff-split-cell--deletion .diff-line__marker::before { content: ""; border-inline-start: 3px dashed var(--diff-removed); }
 .diff-line .visually-hidden { user-select: none; }
 .diff-line__content { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+/* Exact edits use the existing focus-halo tint over the row's softer fill. */
+.diff-line--addition .diff-inline-change,
+.diff-split-cell--addition .diff-inline-change { background: color-mix(in srgb, var(--diff-added) var(--tint-halo-focus), transparent); }
+.diff-line--deletion .diff-inline-change,
+.diff-split-cell--deletion .diff-inline-change { background: color-mix(in srgb, var(--diff-removed) var(--tint-halo-focus), transparent); }
+.diff-changed-whitespace { position: relative; }
+/* Empty speech alternative: glyphs do not replace or join the source text. */
+.diff-changed-whitespace::after { content: attr(data-whitespace) / ""; position: absolute; inset-inline-start: 0; color: var(--text-secondary-color); pointer-events: none; user-select: none; }
+/* A sibling of the scrolling pre, so headings stay put in either scroll axis. */
+.diff-comparison-headings { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-inline-end: var(--space-4); border-bottom: 1px solid var(--border-subtle); background: var(--surface-code); }
+.diff-comparison-headings > div { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; padding: var(--space-2) var(--space-3); }
+.diff-comparison-headings > div + div { border-inline-start: 1px solid var(--border-divider); }
+.diff-comparison-headings strong { font-size: var(--text-label); font-weight: var(--weight-strong); }
+.diff-comparison-headings span { font-size: var(--text-caption); color: var(--text-secondary-color); overflow-wrap: anywhere; }
+/* Contour only; pseudo-elements leave the measured row geometry untouched. */
+.diff-row--arrival::after { content: ""; position: absolute; inset: 0; border-inline: 2px solid var(--text-secondary-color); pointer-events: none; }
+.diff-row--arrival-start::after { border-block-start: 2px solid var(--text-secondary-color); }
+.diff-row--arrival-end::after { border-block-end: 2px solid var(--text-secondary-color); }
+@media (forced-colors: active) {
+  .diff-inline-change { text-decoration: underline; text-decoration-thickness: 2px; }
+}
 .syntax-token--comment { color: var(--syntax-comment); font-style: italic; }
 .syntax-token--string { color: var(--syntax-string); }
 .syntax-token--number { color: var(--syntax-number); }
@@ -936,9 +963,7 @@
 .syntax-token--type { color: var(--syntax-type); }
 .syntax-token--property { color: var(--syntax-property); }
 .diff-line--addition { background: color-mix(in srgb, var(--diff-added) var(--tint-fill), transparent); }
-.diff-line--addition .diff-line__sign, .diff-line--addition .diff-line__content { color: var(--diff-added); }
 .diff-line--deletion { background: color-mix(in srgb, var(--diff-removed) var(--tint-fill), transparent); }
-.diff-line--deletion .diff-line__sign, .diff-line--deletion .diff-line__content { color: var(--diff-removed); }
 .diff-split-row {
   display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px minmax(0, 1fr);
   align-items: stretch; padding-right: var(--space-4);
@@ -948,9 +973,7 @@
   display: grid; grid-template-columns: 14px minmax(0, 1fr); align-items: baseline; min-width: 0;
 }
 .diff-split-cell--addition { background: color-mix(in srgb, var(--diff-added) var(--tint-fill), transparent); }
-.diff-split-cell--addition .diff-line__sign, .diff-split-cell--addition .diff-line__content { color: var(--diff-added); }
 .diff-split-cell--deletion { background: color-mix(in srgb, var(--diff-removed) var(--tint-fill), transparent); }
-.diff-split-cell--deletion .diff-line__sign, .diff-split-cell--deletion .diff-line__content { color: var(--diff-removed); }
 /* Filler for the side a change does not have: fainter than anything muted,
    so it never competes with the code beside it. */
 .diff-split-cell--empty { background: var(--surface-hover); opacity: 0.35; }

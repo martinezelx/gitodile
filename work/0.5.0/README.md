@@ -29,7 +29,11 @@ criteria, Windows evidence and external qualification formally carried to
 065-8 (Linux) and 065-10 (macOS). Those tests are still unexecuted and their
 original criteria remain unchecked in the completed epics.
 
-Done: [065-4-5](../done/0.5.0/065-4-5-integration-audit.md), the complete Windows
+Done: [215 — Text diff detail and orientation](../done/0.5.0/215-text-diff-detail-and-orientation.md),
+exact fragments, visible changed spacing, comparison headings and navigation cues;
+[214 — Text diff bars and tint](../done/0.5.0/214-text-diff-bars-and-tint.md),
+the approved solid/dashed markers in Changes and History;
+[065-4-5](../done/0.5.0/065-4-5-integration-audit.md), the complete Windows
 integration audit, traceability matrix and safety fixes;
 [065-4-4](../done/0.5.0/065-4-4-get-diverged-overlaps.md), Get project changes
 hands saved upstream overlaps to the resolver without publishing;

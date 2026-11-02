@@ -16,6 +16,10 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const mockedInvoke = vi.mocked(invoke);
 const defaultResizeObserver = globalThis.ResizeObserver;
 
+// Inline diff marks split a line across spans; match its complete source text.
+const sourceLine = (text: string) => (_content: string, element: Element | null): boolean =>
+  element?.textContent === text && [...element.children].every(child => child.textContent !== text);
+
 afterEach(() => {
   globalThis.ResizeObserver = defaultResizeObserver;
   // Vitest runs without `globals`, so Testing Library never registers its own
@@ -917,7 +921,7 @@ describe("ChangesPanel review controls", () => {
 
     expect(await screen.findByText("Couldn't read those lines.")).toBeInTheDocument();
     // The diff itself is untouched, and the marker is still a live retry.
-    expect(screen.getByText("before one")).toBeInTheDocument();
+    expect(screen.getByText(sourceLine("before one"))).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show 47 unchanged lines" })).toBeEnabled();
   });
 
@@ -995,16 +999,22 @@ describe("ChangesPanel review controls", () => {
 
     expect(await screen.findByText("Change 1 of 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous change" })).toBeDisabled();
+    expect(document.querySelector(".diff-row--arrival")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Next change" }));
 
     expect(screen.getByText("Change 2 of 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next change" })).toBeDisabled();
+    // This class exposes the transient arrival state; a file switch clears it.
+    expect(document.querySelector(".diff-row--arrival")).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Next file" }));
+    await screen.findByText("brand new");
+    expect(document.querySelector(".diff-row--arrival")).toBeNull();
   });
 
   it("finds text in the open difference, and its one X closes the find", async () => {
     renderPanel();
-    await screen.findByText("after one");
+    await screen.findByText(sourceLine("after one"));
 
     // The find is an icon until asked for, so it spends no width at rest.
     expect(screen.queryByPlaceholderText("Search in diff")).not.toBeInTheDocument();
@@ -1040,7 +1050,7 @@ describe("ChangesPanel review controls", () => {
       </ToastProvider></LanguageProvider>,
     );
 
-    expect(await screen.findByText("before one")).toBeInTheDocument();
+    expect(await screen.findByText(sourceLine("before one"))).toBeInTheDocument();
     expect(container.querySelector(".diff-split-row")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Diff view (Unified)" }));
@@ -1099,7 +1109,7 @@ describe("ChangesPanel review controls", () => {
   it("offers the complete diff as accessible text and supports menu keyboard navigation", async () => {
     renderPanel();
 
-    await screen.findByText("before one");
+    await screen.findByText(sourceLine("before one"));
     await userEvent.click(screen.getByRole("button", { name: "Diff view (Unified)" }));
 
     const unified = screen.getByRole("menuitemradio", { name: "Unified" });

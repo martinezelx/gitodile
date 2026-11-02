@@ -3474,6 +3474,34 @@ the project's root in the system file manager through `open_project_folder`,
 which resolves the folder from the open project and never from a path the
 renderer sends. Under 980px the column drops below the timeline.
 
+Text diffs in Changes and History use the same bar-and-tint language as
+rendered Markdown: a 3px solid added bar and a 3px dashed removed bar in the
+existing line gutter, without plus/minus signs. The bar spans each full line,
+including wrapped and empty lines; unchanged lines keep the same content
+alignment. Both unified and split views retain their line numbers and hidden
+Added/Removed labels. Code uses the normal text ink and syntax-token colours,
+with the existing diff tints behind it. The accessible plain-text diff retains
+its patch signs. No extra preference is needed.
+
+Paired replacement lines additionally mark the exact changed fragments with
+`--tint-halo-focus` of their diff colour, over the existing `--tint-fill` row.
+Full-line syntax colours and search marks remain intact. Only changed spaces
+and tabs carry decorative middle-dot and right-arrow glyphs; the original
+whitespace remains selectable and copyable. Cap decorative spacing glyphs at
+64 per source line, retaining the remaining whitespace as original text with
+its changed tint, so one long line cannot defeat virtualization. Bound comparison work; a large or
+unrelated replacement keeps its whole-row marks without inventing precision.
+Split text views keep Before/After headings outside the scrolling code, using
+`--surface-code`, the normal inner-strip label scale and a region hairline.
+Changes names the last saved version and current working copy; History names
+its actual comparison base (or empty project) and selected saved version.
+Explicit change-arrow navigation briefly outlines the affected line groups in
+`--text-secondary-color` for `--attention-duration`. The static contour never
+changes row dimensions or animates, including under reduced motion, and only
+an explicit jump starts it; file activation and background refresh do not.
+Forced colours underline changed fragments as well as retaining the
+solid/dashed line markers.
+
 Changes offers **Markdown preview** in its View picker for `.md` and `.markdown`
 text files that are not conflicted, selecting it by default. Remember explicit
 Markdown choices across sessions independently of code-file view choices.

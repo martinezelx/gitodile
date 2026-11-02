@@ -1,4 +1,10 @@
 export interface ChangesTranslations {
+  changesDiffBefore: string;
+  changesDiffAfter: string;
+  changesDiffSaved: string;
+  changesDiffWorkingCopy: string;
+  changesDiffEmptyBase: string;
+
   changesMarkdownPreview: string;
   changesMarkdownFallback: string;
   changesMarkdownExcerpt: string;

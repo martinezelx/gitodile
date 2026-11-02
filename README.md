@@ -53,7 +53,10 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   incarnation isolated with an opaque session epoch.
 - Inspect the working tree in plain language, including staged, unstaged,
   untracked, deleted, renamed, conflicted, and ignored states.
-- Review and copy readable, syntax-colored text diffs, inspect binary or
+- Review and copy readable, syntax-colored text diffs with solid added bars,
+  dashed removed bars and soft tints in Changes and History. Paired edits show
+  exact changed fragments and spacing; split headings identify each side and
+  change navigation briefly outlines its destination. Inspect binary or
   oversized-file states, and navigate large change lists with virtualization
   and bounded native payloads.
 - Read `.md` and `.markdown` documents in Changes with **Markdown preview** by default.

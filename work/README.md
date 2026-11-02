@@ -85,8 +85,15 @@ and 038 predate that convention, so their already-permanent child IDs remain
 
 Reserved IDs without their own task file are still burned: `062` was folded
 into task 057 and `196` into task 195 by explicit request. The next unused
-top-level ID after the current plan is `214`. Epic 206 owns tasks 037-2 and
+top-level ID after the current plan is `216`. Epic 206 owns tasks 037-2 and
 037-4, which kept their IDs when they moved out of epic 037 on 2026-10-27.
+
+Exact changed fragments, changed spacing, comparison headings and navigation
+cues are complete in [215](done/0.5.0/215-text-diff-detail-and-orientation.md),
+reviewed in the running desktop app on 2026-11-02.
+
+All visual text diffs now share Markdown's solid/dashed bars and tint in
+[214](done/0.5.0/214-text-diff-bars-and-tint.md), completed on 2026-11-02.
 
 The status bar's project initials and the Markdown change marks (bar and
 tint, no sign) are fixed in

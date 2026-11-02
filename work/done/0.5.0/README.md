@@ -1,6 +1,6 @@
 # Completed work — 0.5.0
 
-16 completed task records. IDs, parent relationships, completion dates
+18 completed task records. IDs, parent relationships, completion dates
 and accepted deferred criteria are preserved.
 
 ## Version evidence
@@ -10,7 +10,10 @@ The implementation and audit children are retained at `73714cc`; the three
 parent epics closed on 2026-10-31 under accepted
 [ADR 0042](../../../docs/adr/0042-propose-platform-qualification-carryover-for-050.md).
 Their external qualification criteria remain unchecked. Task 212 was completed
-ahead of the queue in this same version. This archive records completed
+ahead of the queue in this same version. Task 214 extends those marks to all
+text diffs on the same release branch on 2026-11-02. Task 215 adds the approved
+fragment detail, changed spacing, comparison headings and navigation cue on
+that same date and branch. This archive records completed
 implementation, not publication of 0.5.0. See the
 [version closeout](../../0.5.0/README.md) and
 [qualification matrix](../../assets/0.5.0-closure/closure-audit.md).
@@ -35,5 +38,9 @@ implementation, not publication of 0.5.0. See the
 | 065-4-4 | 2026-10-30 | [Resolve a diverged upstream's overlaps from Get project changes](065-4-4-get-diverged-overlaps.md) |
 | 065-4-5 | 2026-10-30 | [Audit the integration workflow end to end](065-4-5-integration-audit.md) |
 | 212 | 2026-10-29 | [Fit the status bar's project initials and mark Markdown changes by bar and tint](212-status-bar-avatar-and-markdown-change-signs.md) |
+
+| 214 | 2026-11-02 | [Mark all text diffs by bar and tint](214-text-diff-bars-and-tint.md) |
+
+| 215 | 2026-11-02 | [Show exact text changes, changed spacing and comparison context](215-text-diff-detail-and-orientation.md) |
 
 Archive organization and assignment rules are in [work/README.md](../../README.md).

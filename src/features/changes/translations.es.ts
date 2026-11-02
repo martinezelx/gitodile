@@ -1,6 +1,12 @@
 import type { ChangesTranslations } from "./translations";
 
 export const es: ChangesTranslations = {
+  changesDiffBefore: "Antes",
+  changesDiffAfter: "Ahora",
+  changesDiffSaved: "Última versión guardada",
+  changesDiffWorkingCopy: "Copia de trabajo actual",
+  changesDiffEmptyBase: "Proyecto vacío",
+
   changesSummaryClean: "Todos los cambios están guardados.",
   changesEmptySavedTitle: "Todos los cambios están guardados",
   changesEmptyAheadDescription: (count) =>
