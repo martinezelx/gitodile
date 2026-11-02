@@ -1,6 +1,6 @@
 # Completed work — 0.5.0
 
-21 completed task records. IDs, parent relationships, completion dates
+22 completed task records. IDs, parent relationships, completion dates
 and accepted deferred criteria are preserved.
 
 ## Version evidence
@@ -16,7 +16,8 @@ fragment detail, changed spacing, comparison headings and navigation cue on
 that same date and branch. Task 216 hardens project switching and retains console
 sessions on the same release branch and date. Task 217 replaces task 214's
 bars with capsules and joined replacements on that same date and branch, and
-task 218 aligns the arrival contour and fragment marks after it. This archive records completed
+task 218 aligns the arrival contour and fragment marks after it. Task 219 moves the
+console mascot between the welcome and the watermark on the same date and branch. This archive records completed
 implementation, not publication of 0.5.0. See the
 [version closeout](../../0.5.0/README.md) and
 [qualification matrix](../../assets/0.5.0-closure/closure-audit.md).
@@ -48,5 +49,6 @@ implementation, not publication of 0.5.0. See the
 | 216 | 2026-11-02 | [Keep project switching fresh and preserve console sessions](216-project-switching-freshness-and-console-state.md) |
 | 217 | 2026-11-02 | [Mark diff runs with capsules and join replacements](217-diff-capsules-and-joined-replacements.md) |
 | 218 | 2026-11-02 | [Align diff navigation and fragment marks with the capsules](218-diff-capsule-refinements.md) |
+| 219 | 2026-11-02 | [Move the console mascot between the welcome and the watermark](219-console-mascot-motion.md) |
 
 Archive organization and assignment rules are in [work/README.md](../../README.md).

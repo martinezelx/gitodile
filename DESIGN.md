@@ -1519,8 +1519,9 @@ line-height 1, keeping the compact footprint of the v4 welcome, as fetch
 tools print their logos; in one tone, the ink
 under the GitOdile themes and the accent fill elsewhere, deepened toward
 the text on light schemes so thin glyphs stay visible, with the white belly and
-eyes left as holes) and, behind it, a dim rain of hex digits like
-commit hashes, falling in the body's colour and passing behind the silhouette
+eyes left as holes) and, behind it, a dim rain of hex digits: the short ids
+of the project's latest saved versions, read from the history the app already
+holds (a seeded stand-in while there is none), falling in the body's colour and passing behind the silhouette
 (see Motion), beside a summary drawn as Omarchy's fastfetch draws one: two framed groups,
 each titled in its frame and drawn in its own theme colour — "project" in the
 accent (name, branch, unsaved changes with added and removed lines, versions to
@@ -1541,10 +1542,16 @@ decoration next to two groups of facts, but start where the frames' rows
 start, under the icons. The mascot has no frame either. Its eyes blink with
 Home's uneven rhythm, including the occasional double blink, by swapping only
 the ASCII eye cells; the drawing and prompt stay still. Submitting the first
-entry replaces the welcome with a small watermark in the bottom-right corner:
-approximately 170px wide at 32% opacity on light schemes and 16% on dark ones,
-with slower local rain kept at an effective 20% opacity in light schemes, revealed by
-rows over about half a second. The watermark sits behind the full-width text,
+entry sends the welcome's drawing to a small watermark in the bottom-right
+corner: the same drawing shrinks and travels there in 460ms on the emphasized
+curve, fading to the watermark's opacity, and its rain shows once it lands.
+The watermark is approximately 170px wide at 32% opacity on light schemes and
+16% on dark ones, with its rain kept at an effective 20% opacity in light
+schemes. Behind the watermark the rain falls through the mascot's whole
+column, from the overlay's top edge down to the foot row and as wide as the
+drawing, slower than the welcome's and with two drops a column so the taller
+strip stays as dense. Each later entry blinks the watermark's eyes once
+(220ms, the idle blink's frames). The watermark sits behind the full-width text,
 outside the scrolling log, with no pointer, selection or accessibility target.
 It is inset 24px above the terminal body's edge (so the shortcut pane and footer
 stay clear), with two extra character rows under the feet and a size that fits
@@ -1552,7 +1559,10 @@ short panes. Rain ends on the last ASCII row of the feet, above the protective
 padding, so the falling characters and the mascot share one imaginary ground.
 Only the rain is masked; the feet are never clipped. Results and
 later commands retain the drawing without replaying the entrance. Clearing the
-transcript restores the welcome with the same row reveal, including Ctrl+L.
+transcript, including Ctrl+L, sends the drawing back the same way: it grows
+from the corner into the welcome while the summary fades in behind it.
+Without the Web Animations API both moves fall back to a row reveal over
+about half a second.
 The welcome setting controls both appearances. The initial welcome drawing
 is already complete when Console opens; only a command that moves it down to
 the watermark, or clearing a nonempty transcript that brings it back up,
@@ -2558,12 +2568,15 @@ Rules:
   a metronome. Each gesture is a fraction of a second followed by seconds of
   stillness, so neither place moves constantly. The console welcome is the third brand moment:
   behind its ASCII mascot, short columns of hex digits, like commit hashes,
-  fall through the art's box at 3–7s each (a terminal's digital rain), dim,
+  (the project's own short version ids) fall through the art's box at 3–7s
+  each (a terminal's digital rain), dim,
   in the body's colour, fading toward their top and passing behind the
   silhouette, belly included. The rain dissolves at the top and sides and
-  stops on the mascot's foot row, sharing its imaginary ground. The welcome's
-  blink and the compact watermark's row reveal are described in Console above;
-  both retain the same sparse, faint rain, slower in the watermark. Motion
+  stops on the mascot's foot row, sharing its imaginary ground. Behind the
+  compact watermark it falls through the mascot's whole column, from the top
+  of the pane. The welcome's blink, the drawing's move to and from the
+  watermark and the watermark's blink on each command are described in
+  Console above. Motion
   is CSS only and stops with the console when the screen
   is hidden. These are the only decorative animations GitOdile allows, and
   only in these three places; the rest of the workbench never decorates. The

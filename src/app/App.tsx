@@ -3228,6 +3228,7 @@ export function App(): React.JSX.Element {
                       <Suspense fallback={<ViewLoadingFallback />}>
                         <ConsoleScreen
                           sessionStore={consoleSessions}
+                          historySource={historyController}
                           projectPath={project.path}
                           projectName={project.name}
                           branch={project.branch}

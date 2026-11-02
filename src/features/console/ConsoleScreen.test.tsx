@@ -322,6 +322,24 @@ describe("ConsoleScreen", () => {
     expect(document.querySelector(".console-watermark .console-art")).not.toBe(art);
   });
 
+  it("moves one drawing between the welcome and the watermark instead of revealing a new one", async () => {
+    const animate = vi.fn();
+    Object.defineProperty(HTMLElement.prototype, "animate", { value: animate, configurable: true });
+    try {
+      const user = userEvent.setup();
+      renderConsole();
+      const input = screen.getByRole("combobox", { name: "Console command" });
+      await user.type(input, "help{Enter}");
+      expect(document.querySelector(".console-watermark .console-art")).not.toHaveClass("console-art--reveal");
+      await user.type(input, "clear{Enter}");
+      expect(document.querySelector(".console-welcome .console-art")).not.toHaveClass("console-art--reveal");
+      const flights = animate.mock.calls.filter(([frames]) => (frames as Keyframe[])[0]?.transform);
+      expect(flights).toHaveLength(2);
+    } finally {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
+    }
+  });
+
   it("classifies an explicitly selected light theme for the watermark even on a dark device", async () => {
     const user = userEvent.setup();
     const lifecycle = createScreenLifecycleController("active");

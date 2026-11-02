@@ -54,6 +54,14 @@ describe("mascotRain", () => {
     }
     expect(new Set(drops.map((drop) => drop.column)).size).toBe(drops.length);
   });
+
+  it("reads the project's version ids down the columns without changing the pattern", () => {
+    const hashes = "f12143f9e2192d";
+    const drops = mascotRain(undefined, undefined, hashes);
+    expect(drops.map(({ glyphs: _, ...drop }) => drop)).toEqual(mascotRain().map(({ glyphs: _, ...drop }) => drop));
+    const stream = drops.map((drop) => drop.glyphs).join("");
+    expect(stream).toBe(hashes.repeat(Math.ceil(stream.length / hashes.length)).slice(0, stream.length));
+  });
 });
 
 describe("mascotEyes", () => {

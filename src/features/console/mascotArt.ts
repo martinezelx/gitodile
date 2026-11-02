@@ -52,8 +52,12 @@ const RAIN_GLYPHS = "0123456789abcdef";
  * console (display: none) spends nothing on it. About two columns in three
  * get a drop; the silhouette hides the rest, so the rain shows around the
  * mascot, not over it.
+ *
+ * Given the project's short version ids, the digits are those, read down each
+ * column in turn. Only the glyphs change: the same seed draws the same
+ * columns, speeds and delays with or without them.
  */
-export function mascotRain(columns: number = MASCOT_ASCII[0].length, seed = 0x6117): RainDrop[] {
+export function mascotRain(columns: number = MASCOT_ASCII[0].length, seed = 0x6117, hashes = ""): RainDrop[] {
   let state = seed >>> 0;
   const random = () => {
     // mulberry32: small, fast and good enough to scatter a few columns.
@@ -64,11 +68,16 @@ export function mascotRain(columns: number = MASCOT_ASCII[0].length, seed = 0x61
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
   const drops: RainDrop[] = [];
+  let cursor = 0;
   for (let column = 0; column < columns; column += 1) {
     if (random() < 0.3) continue;
     const length = 5 + Math.floor(random() * 9);
     let glyphs = "";
-    for (let i = 0; i < length; i += 1) glyphs += RAIN_GLYPHS[Math.floor(random() * RAIN_GLYPHS.length)];
+    for (let i = 0; i < length; i += 1) {
+      const glyph = RAIN_GLYPHS[Math.floor(random() * RAIN_GLYPHS.length)];
+      glyphs += hashes ? hashes[(cursor + i) % hashes.length] : glyph;
+    }
+    cursor += length;
     const duration = Math.round((3.2 + random() * 3.6) * 10) / 10;
     drops.push({ column, glyphs, duration, delay: -Math.round(random() * duration * 10) / 10 });
   }
