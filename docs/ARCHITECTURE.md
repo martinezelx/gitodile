@@ -210,6 +210,14 @@ Repository identity refreshes use `refreshProject`, which updates only an
 existing session with the same epoch. They never change the active project or
 reopen a closed one. `open` is reserved for an explicit project-opening action.
 
+Activating an already-open project also refreshes its branch/HEAD identity and
+working-tree facts, so watching being disabled or unavailable cannot leave the
+branch label from its previous visit. Startup restore preserves an explicitly
+stored null active project and returns to Home while the other projects stay open.
+Status invalidations received during a read coalesce into a trailing read; the
+older snapshot is not published as fresh, and mutation supersession or close
+cancels that follow-up.
+
 Runtime instances are passed explicitly. There is no ambient current-project
 store. Selectors are narrow and preserve identity when their selected value is
 unchanged.
@@ -519,8 +527,12 @@ login, and an unsupported provider come back as structured reasons, not errors.
 
 Shortcut names, and the command lines a shortcut may store with the tier Rust
 gave them, are an app-wide frontend preference; a stored line is planned again
-on every run and is not run when its plan needs a wider tier. The transcript is
-held only by the project screen and is evicted with its session epoch.
+on every run and is not run when its plan needs a wider tier. App owns an explicit
+console session store. Each project epoch retains its transcript (40 entries),
+command recall (40 lines), draft and pending/running command state in memory
+across screen eviction and project switches. Hidden screens detach their store
+subscription; already requested results settle in their originating session.
+Closing a project evicts its console state and invalidates late callbacks.
 
 Every command that acts on an already-open repository requires `sessionEpoch`,
 reads and mutations alike, and a missing epoch fails with `stale_session`
@@ -544,6 +556,9 @@ type RepositoryInvalidation = {
 ```
 
 Events are trailing-debounced for 300 ms with a two-second starvation ceiling.
+Sequence numbers come from the watcher registry lifetime, so off/on,
+registration replacement and updater suspension never reset the renderer's
+per-session ordering. Registration generations still reject detached callbacks.
 Raw changed paths and repository content never cross IPC. Shared ref/config
 changes fan out once to every related open worktree; objects, logs, hooks,
 modules, and lock-file churn are filtered. Explicit refresh remains available

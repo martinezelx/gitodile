@@ -108,6 +108,7 @@ export function createRepositoryReadCoordinator(
     } catch {
       // Preserve the last truthful identity; other scoped reads still run.
     }
+    if (runtime.getSnapshot().byId[path]?.epoch !== query.sessionEpoch) return;
     await notify(query, true);
   };
 
@@ -127,6 +128,7 @@ export function createRepositoryReadCoordinator(
     } catch {
       // Preserve the last truthful identity; the working-tree read is still useful.
     }
+    if (runtime.getSnapshot().byId[path]?.epoch !== query.sessionEpoch) return;
     await notify(query, false);
   };
 

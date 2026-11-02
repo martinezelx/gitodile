@@ -1,4 +1,5 @@
 export { ConsoleScreen, consoleScreenModule } from "./screen";
+export { createConsoleSessionStore, type ConsoleSessionStore } from "./session";
 export {
   CONSOLE_TEXT_SIZES,
   DEFAULT_CONSOLE_PREFERENCES,

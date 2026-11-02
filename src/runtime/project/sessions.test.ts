@@ -83,14 +83,17 @@ describe("projectSessionsReducer", () => {
     expect(state.activeId).toBe("/b");
   });
 
-  it("falls back to the last restored project when the stored active one was skipped", () => {
+  it.each([
+    { stored: "/b", expected: "/c" },
+    { stored: null, expected: null },
+  ])("restores selection $stored as $expected without inventing an explicit choice", ({ stored, expected }) => {
     const state = projectSessionsReducer(initialProjectSessionsState, {
       type: "restore",
       projects: [makeProject("/a"), makeProject("/c")],
-      activeId: "/b",
+      activeId: stored,
     });
     expect(state.order).toEqual(["/a", "/c"]);
-    expect(state.activeId).toBe("/c");
+    expect(state.activeId).toBe(expected);
   });
 
   it("keeps a project the user opened while restore was still revalidating", () => {

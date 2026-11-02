@@ -85,8 +85,12 @@ and 038 predate that convention, so their already-permanent child IDs remain
 
 Reserved IDs without their own task file are still burned: `062` was folded
 into task 057 and `196` into task 195 by explicit request. The next unused
-top-level ID after the current plan is `216`. Epic 206 owns tasks 037-2 and
+top-level ID after the current plan is `217`. Epic 206 owns tasks 037-2 and
 037-4, which kept their IDs when they moved out of epic 037 on 2026-10-27.
+
+Project switching freshness, explicit empty startup selection and console-session
+retention are complete in [216](done/0.5.0/216-project-switching-freshness-and-console-state.md),
+implemented ahead of the queue at the user's request on 2026-11-02.
 
 Exact changed fragments, changed spacing, comparison headings and navigation
 cues are complete in [215](done/0.5.0/215-text-diff-detail-and-orientation.md),

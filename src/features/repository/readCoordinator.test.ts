@@ -114,6 +114,29 @@ describe("repository read coordinator", () => {
     runtime.dispose();
   });
 
+  it.each(["refreshAll", "refreshProjectAndWorktree"] as const)("%s does not restart feature reads after its project closes and reopens", async (method) => {
+    const runtime = createProjectRuntime();
+    runtime.dispatch({ type: "open", project: project() });
+    let finish!: (value: RepositoryInfo) => void;
+    const repository = createRepositoryController({
+      openFolder: vi.fn(),
+      open: vi.fn(() => new Promise<RepositoryInfo>((resolve) => { finish = resolve; })),
+    });
+    const refresh = vi.fn();
+    const coordinator = createRepositoryReadCoordinator(repository, [{
+      id: "status", refreshOn: "worktree-change", blocking: true, refresh, supersede: vi.fn(),
+    }]);
+    const refreshing = coordinator[method](runtime, runtime.getSnapshot(), "/repo");
+    runtime.dispatch({ type: "close", id: "/repo" });
+    coordinator.close("/repo", EPOCH);
+    runtime.dispatch({ type: "open", project: { ...project(), sessionEpoch: "new-epoch" } });
+    finish({ ...project(), branch: "outdated" });
+    await refreshing;
+    expect(refresh).not.toHaveBeenCalled();
+    expect(runtime.getSnapshot().byId["/repo"].project.branch).toBe("main");
+    runtime.dispose();
+  });
+
   it("dispatches repository identity before any subscriber refreshes", async () => {
     const log: string[] = [];
     const { coordinator, runtime, awaited } = coordinatorWith(log);

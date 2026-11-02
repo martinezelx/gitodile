@@ -10,9 +10,9 @@ its task list and the evidence used to assign that version.
 | [0.3.0](0.3.0/README.md) | 26 | Completed-phase snapshot; includes 142/143's delayed release closure |
 | [0.4.0](0.4.0/README.md) | 60 | Released; delivery verified against v0.4.0 |
 | [0.4.1](0.4.1/README.md) | 18 | Released; includes 207's delayed administrative closure |
-| [0.5.0](0.5.0/README.md) | 16 | Implementation closed; publication not performed, external qualification carried by ADR 0042 |
+| [0.5.0](0.5.0/README.md) | 19 | Implementation closed; publication not performed, external qualification carried by ADR 0042 |
 
-All 248 current completed records are now in version folders; there are no
+All 251 current completed records are now in version folders; there are no
 loose task records in this archive root. New completed work goes in its
 version folder. Assets stay in `work/assets/`.
 See the [work rules](../README.md) and

@@ -1,6 +1,6 @@
 # Completed work — 0.5.0
 
-18 completed task records. IDs, parent relationships, completion dates
+19 completed task records. IDs, parent relationships, completion dates
 and accepted deferred criteria are preserved.
 
 ## Version evidence
@@ -13,7 +13,8 @@ Their external qualification criteria remain unchecked. Task 212 was completed
 ahead of the queue in this same version. Task 214 extends those marks to all
 text diffs on the same release branch on 2026-11-02. Task 215 adds the approved
 fragment detail, changed spacing, comparison headings and navigation cue on
-that same date and branch. This archive records completed
+that same date and branch. Task 216 hardens project switching and retains console
+sessions on the same release branch and date. This archive records completed
 implementation, not publication of 0.5.0. See the
 [version closeout](../../0.5.0/README.md) and
 [qualification matrix](../../assets/0.5.0-closure/closure-audit.md).
@@ -42,5 +43,6 @@ implementation, not publication of 0.5.0. See the
 | 214 | 2026-11-02 | [Mark all text diffs by bar and tint](214-text-diff-bars-and-tint.md) |
 
 | 215 | 2026-11-02 | [Show exact text changes, changed spacing and comparison context](215-text-diff-detail-and-orientation.md) |
+| 216 | 2026-11-02 | [Keep project switching fresh and preserve console sessions](216-project-switching-freshness-and-console-state.md) |
 
 Archive organization and assignment rules are in [work/README.md](../../README.md).

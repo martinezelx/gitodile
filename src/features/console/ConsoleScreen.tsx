@@ -33,45 +33,13 @@ import {
 import { ConsoleMascot } from "./ConsoleMascot";
 import { highlightOutput, queryShape, type OutputSegment } from "./output";
 import { DEFAULT_CONSOLE_PREFERENCES, type ConsolePreferences } from "./preferences";
-import type { ConsoleHost, ConsolePlan, ConsoleRunResult, ConsoleTier, HostKind, OutputShape } from "./port";
+import type { ConsolePlan, ConsoleTier, HostKind, OutputShape } from "./port";
 import { consolePort } from "./tauriAdapter";
+import { createConsoleSessionStore, useConsoleSession, type ConsoleSessionStore, type ConsoleOutput, type Entry } from "./session";
 
-/** What any run returns: a catalogue query's result or a typed command's. */
-type ConsoleOutput = Omit<ConsoleRunResult, "shape" | "failure">;
 /** A shortcut's target in the editor: a catalogue query, or a command line. */
 type ShortcutTarget = ConsoleQueryId | "line";
 const SHORTCUT_TARGETS: readonly ShortcutTarget[] = [...OPERATION_IDS, ...HOSTING_OPERATION_IDS, "line"];
-
-type Entry = {
-  id: number;
-  kind: "query" | "help" | "help-git" | "message";
-  input: string;
-  operationId?: ConsoleQueryId;
-  /** The Git line a typed command or a line shortcut plans on every run. */
-  line?: string;
-  /** A line shortcut's saved tier, which no later run may exceed. */
-  ceiling?: ConsoleTier;
-  shape?: OutputShape;
-  command?: string;
-  result?: ConsoleOutput;
-  message?: string;
-  /** Why Rust would not run the line, in the person's language. */
-  refusal?: string;
-  /** A change plan, printed before it asks to go ahead. */
-  plan?: ConsolePlan;
-  /** Waiting for the answer to `[s/N]`. */
-  awaiting?: boolean;
-  /** What the person answered, echoed after the question as a terminal does. */
-  answer?: string;
-  cancelled?: boolean;
-  /** What Rust thinks a failed change ran into, in the person's language. */
-  failure?: string;
-  error?: string;
-  running?: boolean;
-  durationMs?: number;
-  /** The line the prompt showed when the entry ran, as a terminal keeps it. */
-  branch: string | null;
-};
 
 type BlockState = "running" | "success" | "failed" | "truncated" | "note";
 
@@ -366,11 +334,12 @@ export type ConsoleCommandPalette = {
   onKeyDown: React.KeyboardEventHandler<HTMLInputElement>;
 };
 
-export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, gitVersion = null, projectStatus = null, preferences = DEFAULT_CONSOLE_PREFERENCES, theme = "system", confirmChanges = true, runHooks = true, onRepositoryChanged, onOpenSettings, commandPalette }: {
+export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, sessionStore, gitVersion = null, projectStatus = null, preferences = DEFAULT_CONSOLE_PREFERENCES, theme = "system", confirmChanges = true, runHooks = true, onRepositoryChanged, onOpenSettings, commandPalette }: {
   projectPath: string;
   projectName: string;
   branch: string | null;
   sessionEpoch: string;
+  sessionStore?: ConsoleSessionStore;
   gitVersion?: string | null;
   /** The shell's project facts; the app status bar steps aside for this line. */
   projectStatus?: ConsoleProjectStatus | null;
@@ -391,54 +360,50 @@ export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, 
   const { t } = useLanguage();
   const lifecycle = useScreenLifecycle();
   const [shortcuts, setShortcuts] = useState(() => readShortcuts());
+  const [localSessionStore] = useState(createConsoleSessionStore);
+  const session = useConsoleSession(sessionStore ?? localSessionStore, projectPath, sessionEpoch, lifecycle === "active");
+  const { entries, history, input, host, running, pending } = session.snapshot;
+  const { setEntries, setHistory, setInput, setHost, setRunning, setPending, nextId, currentRequest, hostRequested } = session;
   /**
    * The project's provider, for the welcome and the hosting shortcuts. Read
-   * once per project session, after first paint: the screen is kept per
-   * session, so showing it again never reads it again. A hosting shortcut's
+   * once per project session, after first paint: the session outlives the
+   * screen, so showing it again never reads it again. A hosting shortcut's
    * answer brings a fresh one.
    */
-  const [host, setHost] = useState<ConsoleHost | null>(null);
   useEffect(() => {
-    setHost(null);
-    if (!sessionEpoch) return;
-    let current = true;
+    if (!sessionEpoch || hostRequested.current) return;
     const read = (): void => {
+      if (hostRequested.current) return;
+      hostRequested.current = true;
       consolePort.readHost({ projectId: projectPath, sessionEpoch })
-        .then((value) => { if (current) setHost(value); })
-        .catch(() => undefined);
+        .then(setHost)
+        .catch(() => { hostRequested.current = false; });
     };
     const idle = "requestIdleCallback" in window;
     const handle = idle ? window.requestIdleCallback(read, { timeout: 2000 }) : window.setTimeout(read, 500);
     return () => {
-      current = false;
       if (idle) window.cancelIdleCallback(handle);
       else window.clearTimeout(handle);
     };
-  }, [projectPath, sessionEpoch]);
+  }, [projectPath, sessionEpoch, setHost, hostRequested]);
   const [managerOpen, setManagerOpen] = useState(false);
-  const [input, setInput] = useState("");
   const [caret, setCaret] = useState<number | null>(0);
-  const [entries, setEntries] = useState<Entry[]>([]);
   // Clearing a nonempty transcript brings the drawing back up. The initial
   // welcome is already in place and must not animate merely on navigation.
   const [welcomeEntrance, setWelcomeEntrance] = useState(false);
-  const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [menuIndex, setMenuIndex] = useState(0);
   const [menuNavigated, setMenuNavigated] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [running, setRunning] = useState(false);
-  /** The change plan the prompt is answering, if any. */
-  const [pending, setPending] = useState<{ id: number; planId: string } | null>(null);
-  const nextId = useRef(0);
-  const currentRequest = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLFormElement>(null);
   const managerButtonRef = useRef<HTMLButtonElement>(null);
   const copiedTimer = useRef<number | undefined>(undefined);
-  const refocusPrompt = useRef(false);
+  // A remounted screen may inherit a still-running command. Its original
+  // component's completion ref no longer belongs to the visible prompt.
+  const refocusPrompt = useRef(running);
   const menuId = useId();
   /* The shared auto-hiding scrollbar also shows while anything inside has
      focus-visible, and the prompt always does here. A terminal shows it while
@@ -462,7 +427,7 @@ export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, 
     };
   }, []);
 
-  useEffect(() => () => { currentRequest.current += 1; window.clearTimeout(copiedTimer.current); }, []);
+  useEffect(() => () => { window.clearTimeout(copiedTimer.current); }, []);
   // A terminal takes typing as soon as it is shown: no click to reach the prompt.
   useEffect(() => {
     if (lifecycle === "active") inputRef.current?.focus({ preventScroll: true });

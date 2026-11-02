@@ -373,14 +373,16 @@ describe("App home", () => {
     expect(screen.getByLabelText("Folder")).toHaveValue("C:\\ordinary folder");
   });
 
-  it("does not overwrite stored projects before startup revalidation completes", async () => {
+  // The shell owns both persisted activation and the restored Home/Overview
+  // destination, so this wiring cannot be proved by the session reducer alone.
+  it.each([restoredProject.path, null])("preserves stored activation %s through startup revalidation", async (activeId) => {
     localStorage.setItem("gitodile-reopen-last-project", "true");
     localStorage.setItem(
       "gitodile-projects",
       JSON.stringify({
         version: 1,
         order: [restoredProject.path],
-        activeId: restoredProject.path,
+        activeId,
       }),
     );
 
@@ -431,7 +433,7 @@ describe("App home", () => {
     expect(JSON.parse(localStorage.getItem("gitodile-projects") ?? "{}")).toEqual({
       version: 1,
       order: [restoredProject.path],
-      activeId: restoredProject.path,
+      activeId,
     });
     // Overview is already the destination: while revalidation runs it stays a
     // placeholder in its own shape rather than flashing the launcher.
@@ -439,14 +441,17 @@ describe("App home", () => {
     expect(screen.getByText("Opening project…").closest('[role="status"]')).toHaveAttribute("aria-busy", "true");
 
     resolveOpen?.(restoredProject);
-    expect(
-      await screen.findByRole("heading", { name: restoredProject.name }),
-    ).toBeInTheDocument();
+    if (activeId === null) {
+      expect(await screen.findByRole("heading", { level: 1, name: /^Good / })).toBeInTheDocument();
+      expect(screen.queryByRole("heading", { name: restoredProject.name })).toBeNull();
+    } else {
+      expect(await screen.findByRole("heading", { name: restoredProject.name })).toBeInTheDocument();
+    }
     await waitFor(() =>
       expect(JSON.parse(localStorage.getItem("gitodile-projects") ?? "{}")).toEqual({
         version: 1,
         order: [restoredProject.path],
-        activeId: restoredProject.path,
+        activeId,
       }),
     );
   });

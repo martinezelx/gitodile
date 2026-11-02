@@ -299,7 +299,7 @@ export function projectSessionsReducer(
       }
       const activeId =
         state.activeId ??
-        (action.activeId !== null && byId[action.activeId] ? action.activeId : order[order.length - 1]);
+        (action.activeId === null ? null : byId[action.activeId] ? action.activeId : order[order.length - 1]);
       return { order, byId, activeId };
     }
 

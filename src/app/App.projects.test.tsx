@@ -40,7 +40,9 @@ vi.mock("./nativeAppMenuAdapter", () => ({
 installAppTestHooks();
 
 describe("App projects", () => {
-  it("refreshes a project's local status whenever it becomes active", async () => {
+  // Activation-to-status-bar wiring belongs to App; a feature-only test cannot
+  // prove both displayed identity and local refresh use the selected session.
+  it("refreshes a project's local status and branch identity whenever it becomes active", async () => {
     localStorage.setItem("gitodile-reopen-last-project", "true");
     localStorage.setItem(
       "gitodile-projects",
@@ -57,7 +59,9 @@ describe("App projects", () => {
       }
       if (command === "open_repository") {
         return Promise.resolve(
-          invokedPath(args) === secondProject.path ? secondProject : restoredProject,
+          invokedPath(args) === secondProject.path
+            ? { ...secondProject, branch: args && typeof args === "object" && Reflect.get(args, "sessionEpoch") ? "changed-elsewhere" : secondProject.branch }
+            : restoredProject,
         );
       }
       if (command === "read_working_tree_status") {
@@ -104,6 +108,7 @@ describe("App projects", () => {
       screen.getByRole("button", { name: new RegExp(`^${restoredProject.name} — switch project`) }),
     );
     await userEvent.click(screen.getByRole("button", { name: `Switch to ${secondProject.name}` }));
+    expect(await screen.findByRole("button", { name: "Change branch (changed-elsewhere)" })).toBeInTheDocument();
 
     await waitFor(() =>
       expect(

@@ -29,7 +29,10 @@ criteria, Windows evidence and external qualification formally carried to
 065-8 (Linux) and 065-10 (macOS). Those tests are still unexecuted and their
 original criteria remain unchecked in the completed epics.
 
-Done: [215 — Text diff detail and orientation](../done/0.5.0/215-text-diff-detail-and-orientation.md),
+Done: [216 — Project switching freshness and console state](../done/0.5.0/216-project-switching-freshness-and-console-state.md),
+watcher restart ordering, trailing status reads, active branch identity, explicit
+empty startup selection and retained console sessions;
+[215 — Text diff detail and orientation](../done/0.5.0/215-text-diff-detail-and-orientation.md),
 exact fragments, visible changed spacing, comparison headings and navigation cues;
 [214 — Text diff bars and tint](../done/0.5.0/214-text-diff-bars-and-tint.md),
 the approved solid/dashed markers in Changes and History;

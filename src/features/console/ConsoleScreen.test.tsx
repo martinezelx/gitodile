@@ -7,6 +7,7 @@ import { createScreenLifecycleController, ScreenLifecycleProvider } from "../../
 import { ConsoleScreen, type ConsoleCommandPalette } from "./ConsoleScreen";
 import type { ConsoleProjectStatus } from "./domain";
 import { consolePort } from "./tauriAdapter";
+import { createConsoleSessionStore, type ConsoleSessionStore } from "./session";
 
 afterEach(() => { cleanup(); vi.restoreAllMocks(); localStorage.clear(); });
 
@@ -30,16 +31,79 @@ function renderConsole(
   epoch = "epoch-1",
   projectStatus: ConsoleProjectStatus = KNOWN_STATUS,
   commandPalette?: ConsoleCommandPalette,
+  sessionStore?: ConsoleSessionStore,
+  projectPath = "/repo",
 ) {
   const lifecycle = createScreenLifecycleController("active");
   const result = render(<LanguageProvider><ScreenLifecycleProvider controller={lifecycle}>
-    <ConsoleScreen projectPath="/repo" projectName="Demo" branch="main" sessionEpoch={epoch} gitVersion="2.47.1"
-      projectStatus={projectStatus} commandPalette={commandPalette} />
+    <ConsoleScreen projectPath={projectPath} projectName="Demo" branch="main" sessionEpoch={epoch} gitVersion="2.47.1"
+      projectStatus={projectStatus} commandPalette={commandPalette} sessionStore={sessionStore} />
   </ScreenLifecycleProvider></LanguageProvider>);
   return { lifecycle, ...result };
 }
 
 describe("ConsoleScreen", () => {
+  it.each(["away", "returned"])("retains transcript, recall, draft and focus when a read finishes with its project %s", async (settlement) => {
+    const store = createConsoleSessionStore();
+    let finish!: (value: Awaited<ReturnType<typeof consolePort.run>>) => void;
+    vi.spyOn(consolePort, "run").mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+    const mount = (path: string) => renderConsole(path, KNOWN_STATUS, undefined, store, path);
+    const user = userEvent.setup();
+    const a = mount("/a");
+    await user.click(screen.getByRole("combobox", { name: "Console command" }));
+    await user.paste("look");
+    await user.keyboard("{Enter}");
+    a.unmount();
+    const b = mount("/b");
+    expect(screen.queryByText("git status", { selector: "code" })).toBeNull();
+    let returned: ReturnType<typeof mount>;
+    if (settlement === "returned") {
+      b.unmount();
+      returned = mount("/a");
+      expect(screen.getByRole("combobox", { name: "Console command" })).toBeDisabled();
+    }
+    await act(async () => finish({ operationId: "status", command: "git status", stdout: "finished in A\n", stderr: "", exitCode: 0, success: true, truncated: false }));
+    if (settlement === "away") {
+      expect(screen.queryByText("finished in A")).toBeNull();
+      b.unmount();
+      returned = mount("/a");
+    }
+    expect(await screen.findByText("finished in A")).toBeInTheDocument();
+    const prompt = screen.getByRole("combobox", { name: "Console command" });
+    expect(prompt).toHaveFocus();
+    await user.click(prompt);
+    await user.keyboard("{ArrowUp}");
+    expect(prompt).toHaveValue("look");
+    await user.clear(prompt);
+    await user.paste("git diff -- notes.md");
+    returned!.unmount();
+    mount("/a");
+    expect(screen.getByRole("combobox", { name: "Console command" })).toHaveValue("git diff -- notes.md");
+  });
+
+  it("keeps a pending confirmation attached to its originating session across remounts", async () => {
+    const store = createConsoleSessionStore();
+    vi.spyOn(consolePort, "plan").mockResolvedValue({
+      planId: "retained-plan", command: "git add .", tier: "local_change", effect: "changes_project", shape: "plain", facts: [], confirmation: "yes_no", refusal: null,
+    });
+    const run = vi.spyOn(consolePort, "runChange").mockResolvedValue({
+      command: "git add .", stdout: "", stderr: "", exitCode: 0, success: true, truncated: false, shape: "plain", failure: null,
+    });
+    const mount = () => renderConsole("a-epoch", KNOWN_STATUS, undefined, store, "/a");
+    const user = userEvent.setup();
+    const a = mount();
+    await user.click(screen.getByRole("combobox", { name: "Console command" }));
+    await user.paste("git add .");
+    await user.keyboard("{Enter}");
+    await screen.findByRole("combobox", { name: /Answer y/ });
+    a.unmount();
+    mount();
+    await user.click(screen.getByRole("combobox", { name: /Answer y/ }));
+    await user.paste("y");
+    await user.keyboard("{Enter}");
+    expect(run).toHaveBeenCalledWith({ projectId: "/a", sessionEpoch: "a-epoch", planId: "retained-plan", answer: "y" });
+  });
+
   it.each(["clear{Enter}", "{Control>}l{/Control}"])("starts still, and only reveals the restored welcome after clearing work with %s", async (clearKeys) => {
     const user = userEvent.setup();
     const { lifecycle } = renderConsole();

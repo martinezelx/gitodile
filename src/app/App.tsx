@@ -120,7 +120,7 @@ import {
 import { createHistoryController, historyPort } from "../features/history";
 import { conflictsPort, createConflictsController, useConflictsState } from "../features/conflicts";
 import { appUpdatesPort, createAppUpdatesController, useAppUpdatesController, type UpdateState } from "../features/app-updates";
-import { useConsoleConfirmChanges } from "../features/console";
+import { createConsoleSessionStore, useConsoleConfirmChanges } from "../features/console";
 import { TooltipHost } from "../shared/ui/tooltip";
 import { LoadingBar } from "../shared/ui/loadingBar";
 import { AppOverlays } from "./AppOverlays";
@@ -392,6 +392,7 @@ export function App(): React.JSX.Element {
     createSaveVersionController(saveVersionPort),
   );
   const [statusController] = useState(() => createStatusController(statusPort));
+  const [consoleSessions] = useState(createConsoleSessionStore);
   const [changesController] = useState(() => createChangesController(changesPort));
   // Overview's cache: the files the unpublished versions carry, the newest
   // discard that can still be restored, and where the project lives. Filled
@@ -424,7 +425,7 @@ export function App(): React.JSX.Element {
         id: "status",
         refreshOn: "worktree-change",
         blocking: true,
-        refresh: (query) => statusController.refresh(projectRuntime, query, mapStatusErrorRef.current),
+        refresh: (query) => statusController.invalidate(projectRuntime, query, mapStatusErrorRef.current),
         supersede: (query) => statusController.supersede(query),
       },
       {
@@ -1266,8 +1267,7 @@ export function App(): React.JSX.Element {
   // index, and the working tree — every one of task 016's "Operation
   // coordination and refresh" invalidation targets that already exist in
   // this app. Re-reading the repository facts (branch/head state) through
-  // the same `"open"` action `handleOpenProject` uses below re-hydrates the
-  // active session in place (same `id`, since the path never changes), and
+  // `refreshProject` updates this session without selecting it, and
   // `checkWorkingTree` covers both the working-tree status and the pending-
   // versions list save/publish depend on. Clearing the Changes selection
   // stops a diff/file that may not exist on the new branch from staying
@@ -1339,7 +1339,7 @@ export function App(): React.JSX.Element {
     if (id !== sessionsState.activeId) dispatchSessions({ type: "activate", id });
     syncViewToSession(target.lastView);
     setProjectAnnouncement(t.projectSwitcherActiveAnnouncement(target.project.name));
-    void checkWorkingTree(target.project.path);
+    void repositoryReads.refreshProjectAndWorktree(projectRuntime, projectRuntime.getSnapshot(), target.id);
   };
 
   /** The one open path. `preselectedPath` skips the folder picker for a folder
@@ -1469,7 +1469,8 @@ export function App(): React.JSX.Element {
       for (const info of restored) {
         void checkWorkingTree(info.path, info.sessionEpoch);
       }
-      setView(restored.length > 0 ? "overview" : "home");
+      const snapshot = projectRuntime.getSnapshot();
+      setView(snapshot.activeId ? snapshot.byId[snapshot.activeId].lastView : "home");
       if (skipped > 0) {
         setSkippedRestoreCount(skipped);
       }
@@ -1944,6 +1945,7 @@ export function App(): React.JSX.Element {
     // Explicitly evict feature-owned state for this session incarnation.
     // Their generations reject late responses from the closed epoch.
     changesController.close(id, closingSession.epoch);
+    consoleSessions.close(id, closingSession.epoch);
     statusController.close({ projectId: id, sessionEpoch: closingSession.epoch });
     syncController.close(projectRuntime, { projectId: id, sessionEpoch: closingSession.epoch });
     repositoryReads.close(id, closingSession.epoch);
@@ -3225,6 +3227,7 @@ export function App(): React.JSX.Element {
                     console: (
                       <Suspense fallback={<ViewLoadingFallback />}>
                         <ConsoleScreen
+                          sessionStore={consoleSessions}
                           projectPath={project.path}
                           projectName={project.name}
                           branch={project.branch}
