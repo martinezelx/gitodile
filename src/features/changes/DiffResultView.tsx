@@ -83,7 +83,7 @@ function EmptyDiffNote({
 /* Memoized, as is `DiffSplitCell`: the virtualizer re-renders the body on every
    scroll step, and each row's props are stable, so without it every visible
    line was tokenized again per frame (task 209). */
-const DiffLineRow = React.memo(function DiffLineRow({ line, highlight, ranges, t }: { line: DiffLine; highlight: HighlightLine | null; ranges?: readonly DiffRange[]; t: Translations }): React.JSX.Element {
+const DiffLineRow = React.memo(function DiffLineRow({ line, highlight, ranges, edges, t }: { line: DiffLine; highlight: HighlightLine | null; ranges?: readonly DiffRange[]; edges: string; t: Translations }): React.JSX.Element {
   const label =
     line.kind === "addition" ? t.changesLineAddedLabel : line.kind === "deletion" ? t.changesLineRemovedLabel : null;
   // One column, not two: a context line's old and new numbers are often the
@@ -93,7 +93,7 @@ const DiffLineRow = React.memo(function DiffLineRow({ line, highlight, ranges, t
   const lineNumber = line.newLineNumber ?? line.oldLineNumber;
 
   return (
-    <div className={`diff-line diff-line--${line.kind}`}>
+    <div className={`diff-line diff-line--${line.kind}${edges}`}>
       <span className="diff-line__number">{lineNumber ?? ""}</span>
       <span className="diff-line__marker" aria-hidden="true" />
       {label && <span className="visually-hidden">{label}</span>}
@@ -191,6 +191,30 @@ export function flattenDiffRows(hunks: DiffHunk[], expansions: GapExpansions = {
  * be marked per-row instead. */
 export function isFirstRowOfHunk(rows: { hunkIndex: number }[], index: number): boolean {
   return index === 0 || rows[index - 1].hunkIndex !== rows[index].hunkIndex;
+}
+
+type DiffRunEdge = "run-start" | "run-end" | "joined-before" | "joined-after";
+
+/** Where a row's gutter capsule opens and closes. A run is a contiguous
+ * stretch of one change kind in one column of one hunk; unified view has one
+ * column and split view two. In unified view a removal directly followed by
+ * its addition joins it instead, so one capsule flows across the boundary. */
+export function diffRunEdges(rows: readonly (DiffRow | SplitRow)[], index: number, column: 0 | 1 = 0): DiffRunEdge[] {
+  const kindAt = (at: number): DiffLine["kind"] | null => {
+    const row = rows[at];
+    if (!row || row.hunkIndex !== rows[index].hunkIndex) return null;
+    const line = row.kind === "line" ? row.line : row.kind === "pair" ? (column === 0 ? row.left : row.right) : null;
+    return line && line.kind !== "context" ? line.kind : null;
+  };
+  const kind = kindAt(index);
+  if (!kind) return [];
+  const unified = rows[index].kind === "line";
+  const previous = kindAt(index - 1);
+  const next = kindAt(index + 1);
+  const edges: DiffRunEdge[] = [];
+  if (previous !== kind) edges.push(unified && kind === "addition" && previous === "deletion" ? "joined-after" : "run-start");
+  if (next !== kind) edges.push(unified && kind === "deletion" && next === "addition" ? "joined-before" : "run-end");
+  return edges;
 }
 
 type VisualDiffViewMode = "unified" | "split";
@@ -552,10 +576,12 @@ const DiffSplitCell = React.memo(function DiffSplitCell({
   line,
   side,
   highlight,
+  edges,
   t,
 }: {
   ranges?: readonly DiffRange[];
   line: DiffLine | null;
+  edges: string;
   side: "old" | "new";
   highlight: HighlightLine | null;
   t: Translations;
@@ -576,7 +602,7 @@ const DiffSplitCell = React.memo(function DiffSplitCell({
   return (
     <>
       <span className="diff-line__number">{lineNumber ?? ""}</span>
-      <span className={`diff-split-cell diff-split-cell--${line.kind}`}>
+      <span className={`diff-split-cell diff-split-cell--${line.kind}${edges}`}>
         <span className="diff-line__marker" aria-hidden="true" />
         {label && <span className="visually-hidden">{label}</span>}
         <span className="diff-line__content">{decorateDiffLine(highlight ? highlight(line.content) : line.content, ranges)}</span>
@@ -975,6 +1001,8 @@ function DiffHunkList({
           const changed = (candidate: (typeof rows)[number] | undefined): boolean => Boolean(candidate && candidate.hunkIndex === arrivalHunk &&
             (candidate.kind === "line" ? candidate.line.kind !== "context" : candidate.kind === "pair" &&
               (candidate.left?.kind === "deletion" || candidate.right?.kind === "addition")));
+          const edgeClasses = (block: string, column: 0 | 1): string =>
+            diffRunEdges(rows, virtualRow.index, column).map((edge) => ` ${block}--${edge}`).join("");
           const arrival = changed(row);
           const arrivalClass = arrival ? ` diff-row--arrival${changed(rows[virtualRow.index - 1]) ? "" : " diff-row--arrival-start"}${changed(rows[virtualRow.index + 1]) ? "" : " diff-row--arrival-end"}` : "";
           return (
@@ -1000,11 +1028,11 @@ function DiffHunkList({
                   t={t}
                 />
               ) : row.kind === "line" ? (
-                <DiffLineRow line={row.line} ranges={details.get(row.line)} highlight={renderHighlight} t={t} />
+                <DiffLineRow line={row.line} ranges={details.get(row.line)} highlight={renderHighlight} edges={edgeClasses("diff-line", 0)} t={t} />
               ) : (
                 <div className="diff-split-row">
-                  <DiffSplitCell line={row.left} ranges={row.left ? details.get(row.left) : undefined} side="old" highlight={renderHighlight} t={t} />
-                  <DiffSplitCell line={row.right} ranges={row.right ? details.get(row.right) : undefined} side="new" highlight={renderHighlight} t={t} />
+                  <DiffSplitCell line={row.left} ranges={row.left ? details.get(row.left) : undefined} side="old" highlight={renderHighlight} edges={edgeClasses("diff-split-cell", 0)} t={t} />
+                  <DiffSplitCell line={row.right} ranges={row.right ? details.get(row.right) : undefined} side="new" highlight={renderHighlight} edges={edgeClasses("diff-split-cell", 1)} t={t} />
                 </div>
               )}
             </div>

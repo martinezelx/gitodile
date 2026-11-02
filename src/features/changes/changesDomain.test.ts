@@ -2,6 +2,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildSplitRows,
+  diffRunEdges,
   estimateLineRows,
   flattenDiffRows,
   formatDiffAsAccessibleText,
@@ -437,6 +438,28 @@ describe("isFirstRowOfHunk", () => {
 
     // [line(hunk0), line(hunk0), marker(hunk1), line(hunk1)]
     expect(rows.map((_, index) => isFirstRowOfHunk(rows, index))).toEqual([true, false, true, false]);
+  });
+});
+
+describe("diffRunEdges", () => {
+  it("joins a removal straight into its addition in unified view and caps every other run", () => {
+    const hunks = [
+      hunk(1, 6, [line("deletion", "a"), line("deletion", "b"), line("addition", "c"), line("context", "d"), line("addition", "e"), line("deletion", "f")]),
+      hunk(20, 1, [line("deletion", "g")]),
+    ];
+    const rows = flattenDiffRows(hunks);
+
+    expect(rows.map((_, index) => diffRunEdges(rows, index))).toEqual([
+      ["run-start"], ["joined-before"], ["joined-after", "run-end"], [], ["run-start", "run-end"], ["run-start", "run-end"],
+      [], ["run-start", "run-end"],
+    ]);
+  });
+
+  it("caps each side of a split view, which never joins across the divider", () => {
+    const rows = buildSplitRows([hunk(1, 3, [line("deletion", "a"), line("deletion", "b"), line("addition", "c")])]);
+
+    expect(rows.map((_, index) => diffRunEdges(rows, index, 0))).toEqual([["run-start"], ["run-end"]]);
+    expect(rows.map((_, index) => diffRunEdges(rows, index, 1))).toEqual([["run-start", "run-end"], []]);
   });
 });
 

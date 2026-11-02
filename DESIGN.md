@@ -3474,17 +3474,30 @@ the project's root in the system file manager through `open_project_folder`,
 which resolves the folder from the open project and never from a path the
 renderer sends. Under 980px the column drops below the timeline.
 
-Text diffs in Changes and History use the same bar-and-tint language as
-rendered Markdown: a 3px solid added bar and a 3px dashed removed bar in the
-existing line gutter, without plus/minus signs. The bar spans each full line,
-including wrapped and empty lines; unchanged lines keep the same content
-alignment. Both unified and split views retain their line numbers and hidden
+Text diffs in Changes and History use the same capsule-and-tint language as
+rendered Markdown: a 5px capsule in the existing line gutter, filled for an
+addition and outlined with a 1.5px edge for a removal, without plus/minus
+signs. One capsule spans each run, a contiguous stretch of one change kind in
+one column of one hunk, through its wrapped and empty lines. It opens and
+closes `--space-1` inside the run with `--radius-pill` ends, so neighbouring
+runs read as separate units; split view caps each side's runs on its own.
+Forced colours draw the same capsules with native borders. Unchanged lines
+keep the same content alignment. Both unified and split views retain their line numbers and hidden
 Added/Removed labels. Code uses the normal text ink and syntax-token colours,
 with the existing diff tints behind it. The accessible plain-text diff retains
 its patch signs. No extra preference is needed.
 
+In unified text view, a removed run directly followed by its added run in the
+same hunk is joined: one capsule continues across the boundary with no cap
+between them. Over `--space-2` on each side the outline's inside fills, the
+capsule colour passes through the OKLCH midpoint of the two diff colours, and
+the soft row tints blend through their sRGB midpoint. Text and exact-fragment
+marks stay sharp; row dimensions and split-view fills are unchanged. Forced
+colours keep the capsules without gradients or masks.
+
 Paired replacement lines additionally mark the exact changed fragments with
-`--tint-halo-focus` of their diff colour, over the existing `--tint-fill` row.
+`--tint-halo-focus` of their diff colour, over the existing `--tint-fill` row,
+softened by the 2px highlight radius.
 Full-line syntax colours and search marks remain intact. Only changed spaces
 and tabs carry decorative middle-dot and right-arrow glyphs; the original
 whitespace remains selectable and copyable. Cap decorative spacing glyphs at
@@ -3496,11 +3509,12 @@ Split text views keep Before/After headings outside the scrolling code, using
 Changes names the last saved version and current working copy; History names
 its actual comparison base (or empty project) and selected saved version.
 Explicit change-arrow navigation briefly outlines the affected line groups in
-`--text-secondary-color` for `--attention-duration`. The static contour never
+`--text-secondary-color` for `--attention-duration`, inset `--space-1` from the
+panel edges with `--radius-item` at the group's first and last line. The static contour never
 changes row dimensions or animates, including under reduced motion, and only
 an explicit jump starts it; file activation and background refresh do not.
 Forced colours underline changed fragments as well as retaining the
-solid/dashed line markers.
+filled/outlined capsules.
 
 Changes offers **Markdown preview** in its View picker for `.md` and `.markdown`
 text files that are not conflicted, selecting it by default. Remember explicit
@@ -3508,9 +3522,14 @@ Markdown choices across sessions independently of code-file view choices.
 If a read fails or the document exceeds size/comparison limits, show the text
 diff with an explanation; keep the preference and offer retry through View.
 It compares complete saved/current documents,
-highlighting affected blocks in red/green with a 3px bar and a tint, and no
-minus/plus sign, in one unified document. The removed bar is dashed and the
-added one solid, so the two read apart by shape and not by colour alone. Unchanged context appears once; a replacement shows the removed block
+highlighting affected blocks in red/green with the text diff's capsule and
+tint, and no minus/plus sign, in one unified document. Each block is one
+closed capsule at its inline start (a table row's on its first cell); the
+removed one is outlined and the added one filled, so the two read apart by
+shape and not by colour alone. A removed block directly followed by its added
+block joins it as in a text diff, trading its paragraph gap for padding so
+both tints meet. A changed code block scrolls inside its code so its capsule
+stays in place. Unchanged context appears once; a replacement shows the removed block
 before the added block at the same position. Compatible lists, tables and quotes
 merge their items/rows so shared context stays in place. New files show additions;
 deleted files retain their saved content and disclose deletion. A summary counts source-line

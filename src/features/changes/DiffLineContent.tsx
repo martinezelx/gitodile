@@ -34,7 +34,10 @@ export function decorateDiffLine(content: React.ReactNode, ranges: readonly Diff
         const to = Math.min(node.length, range.end - start);
         if (to <= from) continue;
         if (from > cursor) parts.push(node.slice(cursor, from));
-        parts.push(<span className="diff-inline-change" key={from}>{decorateWhitespace(node.slice(from, to))}</span>);
+        // A fragment crossing syntax tokens is split into one span per token;
+        // only its real ends are rounded, so the pieces still read as one.
+        const edges = `${range.start < start ? " diff-inline-change--continues-before" : ""}${range.end > start + node.length ? " diff-inline-change--continues-after" : ""}`;
+        parts.push(<span className={`diff-inline-change${edges}`} key={from}>{decorateWhitespace(node.slice(from, to))}</span>);
         cursor = to;
       }
       if (cursor < node.length) parts.push(node.slice(cursor));

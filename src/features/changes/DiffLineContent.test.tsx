@@ -28,6 +28,16 @@ it("keeps search matches nested around exact changed text", () => {
   expect(container.querySelector('mark .diff-inline-change')?.textContent).toBe('value');
 });
 
+it("marks where a fragment split across syntax tokens continues, so only its real ends are rounded", () => {
+  const source = ["let ", <span key="value">value</span>, " = 1;"];
+  const { container } = render(<code>{decorateDiffLine(source, [{ start: 2, end: 9 }, { start: 12, end: 13 }])}</code>);
+  expect([...container.querySelectorAll(".diff-inline-change")].map(node => [node.textContent, node.className])).toEqual([
+    ["t ", "diff-inline-change diff-inline-change--continues-after"],
+    ["value", "diff-inline-change diff-inline-change--continues-before"],
+    ["1", "diff-inline-change"],
+  ]);
+});
+
 it.each(["spaces", "tabs"])("bounds decorative nodes in a long changed line of %s while preserving its source", kind => {
   const source = (kind === "tabs" ? "\t" : " ").repeat(4096);
   // Several token spans exercise the budget across the whole line, not per token.

@@ -19,13 +19,14 @@ const DIFF_SPECIMEN: FileDiff = {
   kind: "text", path: "example.ts", originalPath: null, change: "changed", truncated: false,
   hunks: [{ header: "@@ -1,5 +1,6 @@", oldStart: 1, oldLines: 5, newStart: 1, newLines: 6, lines: [
     { kind: "context", content: "export function saveVersion() {", oldLineNumber: 1, newLineNumber: 1 },
-    { kind: "deletion", content: "\tconst offset = -1;  ", oldLineNumber: 2, newLineNumber: null },
+    { kind: "deletion", content: '\tconst offset = -1; // Keep a recovery point before replacing unsaved work, including when this explanation wraps across several display lines.  ', oldLineNumber: 2, newLineNumber: null },
     { kind: "deletion", content: "", oldLineNumber: 3, newLineNumber: null },
     { kind: "addition", content: "  const offset = +1;", oldLineNumber: null, newLineNumber: 2 },
     { kind: "addition", content: "", oldLineNumber: null, newLineNumber: 3 },
     { kind: "addition", content: '  const message = "Save the versions on this branch, keeping unsaved work available and asking before publishing anything to the shared project.";', oldLineNumber: null, newLineNumber: 4 },
     { kind: "context", content: "  return offset;", oldLineNumber: 4, newLineNumber: 5 },
-    { kind: "context", content: "}", oldLineNumber: 5, newLineNumber: 6 },
+    { kind: "deletion", content: "}", oldLineNumber: 5, newLineNumber: null },
+    { kind: "addition", content: "};", oldLineNumber: null, newLineNumber: 6 },
   ] }],
 };
 
@@ -35,7 +36,7 @@ function DiffMarks(): React.JSX.Element {
     <div className="gallery__row"><button className="secondary-button" type="button" onClick={() => setTarget(previous => ({ index: 0, token: previous.token + 1 }))}>Jump to change</button></div>
     <Specimen title="Unified text"><div className="gallery__diff"><DiffResultView diff={DIFF_SPECIMEN} hunkTarget={target} viewMode="unified" t={en} /></div></Specimen>
     <Specimen title="Split text"><div className="gallery__diff"><DiffResultView diff={DIFF_SPECIMEN} hunkTarget={target} viewMode="split" t={en} /></div></Specimen>
-    <Specimen title="Rendered Markdown"><div className="markdown-preview__document"><p className="markdown-preview__removed">The old explanation.</p><p className="markdown-preview__added">The new explanation, with a solid bar and the same soft tint.</p></div></Specimen>
+    <Specimen title="Rendered Markdown"><div className="markdown-preview__document"><p className="markdown-preview__removed">The old explanation.</p><p className="markdown-preview__added">The new explanation, joined to the old one by the same capsule and tint.</p></div></Specimen>
   </Section>;
 }
 

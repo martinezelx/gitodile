@@ -1,6 +1,6 @@
 # Completed work — 0.5.0
 
-19 completed task records. IDs, parent relationships, completion dates
+21 completed task records. IDs, parent relationships, completion dates
 and accepted deferred criteria are preserved.
 
 ## Version evidence
@@ -14,7 +14,9 @@ ahead of the queue in this same version. Task 214 extends those marks to all
 text diffs on the same release branch on 2026-11-02. Task 215 adds the approved
 fragment detail, changed spacing, comparison headings and navigation cue on
 that same date and branch. Task 216 hardens project switching and retains console
-sessions on the same release branch and date. This archive records completed
+sessions on the same release branch and date. Task 217 replaces task 214's
+bars with capsules and joined replacements on that same date and branch, and
+task 218 aligns the arrival contour and fragment marks after it. This archive records completed
 implementation, not publication of 0.5.0. See the
 [version closeout](../../0.5.0/README.md) and
 [qualification matrix](../../assets/0.5.0-closure/closure-audit.md).
@@ -44,5 +46,7 @@ implementation, not publication of 0.5.0. See the
 
 | 215 | 2026-11-02 | [Show exact text changes, changed spacing and comparison context](215-text-diff-detail-and-orientation.md) |
 | 216 | 2026-11-02 | [Keep project switching fresh and preserve console sessions](216-project-switching-freshness-and-console-state.md) |
+| 217 | 2026-11-02 | [Mark diff runs with capsules and join replacements](217-diff-capsules-and-joined-replacements.md) |
+| 218 | 2026-11-02 | [Align diff navigation and fragment marks with the capsules](218-diff-capsule-refinements.md) |
 
 Archive organization and assignment rules are in [work/README.md](../../README.md).

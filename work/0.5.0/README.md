@@ -29,7 +29,12 @@ criteria, Windows evidence and external qualification formally carried to
 065-8 (Linux) and 065-10 (macOS). Those tests are still unexecuted and their
 original criteria remain unchecked in the completed epics.
 
-Done: [216 — Project switching freshness and console state](../done/0.5.0/216-project-switching-freshness-and-console-state.md),
+Done: [218 — Diff capsule refinements](../done/0.5.0/218-diff-capsule-refinements.md),
+a rounded arrival contour and softened fragment marks;
+[217 — Diff capsules and joined replacements](../done/0.5.0/217-diff-capsules-and-joined-replacements.md),
+one filled or outlined capsule per change run in text diffs and Markdown, with
+a blended join from a removal into its addition;
+[216 — Project switching freshness and console state](../done/0.5.0/216-project-switching-freshness-and-console-state.md),
 watcher restart ordering, trailing status reads, active branch identity, explicit
 empty startup selection and retained console sessions;
 [215 — Text diff detail and orientation](../done/0.5.0/215-text-diff-detail-and-orientation.md),
