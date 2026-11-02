@@ -300,7 +300,7 @@ About, decided while implementing:
   `#ff7a6b` (6.10:1) on `--surface-raised`. Added to the `DESIGN.md` token
   table so it is not re-derived later.
 - **The heart is `role="img"` with a translated label, not `aria-hidden`.**
-  Hiding it makes the sentence read "Made with by Luis M. Martínez."
+  Hiding it makes the sentence read "Made with by Luis Muñoz Martinez."
 - **OS name and build on separate rows.** Windows 11 reports NT `10.0`, so a
   combined "Windows 10.0.26200" tells a Windows 11 user they are on Windows
   10. The name comes from the build number (>= 22000 is 11); the raw string
@@ -478,7 +478,7 @@ header chip hovered 5.19 / 4.52, rail dot 6.54 / 6.22. All clear 4.5:1. The
 20% hover fill first tried measured 4.08:1 in dark and was replaced.
 
 About, in the browser: the app renders clean after the plugin-os fix, the
-footer reads "Hecho con ♥ por Luis M. Martínez." with the heart computed at
+footer reads "Hecho con ♥ por Luis Muñoz Martinez." with the heart computed at
 `rgb(255, 122, 107)`, and the version row renders at 16px — the same size as
 the description above it, where the first attempt used 13px.
 

@@ -645,7 +645,7 @@ describe("About dialog", () => {
     renderOverlays();
 
     // The sentence is "Made with <heart> by …". Hiding the glyph would read as
-    // "Made with by Luis M. Martínez."
+    // "Made with by Luis Muñoz Martinez."
     const heart = screen.getByRole("img", { name: "love" });
     expect(heart).toHaveTextContent("♥");
     expect(heart).toHaveClass("about-dialog__heart");

@@ -221,7 +221,7 @@ export const en: AppTranslations = {
   aboutUpToDate: "Up to date",
   aboutUpdateUnavailable: "Updates unavailable",
   aboutFooterMadeWith: "Made with",
-  aboutFooterByAuthor: "by Luis M. Martínez.",
+  aboutFooterByAuthor: "by Luis Muñoz Martinez.",
   aboutHeartLabel: "love",
   changelogTitle: "What's new",
   changelogVersionHeading: (version) => version,

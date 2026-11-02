@@ -2,7 +2,7 @@
 name = "gitodile"
 version = "0.5.0"
 description = "The Git client for humans and their agents"
-authors = ["Luis M. Martínez"]
+authors = ["Luis Muñoz Martinez"]
 edition = "2021"
 license = "AGPL-3.0-only"
 

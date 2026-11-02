@@ -40,7 +40,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "copyright": "Copyright © 2026 Luis M. Martínez",
+    "copyright": "Copyright © 2026 Luis Muñoz Martinez",
     "homepage": "https://github.com/martinezelx/gitodile",
     "icon": [
       "icons/32x32.png",

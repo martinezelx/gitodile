@@ -651,7 +651,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md) before making changes and
 GitOdile is licensed under the GNU Affero General Public License v3.0 only
 (`AGPL-3.0-only`). See [`LICENSE`](LICENSE).
 
-Copyright © 2026 Luis M. Martínez.
+Copyright © 2026 Luis Muñoz Martinez.
 
 The GitOdile name, logo, application icon, and visual identity are subject to
 separate brand rights. The software license does not grant rights to use them.
