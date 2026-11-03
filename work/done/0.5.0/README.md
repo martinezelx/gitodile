@@ -1,6 +1,6 @@
 # Completed work — 0.5.0
 
-22 completed task records. IDs, parent relationships, completion dates
+23 completed task records. IDs, parent relationships, completion dates
 and accepted deferred criteria are preserved.
 
 ## Version evidence
@@ -17,7 +17,9 @@ that same date and branch. Task 216 hardens project switching and retains consol
 sessions on the same release branch and date. Task 217 replaces task 214's
 bars with capsules and joined replacements on that same date and branch, and
 task 218 aligns the arrival contour and fragment marks after it. Task 219 moves the
-console mascot between the welcome and the watermark on the same date and branch. This archive records completed
+console mascot between the welcome and the watermark on the same date and branch.
+Task 220 has the issue report copy and open GitHub in one action and guide the
+paste, on the same branch on 2026-11-03. This archive records completed
 implementation, not publication of 0.5.0. See the
 [version closeout](../../0.5.0/README.md) and
 [qualification matrix](../../assets/0.5.0-closure/closure-audit.md).
@@ -50,5 +52,6 @@ implementation, not publication of 0.5.0. See the
 | 217 | 2026-11-02 | [Mark diff runs with capsules and join replacements](217-diff-capsules-and-joined-replacements.md) |
 | 218 | 2026-11-02 | [Align diff navigation and fragment marks with the capsules](218-diff-capsule-refinements.md) |
 | 219 | 2026-11-02 | [Move the console mascot between the welcome and the watermark](219-console-mascot-motion.md) |
+| 220 | 2026-11-03 | [Issue report copies, opens and guides the paste](220-issue-report-copy-and-finish.md) |
 
 Archive organization and assignment rules are in [work/README.md](../../README.md).

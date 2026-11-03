@@ -17,6 +17,22 @@ function environmentPrefill(report: string): string {
   return report.slice(start, end === -1 ? undefined : end).trim();
 }
 
+/** The report without its session activity: what is shown, copied and saved
+ * when the reader leaves the activity out. */
+export function reportWithoutActivity(report: string): string {
+  const end = report.indexOf(ACTIVITY_HEADING);
+  return end === -1 ? report : report.slice(0, end);
+}
+
+export type IssueReportUrlOptions = {
+  /** The reader's own title; the form's prefix is kept in front of it. */
+  title?: string;
+  /** Ends the prefilled field when the report on the clipboard carries
+   * activity. The field renders as text, so this is a visible line rather than
+   * a hidden comment, and one left unpasted tells the maintainer as much. */
+  pasteReminder?: string;
+};
+
 /** Share the reviewed environment and the publication check's form IDs.
  * Unknown query parameters are silently ignored by GitHub, so filenames and
  * IDs in issueReportContract.json must remain compatible with shipped builds.
@@ -25,11 +41,14 @@ function environmentPrefill(report: string): string {
  * characters — past what GitHub accepts before it answers 414 rather than a
  * form — and it belongs to the report the user pastes or attaches, which is the
  * route that carries it whole and the one they have already been shown. */
-export function buildIssueReportUrl(report: string, language: Language = "en"): string {
+export function buildIssueReportUrl(report: string, language: Language = "en", options: IssueReportUrlOptions = {}): string {
+  const environment = environmentPrefill(report);
   const params = new URLSearchParams({
     template: contract.bugTemplates[language],
-    [contract.diagnosticsField]: environmentPrefill(report),
+    [contract.diagnosticsField]: options.pasteReminder ? `${environment}\n\n${options.pasteReminder}` : environment,
   });
+  const title = options.title?.trim();
+  if (title) params.set("title", `${contract.bugTitlePrefix}${title}`);
   return `${FEEDBACK_REPOSITORY_URL}/issues/new?${params.toString()}`;
 }
 

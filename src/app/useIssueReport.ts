@@ -1,32 +1,45 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { buildIssueReportUrl, useIssueReportEnvironment } from "./issueReport";
+import { useLanguage } from "../i18n";
+import { buildIssueReportUrl, reportWithoutActivity, useIssueReportEnvironment } from "./issueReport";
 import { issueReportPort, type IssueReportPort } from "./issueReportAdapter";
 
-type FlowPhase = "closed" | "preparing" | "review" | "opening" | "failed";
+type FlowPhase = "closed" | "preparing" | "review" | "opening" | "finish" | "failed";
 type ActionState = "idle" | "working" | "done" | "failed";
 
 /** The shell owns the review and browser launch; repository state is never
  * read here. Rust supplies a bounded snapshot of session activity. */
 export function useIssueReport(gitVersion: string | null, port: IssueReportPort = issueReportPort) {
   const { environment, language } = useIssueReportEnvironment(gitVersion);
+  const { t } = useLanguage();
   const [phase, setPhase] = useState<FlowPhase>("closed");
   const [reportText, setReportText] = useState<string | null>(null);
+  const [includeActivity, setIncludeActivity] = useState(true);
+  const [title, setTitle] = useState("");
   const [failedUrl, setFailedUrl] = useState<string | null>(null);
   const [copyReportState, setCopyReportState] = useState<ActionState>("idle");
   const [saveState, setSaveState] = useState<ActionState>("idle");
   const [copyLinkState, setCopyLinkState] = useState<ActionState>("idle");
+  // The finish step's own copy, told apart from the one made on the way out.
+  const [recopied, setRecopied] = useState(false);
   const generation = useRef(0);
   const busy = useRef(false);
+
+  // What the reader sees is what is copied, saved and pasted: leaving the
+  // activity out changes the text itself, not a flag sent alongside it.
+  const shownReport = reportText === null ? null : includeActivity ? reportText : reportWithoutActivity(reportText);
 
   const dismiss = useCallback(() => {
     generation.current++;
     busy.current = false;
     setPhase("closed");
     setReportText(null);
+    setIncludeActivity(true);
+    setTitle("");
     setFailedUrl(null);
     setCopyReportState("idle");
     setSaveState("idle");
     setCopyLinkState("idle");
+    setRecopied(false);
   }, []);
   useEffect(() => () => { generation.current++; }, []);
 
@@ -53,17 +66,15 @@ export function useIssueReport(gitVersion: string | null, port: IssueReportPort 
     }
   };
 
-  const continueToGitHub = async (): Promise<void> => {
-    if (busy.current || reportText === null) return;
-    busy.current = true;
-    const attempt = ++generation.current;
-    const target = buildIssueReportUrl(reportText, language);
-    setPhase("opening");
-    setCopyReportState("idle");
-    setSaveState("idle");
+  /** With nothing on the clipboard there is nothing left to paste, so the
+   * flow ends when the form opens instead of guiding a paste. */
+  const open = async (target: string, attempt: number, pasteFollows: boolean): Promise<void> => {
     try {
       await port.open(target);
-      if (attempt === generation.current) dismiss();
+      if (attempt === generation.current) {
+        if (pasteFollows) setPhase("finish");
+        else dismiss();
+      }
     } catch {
       if (attempt === generation.current) {
         setFailedUrl(target);
@@ -74,31 +85,58 @@ export function useIssueReport(gitVersion: string | null, port: IssueReportPort 
     }
   };
 
+  /** Copy first, so the report is waiting when the form appears. A failed copy
+   * still opens the form: the finish step says so and offers it again. The
+   * versions alone already travel in the address, so without the activity
+   * there is nothing to copy. */
+  const copyThenOpen = async (target: string, attempt: number): Promise<void> => {
+    if (includeActivity && shownReport !== null) {
+      setCopyReportState("working");
+      try {
+        await port.copy(shownReport);
+        if (attempt === generation.current) setCopyReportState("done");
+      } catch {
+        if (attempt === generation.current) setCopyReportState("failed");
+      }
+      if (attempt !== generation.current) return;
+    }
+    await open(target, attempt, includeActivity);
+  };
+
+  const continueToGitHub = async (): Promise<void> => {
+    if (busy.current || shownReport === null) return;
+    busy.current = true;
+    const attempt = ++generation.current;
+    const target = buildIssueReportUrl(shownReport, language, {
+      title,
+      pasteReminder: includeActivity ? t.issueReportPasteReminder : undefined,
+    });
+    setPhase("opening");
+    setSaveState("idle");
+    await copyThenOpen(target, attempt);
+  };
+
+  /** The failure screen's own "Copy link" replaces the report on the
+   * clipboard, so a retry copies the report again rather than letting the
+   * finish step claim a copy that is no longer there. */
   const retry = async (): Promise<void> => {
     if (busy.current || failedUrl === null) return;
     busy.current = true;
     const attempt = ++generation.current;
     setPhase("opening");
     setCopyLinkState("idle");
-    try {
-      await port.open(failedUrl);
-      if (attempt === generation.current) dismiss();
-    } catch {
-      if (attempt === generation.current) setPhase("failed");
-    } finally {
-      if (attempt === generation.current) busy.current = false;
-    }
+    await copyThenOpen(failedUrl, attempt);
   };
 
   const runReportAction = async (
     action: (value: string) => Promise<unknown>,
     setState: (state: ActionState) => void,
   ): Promise<void> => {
-    if (reportText === null) return;
+    if (shownReport === null) return;
     const attempt = generation.current;
     setState("working");
     try {
-      const outcome = await action(reportText);
+      const outcome = await action(shownReport);
       if (attempt === generation.current) setState(outcome === false ? "idle" : "done");
     } catch {
       if (attempt === generation.current) setState("failed");
@@ -121,23 +159,28 @@ export function useIssueReport(gitVersion: string | null, port: IssueReportPort 
     phase,
     isOpen: phase !== "closed",
     isOpening: phase === "preparing" || phase === "opening",
-    reportText,
+    reportText: shownReport,
+    includeActivity,
+    title,
     failedUrl,
     copyReportState,
     saveState,
     copyLinkState,
+    recopied,
     dismiss,
     report,
     continueToGitHub,
     retry,
-    copyReport: () => {
+    setIncludeActivity: (include: boolean) => {
       setSaveState("idle");
+      setIncludeActivity(include);
+    },
+    setTitle,
+    copyReport: () => {
+      setRecopied(true);
       return runReportAction(port.copy, setCopyReportState);
     },
-    saveReport: () => {
-      setCopyReportState("idle");
-      return runReportAction(port.save, setSaveState);
-    },
+    saveReport: () => runReportAction(port.save, setSaveState),
     copyLink,
   };
 }

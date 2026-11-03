@@ -265,12 +265,18 @@ never persisted unless the user explicitly saves the reviewed report.
 snapshot and `issueReportContract.json`. Only the versions travel in the
 address: a full session encodes to some twelve thousand characters, which GitHub
 answers with 414 rather than a form, so the activity reaches the issue through
-the clipboard or the attached file instead. `useIssueReport.ts` owns the
-review/copy/save/launch flow through `issueReportAdapter.ts`. The titlebar
-receives an action, and one eager dialog moves through preparing, review,
-opening and browser-failure states. Dismissed attempts cannot restore stale
-errors or clipboard state. Opening the form is an explicit external action;
-the saved text file must be attached manually. The live tracker/form contract
+the clipboard or the attached file instead. The address may also carry the
+reader's optional title, behind the form's `[Bug]: ` prefix, and, when the
+activity is included, a last line in the prefilled field asking for the paste.
+`useIssueReport.ts` owns the review/copy/save/launch flow through
+`issueReportAdapter.ts`. The titlebar receives an action, and one eager dialog
+moves through preparing, review, opening, finish and browser-failure states.
+Leaving the activity out changes the shown, copied and saved text itself. The
+primary action copies that text before opening the form, and a failed copy
+still opens it; the finish step then says what is left (the paste) and offers
+the copy again. Dismissed attempts cannot restore stale errors or clipboard
+state. Opening the form is an explicit external action; the saved text file
+must be attached manually. The live tracker/form contract
 is checked separately from the offline gate by `pnpm run check:feedback`,
 including private vulnerability reporting enablement.
 

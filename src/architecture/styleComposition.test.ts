@@ -922,7 +922,7 @@ describe("production style composition", () => {
       ".project-quick-switch__search input": ".project-quick-switch__search:focus-within",
       ".settings-dialog": null,
       ".about-dialog": ".about-dialog:focus-visible",
-      ".issue-report-dialog__report-body": ".issue-report-dialog__report:has(:focus-visible)",
+      ".issue-report-dialog__report-body": ".issue-report-dialog__report:has(.issue-report-dialog__report-body:focus-visible)",
       ".changelog-dialog__body": null,
       ".text-field input": ".text-field input:focus-visible",
       ".text-field select": ".text-field select:focus-visible",

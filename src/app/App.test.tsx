@@ -81,7 +81,7 @@ describe("App shell", () => {
     render(<LanguageProvider><App /></LanguageProvider>);
     await user.click(screen.getByRole("button", { name: "More actions" }));
     await user.click(screen.getByRole("menuitem", { name: "Report an issue" }));
-    await user.click(await screen.findByRole("button", { name: "Open issue" }));
+    await user.click(await screen.findByRole("button", { name: "Copy and open GitHub" }));
     expect(await screen.findByRole("alertdialog")).toHaveAccessibleName("The browser didn't open");
     await user.keyboard("{Control>}k{/Control}");
     expect(screen.queryByRole("dialog")).toBeNull();
@@ -107,7 +107,7 @@ describe("App shell", () => {
     render(<LanguageProvider><App /></LanguageProvider>);
     await user.click(screen.getByRole("button", { name: "Más acciones" }));
     await user.click(screen.getByRole("menuitem", { name: "Reportar un problema" }));
-    await user.click(await screen.findByRole("button", { name: "Reportar en GitHub" }));
+    await user.click(await screen.findByRole("button", { name: "Copiar y abrir GitHub" }));
 
     expect(openUrl).toHaveBeenCalledOnce();
     const url = new URL(vi.mocked(openUrl).mock.calls[0][0]);

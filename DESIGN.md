@@ -2863,7 +2863,12 @@ trustworthy to preview, and the placeholders stay.
 **Progress is three steps at most.** The native side may report six phases;
 the dialog maps them onto the few the reader can follow ("Downloading",
 "Checking", "Opening") in `.app-dialog__steps`, the active one spinning and the
-done ones ticked.
+done ones ticked. A step that is the reader's to do outside GitOdile
+carries the glyph of the action, in primary ink, not spinning and never a
+number: nothing runs until they act. Each step is one short line. The issue report's "Finish on GitHub" is
+the case: after the browser opens it ticks the copy and the launch, shows the
+paste glyph on the paste, and offers `Copy again` and `Done`; a
+copy that failed is crossed in the warning ink and adds `Save report…`.
 
 **Copy follows § Content design**, with one addition for dialogs: the text a
 dialog shows is written in `translations.ts` from facts the native side

@@ -29,7 +29,10 @@ criteria, Windows evidence and external qualification formally carried to
 065-8 (Linux) and 065-10 (macOS). Those tests are still unexecuted and their
 original criteria remain unchecked in the completed epics.
 
-Done: [219 — Console mascot motion](../done/0.5.0/219-console-mascot-motion.md),
+Done: [220 — Issue report copy and finish](../done/0.5.0/220-issue-report-copy-and-finish.md),
+one action that copies the report and opens GitHub, a finish step for the paste
+and a paste reminder in the form;
+[219 — Console mascot motion](../done/0.5.0/219-console-mascot-motion.md),
 the drawing's move to the watermark and back, rain through the whole column,
 a blink per command and the project's own version ids as rain;
 [218 — Diff capsule refinements](../done/0.5.0/218-diff-capsule-refinements.md),
