@@ -65,10 +65,9 @@ function describe(details: NotificationDetails, t: Translations): {
           : t.notificationChangesPublishedTo(details.destination),
       };
     case "appUpdateAvailable":
-      return {
-        title: t.notificationAppUpdateTitle(details.version),
-        description: t.notificationAppUpdateDescription,
-      };
+      return details.ready
+        ? { title: t.notificationAppUpdateReadyTitle(details.version), description: t.notificationAppUpdateReadyDescription }
+        : { title: t.notificationAppUpdateTitle(details.version), description: t.notificationAppUpdateDescription };
   }
 }
 

@@ -85,8 +85,12 @@ and 038 predate that convention, so their already-permanent child IDs remain
 
 Reserved IDs without their own task file are still burned: `062` was folded
 into task 057 and `196` into task 195 by explicit request. The next unused
-top-level ID after the current plan is `220`. Epic 206 owns tasks 037-2 and
+top-level ID after the current plan is `222`. Epic 206 owns tasks 037-2 and
 037-4, which kept their IDs when they moved out of epic 037 on 2026-10-27.
+
+Application updates have one home, Settings › Updates, in
+[221](done/0.5.0/221-one-home-for-app-updates.md), completed on 2026-11-03 ahead
+of the queue at the user's request (ADR 0044).
 
 Text diffs and rendered Markdown mark each change run with one filled or
 outlined capsule, joining a removal into its addition, in

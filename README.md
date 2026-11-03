@@ -175,8 +175,7 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   native lifecycle through download, signature verification, explicit
   install/restart consent, draft or active-work blockers, cancellation and
   observed-version confirmation. The startup check is on by default: it asks
-  GitHub once when the app opens (and again every 24 hours while it stays
-  open), records a notification when a release is found, and never downloads
+  GitHub once when the app opens (and once a day if it stays open), records a notification when a release is found, and never downloads
   or installs anything by itself.
 - Configure light/dark/system themes, reduced motion, English/Spanish copy,
   date and number formats, Git identity, installation diagnostics, supported

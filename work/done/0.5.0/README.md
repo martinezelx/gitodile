@@ -53,5 +53,6 @@ implementation, not publication of 0.5.0. See the
 | 218 | 2026-11-02 | [Align diff navigation and fragment marks with the capsules](218-diff-capsule-refinements.md) |
 | 219 | 2026-11-02 | [Move the console mascot between the welcome and the watermark](219-console-mascot-motion.md) |
 | 220 | 2026-11-03 | [Issue report copies, opens and guides the paste](220-issue-report-copy-and-finish.md) |
+| 221 | 2026-11-03 | [Give application updates one home in Settings](221-one-home-for-app-updates.md) |
 
 Archive organization and assignment rules are in [work/README.md](../../README.md).

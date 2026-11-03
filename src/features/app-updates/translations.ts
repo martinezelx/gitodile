@@ -9,19 +9,19 @@ import type { UpdateError, UpdateState } from "./domain";
  * reassure people about on every download. */
 const dictionaries = {
   en: {
-    eyebrow: "Updates",
     title: "Updates",
-    titleAvailable: "A new version is available",
-    titleDownloading: (version: string) => `Downloading ${version}`,
-    titleReady: "Ready to install",
-    titleVerifying: (version: string) => `Verifying ${version}`,
-    titleCurrent: "You have the latest version",
-    titleInstalling: "Installing the update",
-    titleBlocked: "Can't install yet",
     titleUnconfirmed: "The update didn't finish",
     installedSubtitle: (version: string) => `Installed version: ${version}`,
     installedLabel: "Installed version",
     check: "Check for updates",
+    /* The More actions entry names the next step once there is one. Each ends
+       in an ellipsis because it opens Settings, where the step is confirmed. */
+    menu: {
+      available: (version: string) => `Update to ${version}…`,
+      downloading: (version: string) => `Downloading ${version}…`,
+      ready: (version: string) => `Install ${version}…`,
+    },
+    attention: (version: string) => `Version ${version} is waiting`,
     details: "Details",
     checking: "Checking for updates…",
     cancel: "Cancel",
@@ -34,25 +34,21 @@ const dictionaries = {
     ready: "Ready to install",
     installExplanation: "The app closes and reopens on the new version. Your project files aren't touched, and your drafts are kept.",
     install: "Install and restart",
-    notNow: "Not now",
     close: "Close",
     checkAgain: "Check again",
     retry: "Try again",
     manual: "Manual download",
-    releaseNotes: "Release notes",
     highlights: "What's new",
     noNotes: "No release notes for this version.",
     received: (bytes: string) => `${bytes} downloaded`,
     progress: (received: string, total: string) => `${received} of ${total}`,
     installing: "Installing… The app will close.",
     cancelled: "Cancelled before anything was installed.",
-    receivingTitle: "How you get updates",
-    automaticLabel: "Check for updates at startup",
-    automaticDescription: "Checks GitHub at startup and every 24 hours, without sending project data or downloading anything by itself.",
-    otherWaysTitle: "Other ways to update",
-    otherWaysDescription: "Download the latest version from GitHub if this installation can't update itself.",
-    manualDownloadDescription: "Opens the releases page in your browser.",
-    openReleases: "Open GitHub Releases",
+    checkedAt: (when: string) => `Checked ${when}`,
+    justNow: "just now",
+    automaticLabel: "Check for updates automatically",
+    automaticDescription: "When GitOdile opens and once a day. Nothing from your projects is sent.",
+    manualFromGitHub: "Download manually from GitHub",
     whatsNewDescription: "What the newest version brings, and what earlier ones changed.",
     whatsNewNewBadge: "New version",
     whatsNewYourVersion: "Your version",
@@ -76,7 +72,7 @@ const dictionaries = {
       idle: "Not checked",
       checking: "Checking",
       current: "Up to date",
-      available: "Update available",
+      available: (version: string) => `${version} available`,
       downloading: "Downloading",
       verifying: "Verifying",
       ready: "Ready to install",
@@ -111,19 +107,17 @@ const dictionaries = {
     } satisfies Record<UpdateError["code"], string>,
   },
   es: {
-    eyebrow: "Actualizaciones",
     title: "Actualizaciones",
-    titleAvailable: "Hay una versión nueva",
-    titleDownloading: (version: string) => `Descargando ${version}`,
-    titleReady: "Lista para instalar",
-    titleVerifying: (version: string) => `Verificando ${version}`,
-    titleCurrent: "Tienes la última versión",
-    titleInstalling: "Instalando la actualización",
-    titleBlocked: "Todavía no se puede instalar",
     titleUnconfirmed: "La actualización no terminó",
     installedSubtitle: (version: string) => `Versión instalada: ${version}`,
     installedLabel: "Versión instalada",
     check: "Buscar actualizaciones",
+    menu: {
+      available: (version: string) => `Actualizar a ${version}…`,
+      downloading: (version: string) => `Descargando ${version}…`,
+      ready: (version: string) => `Instalar ${version}…`,
+    },
+    attention: (version: string) => `La versión ${version} está esperando`,
     details: "Detalles",
     checking: "Buscando actualizaciones…",
     cancel: "Cancelar",
@@ -136,25 +130,21 @@ const dictionaries = {
     ready: "Lista para instalar",
     installExplanation: "La aplicación se cierra y se vuelve a abrir con la versión nueva. Los archivos de tus proyectos no se tocan y tus borradores se conservan.",
     install: "Instalar y reiniciar",
-    notNow: "Ahora no",
     close: "Cerrar",
     checkAgain: "Buscar de nuevo",
     retry: "Reintentar",
     manual: "Descarga manual",
-    releaseNotes: "Notas de versión",
     highlights: "Novedades",
     noNotes: "Esta versión no incluye notas.",
     received: (bytes: string) => `${bytes} descargados`,
     progress: (received: string, total: string) => `${received} de ${total}`,
     installing: "Instalando… La aplicación se cerrará.",
     cancelled: "Cancelado antes de instalar nada.",
-    receivingTitle: "Cómo recibes las actualizaciones",
-    automaticLabel: "Buscar actualizaciones al iniciar",
-    automaticDescription: "Consulta GitHub al iniciar y cada 24 horas, sin enviar datos ni descargar nada por su cuenta.",
-    otherWaysTitle: "Otras formas de actualizar",
-    otherWaysDescription: "Descarga la última versión desde GitHub si esta instalación no puede actualizarse sola.",
-    manualDownloadDescription: "Abre la página de versiones en tu navegador.",
-    openReleases: "Abrir GitHub Releases",
+    checkedAt: (when: string) => `Comprobado ${when}`,
+    justNow: "ahora mismo",
+    automaticLabel: "Buscar actualizaciones automáticamente",
+    automaticDescription: "Al abrir GitOdile y una vez al día. No se envía nada de tus proyectos.",
+    manualFromGitHub: "Descargar manualmente desde GitHub",
     whatsNewDescription: "Qué trae la última versión y qué cambiaron las anteriores.",
     whatsNewNewBadge: "Nueva versión",
     whatsNewYourVersion: "Tu versión",
@@ -178,7 +168,7 @@ const dictionaries = {
       idle: "Sin comprobar",
       checking: "Comprobando",
       current: "Al día",
-      available: "Actualización disponible",
+      available: (version: string) => `${version} disponible`,
       downloading: "Descargando",
       verifying: "Verificando",
       ready: "Lista para instalar",
@@ -220,4 +210,19 @@ export function appUpdateTranslations(language: Language) {
 
 export function candidateFromState(state: UpdateState) {
   return "candidate" in state ? state.candidate : null;
+}
+
+/** The More actions and macOS menu entry: the next step when there is one,
+ * otherwise the check. Both menus read it, so they never name one state two
+ * ways. */
+export function updateMenuLabel(state: UpdateState, language: Language): string {
+  const t = dictionaries[language];
+  switch (state.kind) {
+    case "available": return t.menu.available(state.candidate.version);
+    case "downloading":
+    case "verifying": return t.menu.downloading(state.candidate.version);
+    case "ready":
+    case "blocked": return t.menu.ready(state.candidate.version);
+    default: return t.check;
+  }
 }

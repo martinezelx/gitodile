@@ -25,7 +25,10 @@ export type NotificationDetails =
   /** The startup check found a newer version of the app itself. Always
    * app-wide (`projectId: null`); the version is what tells "the same
    * release again" from "a newer one since". Nothing has been downloaded. */
-  | { kind: "appUpdateAvailable"; version: string };
+  /* `ready` once the download finished out of sight: the same entry, now
+     naming the next step, so the inbox never says "available" about a
+     release that only needs installing. Absent in records stored before. */
+  | { kind: "appUpdateAvailable"; version: string; ready?: true };
 
 export type NotificationKind = NotificationDetails["kind"];
 
@@ -116,7 +119,8 @@ export function notificationDetailsEqual(
         left.destination === right.destination
       );
     case "appUpdateAvailable":
-      return right.kind === "appUpdateAvailable" && left.version === right.version;
+      return right.kind === "appUpdateAvailable" && left.version === right.version
+        && (left.ready ?? false) === (right.ready ?? false);
     default: {
       const unhandled: never = left;
       return unhandled;

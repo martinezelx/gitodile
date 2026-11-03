@@ -253,11 +253,6 @@ export interface AppTranslations {
   aboutFooterByAuthor: string;
   aboutHeartLabel: string;
   changelogTitle: string;
-  changelogVersionHeading: (version: string) => string;
-  changelogCurrentRelease: string;
-  changelogEarlierHeading: string;
-  changelogHighlightCount: (count: number) => string;
-  changelogNoHighlights: string;
   closeConfirmTitle: string;
   closeConfirmBodyGeneric: string;
   closeConfirmBodyNamed: (name: string) => string;

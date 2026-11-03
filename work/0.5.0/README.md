@@ -29,7 +29,11 @@ criteria, Windows evidence and external qualification formally carried to
 065-8 (Linux) and 065-10 (macOS). Those tests are still unexecuted and their
 original criteria remain unchecked in the completed epics.
 
-Done: [220 — Issue report copy and finish](../done/0.5.0/220-issue-report-copy-and-finish.md),
+Done: [221 — One home for app updates](../done/0.5.0/221-one-home-for-app-updates.md),
+Settings › Updates as the one place the update is handled, a dot and a
+next-step label on More actions, What's new folded into that section and the
+changelog and update dialogs retired except for a wrong-version restart;
+[220 — Issue report copy and finish](../done/0.5.0/220-issue-report-copy-and-finish.md),
 one action that copies the report and opens GitHub, a finish step for the paste
 and a paste reminder in the form;
 [219 — Console mascot motion](../done/0.5.0/219-console-mascot-motion.md),

@@ -988,11 +988,15 @@ The WebView reaches only six GitOdile commands described by the IPC
 contract; no updater/process guest permission or JavaScript updater package
 is exposed.
 
-`features/app-updates` owns the renderer controller and eager update dialog.
-The controller reads and mirrors the process-wide native snapshot, coalesces
-every shell entry point, and polls only while a native check, download, or
-verification is active; it never infers a second lifecycle or retains payload
-bytes. Changelog mounting remains local-only. General Settings stores the
+`features/app-updates` owns the renderer controller, the Settings › Updates
+control that is the update's one surface, and the eager restart dialog shown
+only for a wrong-version restart (ADR 0044). The shell routes every entry point
+to that section; an entry that checks does so only from a settled state with
+nothing offered. The controller reads and mirrors the process-wide native
+snapshot, coalesces every shell entry point, and polls only while a native
+check, download, or verification is active; it never infers a second lifecycle
+or retains payload bytes. What's new lives in the same section and remains
+local-only. General Settings stores the
 off-by-default consent switch, while the controller owns the settled-startup
 timer and its fixed once-per-24-hours in-process cadence. That timer is an
 install participant, so preparation suspends it with the other background

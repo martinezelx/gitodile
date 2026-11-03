@@ -160,6 +160,17 @@ describe("deliberate reading and persistent history", () => {
     expect(second.result.current.unreadCount).toBe(1);
   });
 
+  it("brings an acknowledged update back once its download is ready", () => {
+    const { result } = renderHook(() => useNotificationCenter(true));
+    act(() => result.current.notify(update()));
+    act(() => result.current.markAllRead());
+    act(() => result.current.notify(update()));
+    expect(result.current.unreadCount).toBe(0);
+    act(() => result.current.notify({ details: { kind: "appUpdateAvailable", version: "0.4.2", ready: true } }));
+    expect(result.current.notifications).toHaveLength(1);
+    expect(result.current.unreadCount).toBe(1);
+  });
+
   it("keeps identical restored failures read without persisting their detailed text", () => {
     const first = renderHook(() => useNotificationCenter(true));
     const failure = { ...teamChanges, details: { kind: "remoteCheckFailed" as const, reason: "Server unavailable" } };

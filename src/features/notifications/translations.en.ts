@@ -37,6 +37,8 @@ export const en: NotificationsTranslations = {
   notificationChangesPublishedTo: (destination) => `Sent to ${destination}.`,
   notificationAppUpdateTitle: (version) => `App update: ${version}`,
   notificationAppUpdateDescription: "Open Updates to see its current status.",
+  notificationAppUpdateReadyTitle: (version) => `${version} finished downloading`,
+  notificationAppUpdateReadyDescription: "Install it from Updates when it suits you.",
   notificationAppUpdateAction: "View update",
   notificationUpstreamGoneTitle: (branch, remote) =>
     `${branch ? `“${branch}”` : "This branch"} is no longer on ${remote ? `“${remote}”` : "the remote"}`,

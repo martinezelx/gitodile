@@ -24,7 +24,7 @@ function makePort(overrides: Partial<IssueReportPort> = {}): IssueReportPort {
 function ReportHarness({ port }: { port: IssueReportPort }) {
   const report = useIssueReport("2.50.0", port);
   return <>
-    <TitlebarMenu onOpenHome={vi.fn()} onOpenAbout={vi.fn()} onOpenChangelog={vi.fn()} onOpenProject={vi.fn()}
+    <TitlebarMenu onOpenHome={vi.fn()} onOpenAbout={vi.fn()} onOpenProject={vi.fn()}
       onCreateProject={vi.fn()} onCloneProject={vi.fn()} onCloseProject={vi.fn()}
       onOpenSettings={vi.fn()} onOpenShortcuts={vi.fn()} hasProject={false}
       isOpeningProject={false} canReloadWindow isReportingIssue={report.isOpening}

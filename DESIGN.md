@@ -89,7 +89,7 @@ The main desktop window should broadly support:
 
 1. **Top bar** — implemented as a custom titlebar rather than a traditional File/Edit/View menu bar, which reads as legacy Win32/desktop-app chrome:
    - the overflow menu starts with Home (Inicio), a quiet way to the project-opening screen while projects remain open. The command palette offers the same destination, and so does the status bar's project popup, whose foot ends in "All in Home" (task 189): Home is the view of every project, so it sits with the projects rather than among the rail's destinations, which all belong to the active one. The titlebar and rail add no permanent Projects button.
-   - the overflow menu's rules separate four groups, in the order they are reached for: the project (Home, then open, create, clone and close), setting the app up (Settings, Keyboard shortcuts), the app itself (What's new, Check for updates, About GitOdile), and the way out when something is wrong (Report an issue, Reload window). Reload once sat beside Settings, pairing a daily entry with a rare recovery one; it belongs with the problem report. Entries that open a dialog asking for more end in an ellipsis, a shortcut the app owns is shown as quiet text at the row's end (`Ctrl+,` beside Settings), and no glyph appears twice in the menu. Opening a project is `FolderOpen` and creating one `FolderPlus` wherever either appears — Home, this menu, the project popup's add rows and the create dialog itself — and the menus spell the actions the same way, ellipsis included.
+   - the overflow menu's rules separate four groups, in the order they are reached for: the project (Home, then open, create, clone and close), setting the app up (Settings, Keyboard shortcuts), the app itself (the update entry, About GitOdile), and the way out when something is wrong (Report an issue, Reload window). Reload once sat beside Settings, pairing a daily entry with a rare recovery one; it belongs with the problem report. Entries that open a dialog asking for more end in an ellipsis, a shortcut the app owns is shown as quiet text at the row's end (`Ctrl+,` beside Settings), and no glyph appears twice in the menu. Opening a project is `FolderOpen` and creating one `FolderPlus` wherever either appears — Home, this menu, the project popup's add rows and the create dialog itself — and the menus spell the actions the same way, ellipsis included.
    - no brand: the titlebar is controls only and starts with the overflow menu, centred over the rail's icon column so the titlebar and the rail share one vertical axis (with no rail, it sits at the plain edge inset). It once carried the app mark in the corner (later the full mascot); a colour illustration in a row of line icons drew the eye to a spot that does nothing, and the operating system already shows the app icon. The mascot lives in the brand moments instead (see "Brand and mascot").
    - left: the rail collapse control and a compact overflow menu. The palette's trigger is not here: it is the field at the foot of the strip (see Status bar), and the shortcut (`Ctrl`/`Cmd`+`K`) reaches it from anywhere.
    - the collapse control doubles as a jump menu: while the rail is collapsed, resting on it opens the rail's destinations as a short menu hanging off the button, so a destination can be reached without expanding and re-collapsing the rail around a single click. It carries the rail's two groups — destinations and the app-level utilities. Projects are not in it: they are the status bar's, which stays on screen while the rail is collapsed (task 189). It is a menu, not a miniature rail — same furniture as every other flyout in the app.
@@ -97,7 +97,7 @@ The main desktop window should broadly support:
    - contextual history: Back/Forward stay together with the command controls. They remain visibly disabled until there is history to traverse, then become available without moving the surrounding chrome.
    - center: the remaining native drag region, including double-click maximize/restore.
    - right: window controls (minimize/maximize/close), styled as small rounded buttons inset from the edge rather than full-height square hit targets, so they read as part of the same rounded-corner system as the rest of the UI instead of bolted-on OS chrome.
-   - macOS is the one exception to this layout ([ADR 0037](docs/adr/0037-native-window-chrome-on-macos.md)). The system draws its traffic lights over the titlebar's left corner, and the titlebar reserves their width (except in full screen, where macOS hides them). There are no custom window controls and no overflow menu: its entries live in the macOS menu bar, under GitOdile (About, Check for updates, Settings…), File (Home and the project actions), View (sidebar, Back/Forward, Reload window), and Help (Keyboard shortcuts, What's new, Report an issue), beside the standard Edit and Window menus. The titlebar keeps the sidebar toggle, Back/Forward and the bell. Windows and Linux keep the layout above. An entry added to the overflow menu is added to `planAppMenu` too.
+   - macOS is the one exception to this layout ([ADR 0037](docs/adr/0037-native-window-chrome-on-macos.md)). The system draws its traffic lights over the titlebar's left corner, and the titlebar reserves their width (except in full screen, where macOS hides them). There are no custom window controls and no overflow menu: its entries live in the macOS menu bar, under GitOdile (About, the update entry, Settings…), File (Home and the project actions), View (sidebar, Back/Forward, Reload window), and Help (Keyboard shortcuts, What's new, Report an issue), beside the standard Edit and Window menus. The titlebar keeps the sidebar toggle, Back/Forward and the bell. Windows and Linux keep the layout above. An entry added to the overflow menu is added to `planAppMenu` too.
    - between the drag region and the window controls: the notification bell — the
      inbox for "what happened while you were elsewhere", which desktop apps keep
      in the window furniture rather than in a workspace panel. It carries no
@@ -508,24 +508,22 @@ The main desktop window should broadly support:
    - the strip carries no version and no update state. A version is a fact
      about the app, not about the project the reader is working on, so the
      update belongs where its news belongs: the notification centre announces
-     one once and is where it stays until it is resolved, the More actions menu
-     holds What's new and Check for updates, and the field reaches the updater
-     as a command. Nothing about the app's own state earns a shape here: green
+     one once and is where it stays until it is resolved, Settings › Updates
+     is where it is handled, the More actions menu leads there, and the field
+     reaches it as a command. Nothing about the app's own state earns a shape here: green
      belongs to the remote, and the app being fine is not a fact to restate.
-     The strip also carries no "all is well" dot, for the same reason. The changelog shares the About
-     dialog's shell and lists each release with its version, publication date
-     when known, notes, and a
-     marker for the build being run. Its header is the glyph mark beside the
-     title and, under the title, an update line that follows the state —
-     a state asking for action (a new version, ready to install, can't install
-     yet) is itself the link, a running check or download has no link, and
-     only "Up to date" or "Updates unavailable" adds "Check for updates" — so
-     the notes start high and no click is described twice. The build being run leads, with its
-     notes already open on the one tinted panel in the dialog — it is what the
-     reader opened the dialog to learn. Every earlier version follows under
-     "Earlier versions" as a one-line keyboard-accessible disclosure — bare
-     chevron, version, how many notes it carries, date — whose
-     notes stay collapsed until requested, so a long history still scans.
+     The strip also carries no "all is well" dot, for the same reason. What's
+     new has no surface of its own: it is a group of Settings › Updates (see
+     the application-update entry below), and every "What's new" in the app —
+     the macOS Help menu, the command palette, About and the startup toast —
+     opens that section at that group. It lists each release with its version,
+     publication date when known, notes, and a marker for the build being run.
+     An offered release leads, marked "New version"; otherwise the build being
+     run leads, marked "Your version", with its notes already open. Every
+     earlier version follows under "Earlier versions" as a one-line
+     keyboard-accessible disclosure — bare chevron, version, how many notes it
+     carries, date — whose notes stay collapsed until requested, so a long
+     history still scans.
      Each release's lines come from its own `docs/release/highlights/v<version>.json`
      — bilingual, one glyph per line, scaffolded by `release:prepare`, validated
      by `check:docs` and required by the merge coordinator — and the changelog
@@ -537,11 +535,10 @@ The main desktop window should broadly support:
      pipeline-only preview) is left out rather than shown empty; only the
      build being run is always listed, and says so when it has no lines. A
      checkout between releases, with no file yet, is listed undated.
-     Notes are bundled and open without a network request. A separate explicit
-     action opens the application-update dialog and starts its shared remote
-     check; mounting or expanding the Changelog never does. Remote update notes
-     remain bounded plain text inside that dialog, separate from the local
-     notes, and cannot load markup, links or images. The
+     Notes are bundled and open without a network request; opening the
+     section or a release never checks. An offered release whose feed carries
+     no highlights shows its remote notes as bounded plain text, which cannot
+     load markup, links or images. The
      titlebar stays reserved for global actions and window controls; no product
      name is repeated because the window is already the product;
    - the current branch is the strip's one navigation shortcut. Its
@@ -590,52 +587,82 @@ The main desktop window should broadly support:
      touch, named after the platform's file manager (Explorer, Finder, or a
      plain folder). "Technical details" is a separate card under the row,
      closed by default and read only when opened;
-   - application-update checks are a separate global concern. What's new (as
-     the link in the update line under its title, above the local notes and never among them), More actions,
-     the command palette and the Updates section of Settings all enter one
-     eager dialog backed by one feature-owned controller, including when no
-     project is open. Updates is its own settings section — it has state,
-     actions and a dialog of its own, like Git — so it never shares General
-     with the project-refresh group. Neither of its two groups is named
-     after the tab. The app's row is the shared installation row: the
-     installed version is a monospace chip beside the name, next to the state
-     chip, and a toned status line (icon and ink, no capsule) appears under
-     them only when it says more than the chip — the offered release, a
-     block, an unavailable check or a failure, as the cause when there is
-     one — so "why is it unavailable" needs no click. "Details" opens the dialog only when it has
-     something the row cannot say: a release, a transfer or an install to
-     confirm. Details stays available during a download, verification or
-     installation, so closing the dialog never removes the way back to progress
-     and, while downloading, cancellation. The dialog says the same thing the same way: mark beside the
-     title, everything on one left edge, one status line that is the cause
-     when there is one. "How you get updates" holds
-     no channel choice: every installation follows the one release feed
-     (ADR 0019). It holds one switch, on by default, for the
-     startup check — one bounded request when the app opens, repeated every
-     24 hours only while it stays open — disclosing the GitHub contact, that
-     repeat and the transmitted-data boundary beside it. A startup check that
-     finds a release records an app-wide notification (info tone, collapsing on
-     the version, opening the update dialog); one that finds nothing or fails
-     records nothing, because "still up to date" is not an event. The dialog wears the changelog's shell and states the
-     installed version before anything about the next one; a failure is its
-     one explanation, never a verdict line with the cause repeated beneath it.
-     Its copy never names the product and keeps each state to one short
-     line, and the title names the state whenever one applies (a new
-     version, downloading, verifying, ready, up to date, installing, can't
-     install yet). Checking never downloads; downloading never installs;
-     and the ready state is the install confirmation: it states the
-     close/restart consequence above "Not now" and "Install and restart",
-     and nothing installs without that button. Up to date closes as its
-     primary action, with checking again beside it. The manual download is
-     offered only where the cause's sentence recommends it — never offline,
-     after a timeout or for an edit the reader can finish. The first launch
-     after an install reports how it went without asking for anything when
-     it worked: a toast says "Updated to X.Y.Z" and, when that version has
-     highlights, offers "See what's new". Only a restart on the wrong version
-     opens the dialog, under its own title, with one sentence, a fresh check
-     and the manual download. Determinate and indeterminate progress use the
-     same stable region, dynamic state changes are announced, and reduced
-     motion replaces the moving indeterminate bar with a static fill;
+   - the application's update has one home, Settings › Updates
+     ([ADR 0044](docs/adr/0044-give-application-updates-one-home.md)). Every
+     way in — the update entry of More actions and of the macOS menu, the
+     command palette, the notification, About and the startup toast — opens
+     that section, including when no project is open, and none opens a modal.
+     An entry that says "check" checks only from a settled state with nothing
+     offered (not checked yet, up to date, cancelled, failed, unavailable): a
+     fresh check replaces the candidate, so from "Ready to install" it would
+     throw away the download the reader came to install. One feature-owned
+     controller backs the section. Updates is its own settings section — it
+     has state and actions of its own, like Git — so it never shares General
+     with the project-refresh group. Neither of its groups is named after the
+     tab. The first group is the app itself: its installation row, then the
+     startup-check switch as a second row, with no group title for one
+     switch; What's new follows as the reading part of the section. The app's
+     row is the shared installation row: the installed version is a monospace
+     chip beside the name, next to the state chip, which names the offered
+     version itself ("0.6.0 available") rather than leaving it to a second
+     line. Once current, the row's fact under the name says when — "Checked
+     5 min ago", in the status bar's wording for a check. A toned status line
+     (icon and ink, no capsule) appears only when it says more than the chip —
+     a block, an unavailable check or a failure, as the cause when there is
+     one. The row carries the whole lifecycle in place, with one contextual
+     primary in one spot: "Check for updates" (or "Check again" once
+     current), "Download (size)", "Install and restart" with the
+     close/restart consequence beside it as the row's hint, and "Try again"
+     for a retryable block or failure. Work in flight — checking,
+     downloading, verifying, installing — has no primary: the chip's spinner
+     and the progress say what is happening, and a grey button repeating the
+     chip's word offers nothing to press. A block a retry cannot clear, and a
+     development build that has nothing to check, have no primary either;
+     their line says why. Cancel stands beside the
+     primary while a named check or a download runs. The manual download is
+     always in the row, as the quiet external-link button the Git and gh rows
+     use for their guide ("Download manually from GitHub"); where the cause's
+     sentence recommends it — never offline, after a timeout or for an edit the
+     reader can finish — it becomes the labelled "Manual download" secondary
+     instead, so it is never offered twice. The
+     progress sits under the name: determinate and indeterminate progress use
+     the same stable region, outside the announced status, and reduced motion
+     replaces the moving indeterminate bar with a static fill. Checking never
+     downloads; downloading never installs; nothing installs without that
+     button. There is no channel choice: every installation follows the one
+     release feed (ADR 0019). The one switch, on by default, is for the
+     startup check — one bounded
+     request when the app opens, repeated once a day only while it stays
+     open, a day on the wall clock so time asleep counts; a check that
+     failed and can be retried tries again an hour later. Its label is
+     "Check for updates automatically", and its description says when and
+     that nothing from the projects is sent, without repeating the label's
+     verb or naming GitHub, which reads as the user's account there; the
+     release host is named by the row's manual-download link. It discloses
+     that repeat and the
+     transmitted-data boundary beside it. While a release can be downloaded,
+     installed or retried, the More actions trigger carries the bell's
+     accent dot, its accessible name adds which version waits, the Settings
+     rail marks Updates, and the update entry names the next step with the
+     solid arrow — "Update to X.Y.Z…", "Downloading X.Y.Z…", "Install
+     X.Y.Z…" — and is "Check for updates" otherwise. A background check that
+     finds a release records an app-wide notification (info tone, collapsing
+     on the version, opening Settings › Updates); one that finds nothing or
+     fails records nothing, because "still up to date" is not an event. A
+     download that finishes while Settings is closed moves that same entry
+     on to "X.Y.Z finished downloading" — an event, so it stays true after
+     the install — and marks it unread again, even when
+     the find was read; one watched in Settings records nothing. No
+     background check runs over a finished download: a check replaces the
+     offer, and would throw the download away. The
+     first launch after an install reports how it went without asking for
+     anything when it worked: a toast says "Updated to X.Y.Z" and, when that
+     version has highlights, offers "See what's new". Only a restart on the
+     wrong version interrupts: a dialog under its own title states the
+     installed version, says so in one sentence, and offers the manual
+     download and "Check again", which closes onto Settings › Updates and
+     checks there. The update copy never names the product and keeps each
+     state to one short line;
    - interactive chrome keeps the text at 13px and inline icons at 14px; a
      block segment stands 30px tall and the field 32px, on a 44px strip. Coarse
      pointers receive the standard 44px target and a correspondingly taller
@@ -1988,10 +2015,11 @@ versions down — cloning a project or the status bar's Get — (`CloudDownload`
 and getting and publishing in one confirmation (`CloudSync`). Updating
 GitOdile itself has nothing to do with
 that remote, so it never borrows the cloud: the app's updates are the circle
-with the arrow — `CircleFadingArrowUp` where the reader goes to look (Check for
-updates in the overflow menu, the update dialog's header, the Updates section
-in Settings, and the `circle-fading-arrow-up` release highlight), and the solid
-`CircleArrowUp` once a newer version has actually been found. The fading ring
+with the arrow — `CircleFadingArrowUp` where the reader goes to look (the
+update entry in the overflow menu, the restart dialog's header, the Updates
+section in Settings, and the `circle-fading-arrow-up` release highlight), and
+the solid `CircleArrowUp` once a newer version has actually been found, the
+overflow menu's update entry included. The fading ring
 completing into a whole one is the same glyph saying "there is one".
 
 That rule governs **controls** — the glyph vocabulary a user learns to operate the app. It does not govern **artwork naming somebody else's product**, which Lucide has no glyphs for at all: file-type icons in the Changes list, and the stack and operating-system marks in About. Those come from the vscode-icons set already installed for file types, or — for the three OS marks, which that set does not carry — are drawn in `src/app/vendorMarks.tsx` and used nowhere else. They keep their vendor colours, because a logo reduced to one ink stops being recognizable at 14px, which is the only job it has. That is the trade: About accepts a handful of fixed colours it does not own so that nothing else in the app has to. The exception is a mark whose brand colour is an ink rather than a hue — Apple's, monochrome by its own definition, and Tux's black body, which is a hole in the layout on the dark dialog surface. Those take `currentColor` and the dialog's own surface, so they are legible in both themes; what identifies Tux at 14px is the silhouette and the yellow beak, not which side of the ink it is on.
@@ -2027,10 +2055,10 @@ takes `--text-hero` and the promise `--text-title`, so the hierarchy comes from
 the scale rather than from three ad-hoc sizes. The running app version sits
 directly below the promise, and the line under it is the one thing About can
 honestly say about updates — "Up to date", or whichever state
-the release model is in — with the link to the changelog beside it. Version
-and update line come from the same release model
-as the changelog and the update dialog, so these surfaces cannot describe one
-build differently. The line names the state it is in — "Up to date" when the build is
+the release model is in — with the link to What's new beside it, which closes
+About onto Settings › Updates at that group. Version and update line come from
+the same release model as Settings › Updates, so the two cannot describe one
+build differently; the line is read-only and About offers no update action. The line names the state it is in — "Up to date" when the build is
 current, "Not checked yet" before the first check, "Updates unavailable" when
 the build carries no feed — so it is never blank, and the slot reads as a state
 rather than a fault. Only a failure About cannot explain stays silent, because
@@ -2115,7 +2143,7 @@ option in a menu or picker is selection, not success, and stays in the ink.
 | Remote | `--tone-remote` = `--status-renamed` | the remote and its copy | the origin cloud, a published version, Clone, Get changes and Connect a remote dialogs, the "new versions" and "published" notifications |
 | Local | `--tone-local` (theme token; the brand's lime in the official themes, success green in community ones) | saved here, not published | "On this computer" in the timelines of Overview, History and Branches, the Save version, Publish, Restore and Create project dialogs, Get-and-publish |
 | Done | `--status-success` | finished, all in order | every completion tick: "All in order" in the next step, done steps in dialogs and Home's setup, a saved version, a created project, "Everything is saved / published", "up to date" in About |
-| App | `--tone-app` (violet, per scheme) | GitOdile itself | What's new, Keyboard shortcuts, Report a problem, the Update dialog and the "new version of GitOdile" notification |
+| App | `--tone-app` (violet, per scheme) | GitOdile itself | Keyboard shortcuts, Report a problem, the restart dialog and the "new version of GitOdile" notification |
 
 Notifications take the tone of the dialog each one opens, and the status
 tones only for what asks for a decision: a line gone from the remote and a
@@ -2726,7 +2754,7 @@ button always, and nothing else unless the dialog needs it:
 - **Every dialog leads with its glyph**, in a neutral circle, in the tone of
   what it handles (§ Glyph tones): Save version, Publish, Restore and Create
   project in `local`; Get project changes, Clone and Connect a remote in
-  `remote`; the Update dialog and the issue report in `app`; a confirmation
+  `remote`; the update restart dialog and the issue report in `app`; a confirmation
   that removes work (discard, delete a branch) and an error in `danger`; a
   block in `warning`; a result in `success`; a plain question (close a
   project, a new branch, switch branches) or a cancellation in `neutral`. A rule
@@ -3136,7 +3164,7 @@ and denied-access states rather than a paragraph above every populated list.
 The interface should explain Git in plain language while preserving technical truth.
 
 **Application versions use the plain number.** Show `X.Y.Z` without a `v`
-prefix in About, What's new, Settings, update dialogs,
+prefix in About, What's new, Settings, the update restart dialog,
 notifications, Console, tooltips and accessible names. Badges and release
 headings need only the number where their context identifies it. Prose uses
 "version" / "versión" when needed: "Installed version: 0.3.1" / "Versión
@@ -3891,7 +3919,7 @@ that size would read as a dialog.
 
 **About separates what a maintainer needs from what the product is proud of.** Technical details answer "why is it broken on *your* machine": the platform, its build, the webview, the Git it found — all things that differ per install, and all things the copy button puts on the clipboard. Built with answers "what is this made of": Tauri, React, Rust, which are identical for every user of a given build and therefore explain nothing about a bug. Mixing the two produces a diagnostics block nobody can act on and a credits list nobody reads, so they are separate sections in separate shapes — label-and-value rows for the facts that vary, and, for the ones that do not, three rows that put the mark beside a small name-over-version block. The credits were capsules first, then bordered tiles (a mark above a name above a version), then an inline lockup, then rows that pushed each version to the right edge; the tiles gave a fact nobody reads a surface of its own, while the other two either crowded the marks or tore the number away from its name. The beside-the-mark block keeps name and version together and lets three credits sit in one band without shrinking type, which is why the fourth (the build tool's own language) stayed dropped. The heading is kept for assistive technology only, since a mark and a product name already read as a credit. Each credit is also a control that opens that project's own home page in the user's browser, because "built with Tauri" is a claim the reader should be able to check; it is a button rather than a link, since the destination is outside the app and an `href` would let a middle click navigate the webview the dialog sits in. It is a control, so it takes the pointing hand; the hand is what says the press leaves the app, and mark, name and version stay readable at rest so the credit withholds nothing without hovering. Its accessible name pairs the layer with the host it opens, so that fact reaches a screen reader before the press rather than after it, and every host is listed explicitly in the opener scope — an unlisted one simply fails to open. A value the app cannot establish is omitted, never filled with "unknown": a missing row says nothing, and a fabricated one sends a bug report the wrong way.
 
-**About names the product together with its promise.** The mascot leads at hero scale, then the correctly cased `GitOdile` name, then the localized promise. The name takes `--text-hero` and the promise `--text-title`, so the hierarchy comes from the scale rather than from three unrelated sizes, and the decorative mascot is hidden from assistive technology. The "Odile" half carries a light sweep in step with the mascot's wink — in the accent fill under a community theme, and in the ink's opposite under the GitOdile themes (white crossing black in light, black crossing white in dark), whose fill is the ink itself — the same 6.5s cycle and 1.2s start, the eye shut while the light is halfway across its 14% travel — so the wordmark and the mark move as one gesture, and reduced motion clears both. The `h2` still carries the name and the promise, so the dialog's accessible name identifies the app before stating its promise; the close control sits in the dialog's own corner above the hero rather than inline with the identity. The version moves into the top-left corner, a pill at the close control's own height and insets, so the two frame the identity as one header line; it still names the build exactly as the changelog and the update dialog do. Machine-specific rows sit under `Your system` / `Tu sistema`, not `Technical details`: platform, OS build, WebView and Git describe the reader's environment rather than an internal implementation. The copy control heads that section rather than trailing it — the label and the way to put it on the clipboard are one thing, and a full-width button below the list spent a row of height restating the same idea. It is a text action with a short visible label ("Copy"), because the section heading already names what is being copied, while its accessible name stays the full "Copy system info".
+**About names the product together with its promise.** The mascot leads at hero scale, then the correctly cased `GitOdile` name, then the localized promise. The name takes `--text-hero` and the promise `--text-title`, so the hierarchy comes from the scale rather than from three unrelated sizes, and the decorative mascot is hidden from assistive technology. The "Odile" half carries a light sweep in step with the mascot's wink — in the accent fill under a community theme, and in the ink's opposite under the GitOdile themes (white crossing black in light, black crossing white in dark), whose fill is the ink itself — the same 6.5s cycle and 1.2s start, the eye shut while the light is halfway across its 14% travel — so the wordmark and the mark move as one gesture, and reduced motion clears both. The `h2` still carries the name and the promise, so the dialog's accessible name identifies the app before stating its promise; the close control sits in the dialog's own corner above the hero rather than inline with the identity. The version moves into the top-left corner, a pill at the close control's own height and insets, so the two frame the identity as one header line; it still names the build exactly as Settings › Updates does. Machine-specific rows sit under `Your system` / `Tu sistema`, not `Technical details`: platform, OS build, WebView and Git describe the reader's environment rather than an internal implementation. The copy control heads that section rather than trailing it — the label and the way to put it on the clipboard are one thing, and a full-width button below the list spent a row of height restating the same idea. It is a text action with a short visible label ("Copy"), because the section heading already names what is being copied, while its accessible name stays the full "Copy system info".
 
 Licence and source links lead the facts, directly under the intro and above the diagnostics. They are durable project provenance, not part of the product pitch or machine diagnostics, so meeting the project's terms before its machine details keeps the introduction focused. The made-with credit closes the dialog instead, under the diagnostics and the credits it belongs with.
 
@@ -3899,8 +3927,8 @@ Licence and source links lead the facts, directly under the intro and above the 
 product-identity surface — the mascot at hero scale, a 28px name, 30px of
 padding — and for a while the open-failure alert and the close-project
 confirmation borrowed its shell, which is why a two-line sentence arrived under
-a heading sized for a logo. (The changelog and the shortcut sheet still extend
-About's shell on purpose: they are documents to read, not messages to answer.)
+a heading sized for a logo. (The shortcut sheet still extends
+About's shell on purpose: it is a document to read, not a message to answer.)
 Short message dialogs use the same shell as every other dialog in the app
 (§ Dialogs, size `s`). Two rules go with them. An error carries a circular
 `--status-danger` glyph beside its heading, because a failure should be

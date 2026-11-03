@@ -119,7 +119,17 @@ import {
 } from "../features/branches";
 import { createHistoryController, historyPort } from "../features/history";
 import { conflictsPort, createConflictsController, useConflictsState } from "../features/conflicts";
-import { appUpdatesPort, createAppUpdatesController, useAppUpdatesController, type UpdateState } from "../features/app-updates";
+import {
+  appUpdateTranslations,
+  appUpdatesPort,
+  checksOnOpen,
+  finishedDownloadOutOfSight,
+  createAppUpdatesController,
+  updateMenuLabel,
+  updateNeedsAttention,
+  useAppUpdatesController,
+  type UpdateState,
+} from "../features/app-updates";
 import { createConsoleSessionStore, useConsoleConfirmChanges } from "../features/console";
 import { TooltipHost } from "../shared/ui/tooltip";
 import { LoadingBar } from "../shared/ui/loadingBar";
@@ -271,11 +281,12 @@ function ViewLoadingFallback(): React.JSX.Element {
 }
 
 export function App(): React.JSX.Element {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [accountController] = useState(() => import.meta.env.DEV ? createMockAccountController() : null);
   const isAccountModalOpen = useAccountModal(accountController);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
-  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  /* Only a restart on the wrong version opens this; every other update state
+     lives in Settings › Updates (task 221). */
   const [isAppUpdateOpen, setIsAppUpdateOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   /* Declared beside the Settings flag because `hasBlockingDialog` below reads
@@ -929,6 +940,8 @@ export function App(): React.JSX.Element {
      create-project identity link — says so by passing it, so remembering the
      last visit only made the plain open unpredictable. */
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  /* Set by a "What's new" so Settings › Updates opens at that group. */
+  const [settingsRevealWhatsNew, setSettingsRevealWhatsNew] = useState(false);
   const gitlabAuth = useGitLabAuth(gitlabAuthPort, isSettingsOpen && settingsSection === "accounts");
   const githubAuth = useGitHubAuth(githubAuthPort, isSettingsOpen && settingsSection === "accounts");
   /* Home's "+" asks for another account, so Accounts opens with its provider
@@ -939,6 +952,7 @@ export function App(): React.JSX.Element {
    * it; everyone else gets General. */
   const openSettings = (section: SettingsSection = "general"): void => {
     setSettingsSection(section);
+    setSettingsRevealWhatsNew(false);
     setIsSettingsOpen(true);
   };
   /* The per-project panel. Opening it for a project that is not the active one
@@ -1013,6 +1027,18 @@ export function App(): React.JSX.Element {
     onBackgroundCheckSettled: (state) => backgroundUpdateResultRef.current(state),
   }));
   const appUpdates = useAppUpdatesController(appUpdatesController, automaticAppUpdates);
+  /** The one way into the app's update: Settings › Updates. A "check" entry
+   * checks only from a settled state with nothing offered, so the menu never
+   * throws away a download waiting to be installed. */
+  const openAppUpdates = ({ check = false, whatsNew = false }: { check?: boolean; whatsNew?: boolean } = {}): void => {
+    openSettings("updates");
+    setSettingsRevealWhatsNew(whatsNew);
+    if (check && checksOnOpen(appUpdatesController.getSnapshot().state)) void appUpdatesController.check();
+  };
+  const appUpdateMenuLabel = updateMenuLabel(appUpdates.state, language);
+  const appUpdateAttention = updateNeedsAttention(appUpdates.state) && "candidate" in appUpdates.state
+    ? appUpdateTranslations(language).attention(appUpdates.state.candidate.version)
+    : null;
   const activeWatcherRegistration = activeSession ? watcherRegistrations[activeSession.id] : undefined;
   const activeWatcherState: "starting" | "watching" | "off" | "unavailable" =
     !watchProjects
@@ -1047,6 +1073,20 @@ export function App(): React.JSX.Element {
       details: { kind: "appUpdateAvailable", version: state.candidate.version },
     });
   };
+  /* A download that finishes while Settings is closed finished out of sight:
+     the update's notification moves on to the next step. One the user watched
+     in Settings needs no receipt. */
+  const previousAppUpdateKind = useRef(appUpdates.state.kind);
+  useEffect(() => {
+    const version = finishedDownloadOutOfSight(previousAppUpdateKind.current, appUpdates.state, isSettingsOpen);
+    previousAppUpdateKind.current = appUpdates.state.kind;
+    if (version === null) return;
+    notificationCenter.notify({
+      projectId: null,
+      projectName: null,
+      details: { kind: "appUpdateAvailable", version, ready: true },
+    });
+  }, [appUpdates.state, isSettingsOpen, notificationCenter]);
   /* Travels with every save and publish rather than being read by Rust: it is
      a choice about what this app does with someone's project, not a fact about
      the project, and the command that acts on it is the one that must carry
@@ -2005,7 +2045,6 @@ export function App(): React.JSX.Element {
   const hasOpenDialog =
     hasBlockingDialog ||
     isAboutOpen ||
-    isChangelogOpen ||
     isAppUpdateOpen ||
     isShortcutsOpen ||
     isCloseConfirmOpen ||
@@ -2224,15 +2263,8 @@ export function App(): React.JSX.Element {
           },
         ]
       : []),
-    { id: "changelog", label: t.changelogTitle, action: () => setIsChangelogOpen(true) },
-    {
-      id: "check-app-updates",
-      label: t.commandCheckAppUpdates,
-      action: () => {
-        setIsAppUpdateOpen(true);
-        void appUpdatesController.check();
-      },
-    },
+    { id: "changelog", label: t.changelogTitle, action: () => openAppUpdates({ whatsNew: true }) },
+    { id: "check-app-updates", label: appUpdateMenuLabel, action: () => openAppUpdates({ check: true }) },
     { id: "about", label: t.aboutGitOdile, action: () => setIsAboutOpen(true) },
   ];
 
@@ -2493,7 +2525,7 @@ export function App(): React.JSX.Element {
   const appMenuSections = planAppMenu(
     {
       about: t.aboutGitOdile,
-      checkUpdates: t.commandCheckAppUpdates,
+      checkUpdates: appUpdateMenuLabel,
       settings: t.appMenuSettings,
       home: t.navHome,
       openProject: t.titlebarOpenProject,
@@ -2550,10 +2582,7 @@ export function App(): React.JSX.Element {
     accountController?.closePopover(true);
     switch (command) {
       case "about": setIsAboutOpen(true); return;
-      case "check-updates":
-        setIsAppUpdateOpen(true);
-        void appUpdatesController.check();
-        return;
+      case "check-updates": openAppUpdates({ check: true }); return;
       case "settings": openSettings(); return;
       case "home": navigateToView("home"); return;
       case "open-project": void handleOpenProject(); return;
@@ -2568,7 +2597,7 @@ export function App(): React.JSX.Element {
       case "go-forward": goForward(); return;
       case "reload-window": window.location.reload(); return;
       case "keyboard-shortcuts": setIsShortcutsOpen(true); return;
-      case "whats-new": setIsChangelogOpen(true); return;
+      case "whats-new": openAppUpdates({ whatsNew: true }); return;
       case "report-issue": void issueReport.report(); return;
     }
   };
@@ -2606,11 +2635,9 @@ export function App(): React.JSX.Element {
               <AccountControl controller={accountController} compact menuClassName="titlebar-menu__item" onOpen={onOpen} fallbackRef={fallbackRef} /> : undefined}
             onOpenHome={() => navigateToView("home")}
             onOpenAbout={() => setIsAboutOpen(true)}
-            onOpenChangelog={() => setIsChangelogOpen(true)}
-            onCheckAppUpdates={() => {
-              setIsAppUpdateOpen(true);
-              void appUpdatesController.check();
-            }}
+            appUpdateLabel={appUpdateMenuLabel}
+            appUpdateAttention={appUpdateAttention}
+            onCheckAppUpdates={() => openAppUpdates({ check: true })}
             onOpenProject={() => void handleOpenProject()}
             onCreateProject={() => setInitializeDialogRequest({ mode: "new-folder" })}
             onCloneProject={() => setIsCloneOpen(true)}
@@ -2784,9 +2811,9 @@ export function App(): React.JSX.Element {
           onReviewTeamChanges={reviewTeamChangesFromNotification}
           onReviewAppUpdate={() => {
             if (hasBlockingDialog) return false;
-            // The dialog uses the current updater snapshot, never the stored
+            // Settings shows the current updater snapshot, never the stored
             // notice's candidate/version. Opening it does not check or install.
-            setIsAppUpdateOpen(true);
+            openAppUpdates();
             return true;
           }}
           onOpenProjectOverview={openOverviewFromNotification}
@@ -3704,7 +3731,12 @@ export function App(): React.JSX.Element {
           projectAvatarStyle,
           setProjectAvatarStyle,
           section: settingsSection,
-          setSection: setSettingsSection,
+          // Leaving a section drops the What's new landing, so coming back to
+          // Updates opens at its top.
+          setSection: (section: SettingsSection) => {
+            setSettingsRevealWhatsNew(false);
+            setSettingsSection(section);
+          },
           gitTooling,
           ghTooling,
           githubAuth, gitlabAuth, glabTooling,
@@ -3722,6 +3754,7 @@ export function App(): React.JSX.Element {
           setAutomaticAppUpdates,
           appUpdates,
           appUpdatesController,
+          revealWhatsNew: settingsRevealWhatsNew,
           confirmDiscard,
           setConfirmDiscard,
           notificationsEnabled,
@@ -3747,8 +3780,11 @@ export function App(): React.JSX.Element {
           lineEndings,
         }}
         about={{ isOpen: isAboutOpen, setOpen: setIsAboutOpen }}
-        changelog={{ isOpen: isChangelogOpen, setOpen: setIsChangelogOpen }}
-        appUpdate={{ isOpen: isAppUpdateOpen, setOpen: setIsAppUpdateOpen }}
+        appUpdate={{
+          isOpen: isAppUpdateOpen,
+          setOpen: setIsAppUpdateOpen,
+          openUpdates: openAppUpdates,
+        }}
         shortcuts={{ isOpen: isShortcutsOpen, setOpen: setIsShortcutsOpen }}
         closeConfirmation={{
           isOpen: isCloseConfirmOpen,

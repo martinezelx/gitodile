@@ -168,7 +168,9 @@ describe("App shell", () => {
     expect(within(palette).getByText("Check remote project changes")).toBeInTheDocument();
     expect(within(palette).getByText("Check for updates")).toBeInTheDocument();
     await userEvent.click(within(palette).getByText("Check for updates"));
-    expect(screen.getByRole("dialog", { name: "Updates" })).toBeInTheDocument();
+    // The check opens Settings › Updates, the update's one home, not a modal.
+    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    expect(await within(settings).findByRole("switch", { name: "Check for updates automatically" })).toBeInTheDocument();
   });
 
   // Exercises real shell coordination, lazy resolver mounting and refresh;
@@ -207,26 +209,26 @@ describe("App shell", () => {
     expect(mockedInvoke.mock.calls.some(([command]) => ["plan_publish", "publish", "get_team_changes", "plan_bring_in_changes"].includes(String(command)))).toBe(false);
   });
 
-  it("opens the release notes and About from the overflow menu, not the status bar", async () => {
+  it("opens About from the overflow menu and its release notes in Settings, not the status bar", async () => {
     restoreProjectWithStatusBar();
     render(<LanguageProvider><App /></LanguageProvider>);
     const statusBar = await screen.findByRole("contentinfo", { name: "Project status" });
 
-    // The strip carries no version: the release notes open from the overflow
-    // menu now, where the update check sits beside them.
+    // The strip carries no version, and the titlebar carries no mark, so
+    // About opens from the overflow menu.
     expect(within(statusBar).queryByRole("button", { name: /What's new/ })).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "More actions" }));
-    await userEvent.click(screen.getByRole("menuitem", { name: "What's new" }));
-    const changelog = screen.getByRole("dialog", { name: "What's new" });
-    expect(within(changelog).getByRole("heading", { name: __APP_VERSION__ })).toBeInTheDocument();
-    expect(within(changelog).getByText("Your version")).toBeInTheDocument();
-    await userEvent.keyboard("{Escape}");
-
-    // The titlebar carries no mark, so About opens from the overflow menu.
     expect(screen.queryByRole("button", { name: "About" })).toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "More actions" }));
     await userEvent.click(screen.getByRole("menuitem", { name: "About GitOdile" }));
-    expect(screen.getByRole("dialog", { name: "GitOdile See everything. Undo anything." })).toBeInTheDocument();
+    const about = screen.getByRole("dialog", { name: "GitOdile See everything. Undo anything." });
+
+    // Its What's new leads to the one changelog, in Settings › Updates.
+    await userEvent.click(within(about).getByRole("button", { name: "What's new" }));
+    expect(screen.queryByRole("dialog", { name: "GitOdile See everything. Undo anything." })).toBeNull();
+    const settings = await screen.findByRole("dialog", { name: "Settings" });
+    const whatsNew = await within(settings).findByRole("region", { name: "What's new" });
+    expect(within(whatsNew).getByRole("heading", { name: __APP_VERSION__ })).toBeInTheDocument();
+    expect(within(whatsNew).getByText("Your version")).toBeInTheDocument();
   });
 
   it("records both outcomes of an automatic check, and offers the review flow from the notification", async () => {

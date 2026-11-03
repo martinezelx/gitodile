@@ -923,7 +923,8 @@ describe("production style composition", () => {
       ".settings-dialog": null,
       ".about-dialog": ".about-dialog:focus-visible",
       ".issue-report-dialog__report-body": ".issue-report-dialog__report:has(.issue-report-dialog__report-body:focus-visible)",
-      ".changelog-dialog__body": null,
+      // Focused when a "What's new" opens Settings › Updates; the scroll is the cue.
+      ".app-whats-new:focus": null,
       ".text-field input": ".text-field input:focus-visible",
       ".text-field select": ".text-field select:focus-visible",
       ".search-box__field input": ".search-box:has(.search-box__field input:focus)",

@@ -59,7 +59,9 @@ export function useNotificationCenter(isEnabled: boolean): NotificationCenterSto
     const request = { id, createdAt: Date.now(),
       details: event.details, projectId: event.projectId ?? null, projectName: event.projectName ?? null };
     setHistory((current) => {
-      if (event.details.kind === "appUpdateAvailable"
+      /* Reading "available" acknowledges the find, not the download that
+         followed: "ready" is new news about the same version. */
+      if (event.details.kind === "appUpdateAvailable" && !event.details.ready
         && event.details.version === current.acknowledgedUpdateVersion) return current;
       return { ...current, notifications: recordNotification(current.notifications, request) };
     });

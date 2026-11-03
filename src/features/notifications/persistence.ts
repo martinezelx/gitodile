@@ -46,7 +46,8 @@ function details(value: unknown): NotificationDetails | null {
       return count(value.versionCount) && nullableText(value.destination, 2048)
         ? { kind: value.kind, versionCount: value.versionCount, destination: value.destination } : null;
     case "appUpdateAvailable":
-      return version(value.version) ? { kind: value.kind, version: value.version } : null;
+      if (!version(value.version) || !(value.ready === undefined || value.ready === true)) return null;
+      return value.ready ? { kind: value.kind, version: value.version, ready: true } : { kind: value.kind, version: value.version };
     default: return null;
   }
 }

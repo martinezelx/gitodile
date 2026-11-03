@@ -81,7 +81,7 @@ export const es: SettingsTranslations = {
   notificationsEventPublishedLabel: "Cambios que publicas",
   notificationsEventPublishedDescription: "Un recibo de lo que enviaste.",
   notificationsEventAppUpdateLabel: "Versiones nuevas de la aplicación",
-  notificationsEventAppUpdateDescription: "Se detecta al iniciar y no se descarga nada solo.",
+  notificationsEventAppUpdateDescription: "Al encontrar una y cuando su descarga está lista.",
   notificationsEventUpstreamGoneLabel: "Se borra la rama remota de una rama",
   notificationsEventUpstreamGoneDescription: "Normalmente al fusionar su PR. Tu trabajo se queda en tu ordenador.",
   settingsGitToolTitle: "Git en tu ordenador",
