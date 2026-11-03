@@ -520,7 +520,7 @@
   left: 13px;
   width: 10px;
   height: 10px;
-  border: 1.5px solid color-mix(in srgb, var(--text-secondary-color) 52%, transparent);
+  border: 1.5px solid var(--node-ring);
   border-radius: var(--radius-round);
   background: var(--surface-panel);
   box-shadow: 0 0 0 2px var(--surface-panel);

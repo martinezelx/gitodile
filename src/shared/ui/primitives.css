@@ -274,7 +274,7 @@
 .inclusion-node__mark {
   width: 10px; height: 10px;
   box-sizing: border-box;
-  border: 1.5px solid color-mix(in srgb, var(--text-secondary-color) 52%, transparent);
+  border: 1.5px solid var(--node-ring);
   border-radius: var(--radius-round);
   background: transparent;
   transition: border-color var(--duration-fast), background-color var(--duration-fast), box-shadow var(--duration-fast), opacity var(--duration-fast);

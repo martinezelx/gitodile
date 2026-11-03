@@ -784,7 +784,8 @@ The main desktop window should broadly support:
      reading Linear gives its status glyphs, and it survives greyscale. The fill is
       `--node-fill`: 65% of the primary ink over the panel, the same recipe in
       light and dark, so a column of saved nodes sits a step below the one
-      accent node without losing the solid state.
+      accent node without losing the solid state. An empty node's ring is
+      `--node-ring`, half the secondary ink, on every screen that draws one.
      History's timeline draws its nodes the
      same way (an unknown publication stays an empty ring), and both ring the
      node in the accent with a soft halo under the pointer rather than filling
@@ -1467,9 +1468,10 @@ Changes strip already carries the select-all control, the pill and `⋯` in ~300
 It shows the layout in use and is pressed, in the accent, while the list is
 in folders. In folders, a chain of folders that hold nothing but the next one
 is one row (`src/features/history`); a folder shows how many files it holds
-and which kinds of change they are, as dots, so a folded folder still says
-it; a file under a folder drops its own folder line; each level steps in 16px
-with a hairline under the parent. The project root's own files come last and
+and, while folded, which kinds of change they are, as dots — an open folder
+drops them, because its files below already say their kind; a file under a
+folder drops its own folder line; each level steps in 16px with a hairline
+under the parent. The project root's own files come last and
 loose, as an IDE draws them, and keep the list's row — name and `Project root`
 under it — because no folder stands over them: the switch never reshapes a
 row it is not grouping. (A `Project root` folder was tried and dropped: it
@@ -2118,12 +2120,12 @@ set, so switching leaves no value behind.
 | `--accent-primary` = `-fill` / `-contrast` | `#1c1917` / `#ffffff` | `#fafaf9` / `#0c0a09` |
 | `--surface-hover` / `--surface-active` | ink at 5% / 8% | ink at 6% / 10% |
 | `--focus-ring` | `#1c1917` | `#fafaf9` |
-| `--status-success` = `--diff-added` | `#3f6a3b` | `#93c48a` |
+| `--status-success` = `--diff-added` | `#38624c` | `#93c48a` |
 | `--status-danger` = `--diff-removed` | `#a83a32` | `#f08a80` |
 | `--status-warning` | `#7a5714` | `#dcb064` |
 | `--status-renamed` (the remote's blue) | `#2a66a6` | `#7eb0f5` |
-| `--tone-local` (saved here) | `#44701a` | `#a8d26b` |
-| `--accent-heart` (raspberry, apart from danger) | `#b8326a` | `#f27aa8` |
+| `--tone-local` (saved here) | `#45770e` | `#bbd950` |
+| `--accent-heart` (raspberry, apart from danger) | `#bd3073` | `#f673b6` |
 | Syntax | greys | greys |
 
 With an ink accent, colour no longer sets a link apart from the words around
@@ -2135,13 +2137,24 @@ in `tokens.css` and `themes.css`, so every palette and scheme keeps them in its
 own hues and contrast. Each reads apart from the others and from the status
 colours: the local lime is not success's green or an added line's, and the
 favourite's raspberry is not danger's red. There are two greens and each says
-one thing: lime is waiting here, green is done. A tick that marks the chosen
+one thing: lime is waiting here, green is done. In every theme each
+pair of tones — remote, local, done, warning, danger, heart and app — sits at
+least 10 apart in OKLab (×100; about 2 is the smallest step the eye notices),
+and the contrast contract below measures it. That is normal vision only: under
+colour blindness red, amber and the greens meet in any palette, which is why a
+tone never carries a meaning without its glyph. A community theme reaches the
+floor with its own palette: each role takes another of its published hues,
+moved only in lightness — saved here a teal, frost or second green beside its
+success green, the heart its pink, magenta or purple — and its block in
+`themes.css` names what moved. Solarized and Gruvbox Dark have no hue left
+over, so their saved-here is the remote's own hue at another lightness: the
+floor holds, and the laptop and cloud glyphs tell the two apart. A tick that marks the chosen
 option in a menu or picker is selection, not success, and stays in the ink.
 
 | Tone | Token | Means | Where |
 |---|---|---|---|
 | Remote | `--tone-remote` = `--status-renamed` | the remote and its copy | the origin cloud, a published version, Clone, Get changes and Connect a remote dialogs, the "new versions" and "published" notifications |
-| Local | `--tone-local` (theme token; the brand's lime in the official themes, success green in community ones) | saved here, not published | "On this computer" in the timelines of Overview, History and Branches, the Save version, Publish, Restore and Create project dialogs, Get-and-publish |
+| Local | `--tone-local` (theme token; the brand's lime in the official themes, a hue of its own palette apart from success in community ones) | saved here, not published | "On this computer" in the timelines of Overview, History and Branches, the Save version, Publish, Restore and Create project dialogs, Get-and-publish |
 | Done | `--status-success` | finished, all in order | every completion tick: "All in order" in the next step, done steps in dialogs and Home's setup, a saved version, a created project, "Everything is saved / published", "up to date" in About |
 | App | `--tone-app` (violet, per scheme) | GitOdile itself | Keyboard shortcuts, Report a problem, the restart dialog and the "new version of GitOdile" notification |
 
@@ -2184,6 +2197,8 @@ theme that fails one:
 - Secondary text measurably quieter than primary (at least 1.25:1 between
   them), and in dark themes a raised surface lighter than the panel, so a menu
   lifts off the page instead of reading as a hole in it.
+- In every theme, every glyph tone at least 10 (OKLab ×100) from
+  every other, so no two kinds of thing share a colour (§ Glyph tones).
 
 Selected text (`::selection` in `base.css`) is a 24% tint of the accent fill
 written in primary text, the strength at which that text still clears 4.5:1

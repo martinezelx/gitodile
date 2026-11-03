@@ -67,6 +67,11 @@ colour for meaning).
   success green. The favourite heart takes its own raspberry
   (`#b8326a` / `#f27aa8`) rather than danger's red, and the light remote
   blue darkened to `#2a66a6` so it stays at 4.5:1 on a selected row.
+  *Amended 2026-11-03:* `themeContrast.test.ts` now holds every pair of glyph
+  tones at least 10 apart in OKLab in every theme. The official lime, green,
+  heart and dark violet moved a few steps to pass (DESIGN.md has the current
+  values), and community themes no longer give "saved here" their success
+  green or the heart their red: each takes another hue of its own palette.
 - Two greens, one meaning each: lime for "saved here, waiting to publish"
   (publish, a new project) and success green for "done" (every completion
   tick, a saved version, added lines). Selection ticks stay in the ink.

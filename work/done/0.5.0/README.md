@@ -1,6 +1,6 @@
 # Completed work — 0.5.0
 
-23 completed task records. IDs, parent relationships, completion dates
+25 completed task records. IDs, parent relationships, completion dates
 and accepted deferred criteria are preserved.
 
 ## Version evidence
@@ -19,7 +19,9 @@ bars with capsules and joined replacements on that same date and branch, and
 task 218 aligns the arrival contour and fragment marks after it. Task 219 moves the
 console mascot between the welcome and the watermark on the same date and branch.
 Task 220 has the issue report copy and open GitHub in one action and guide the
-paste, on the same branch on 2026-11-03. This archive records completed
+paste, on the same branch on 2026-11-03. Task 221 gives application updates
+one home in Settings, and task 222 keeps the glyph tones apart and drops the
+open folders' change dots, on the same branch and date. This archive records completed
 implementation, not publication of 0.5.0. See the
 [version closeout](../../0.5.0/README.md) and
 [qualification matrix](../../assets/0.5.0-closure/closure-audit.md).
@@ -54,5 +56,6 @@ implementation, not publication of 0.5.0. See the
 | 219 | 2026-11-02 | [Move the console mascot between the welcome and the watermark](219-console-mascot-motion.md) |
 | 220 | 2026-11-03 | [Issue report copies, opens and guides the paste](220-issue-report-copy-and-finish.md) |
 | 221 | 2026-11-03 | [Give application updates one home in Settings](221-one-home-for-app-updates.md) |
+| 222 | 2026-11-03 | [Keep glyph tones apart and spend colour once](222-colour-system-review.md) |
 
 Archive organization and assignment rules are in [work/README.md](../../README.md).

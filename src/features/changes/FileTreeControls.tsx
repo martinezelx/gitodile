@@ -47,8 +47,9 @@ export function treeIndentStyle(depth: number): React.CSSProperties {
 }
 
 /** A folder in a file tree: the caret, the folder, its name (a compacted
- * chain prints as `src/features/history`), then how many files it holds and
- * which kinds of change they are. The button folds and unfolds it; `←` and
+ * chain prints as `src/features/history`), then how many files it holds and,
+ * while it is folded, which kinds of change they are: an open folder's files
+ * say their own kind below it. The button folds and unfolds it; `←` and
  * `→` do the same from the keyboard, the way every tree answers them.
  *
  * `leading` is what a host puts before it — Changes' include box. */
@@ -77,9 +78,11 @@ export function FileTreeFolderButton<T extends { category: ChangeCategory }>({ r
       {row.expanded ? <FolderOpen className="file-tree-folder__icon" aria-hidden="true" /> : <Folder className="file-tree-folder__icon" aria-hidden="true" />}
       <span className="file-tree-folder__name">{row.label}</span>
       <span className="file-tree-folder__summary" aria-hidden="true">
-        <span className="file-tree-folder__kinds">
-          {kinds.map((kind) => <span key={kind} className={`file-tree-folder__kind file-tree-folder__kind--${kind}`} />)}
-        </span>
+        {!row.expanded && (
+          <span className="file-tree-folder__kinds">
+            {kinds.map((kind) => <span key={kind} className={`file-tree-folder__kind file-tree-folder__kind--${kind}`} />)}
+          </span>
+        )}
         <span className="file-tree-folder__count">{count}</span>
       </span>
     </button>

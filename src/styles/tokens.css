@@ -234,6 +234,11 @@
      column out-shouting the one accent node. One derived value, no per-theme
      colour to maintain; `themeContrast.test.ts` holds its 3:1 floor. */
   --node-fill: color-mix(in srgb, var(--text-primary-color) 65%, var(--surface-panel));
+  /* The same node's ring at rest, before it is filled: the empty state of the
+     included file in Changes and of a version in Overview, History and the
+     Branches recent list. Half the secondary ink, so the empty ring reads as a
+     place and never as a version. Five copies had said it before. */
+  --node-ring: color-mix(in srgb, var(--text-secondary-color) 52%, transparent);
   /* Deliberately theme-independent (unlike every other --surface-* token):
      a tooltip that flips light/dark with the app loses the one property
      that makes this style work — reliable contrast over *anything* behind
@@ -294,9 +299,9 @@
      (only on this computer, publish, a new project) is `--tone-local`, a
      theme token of its own (themes.css): the official themes give it the
      brand's lime so it reads apart from success and added lines; community
-     themes keep their success green. GitOdile itself (what's new, shortcuts,
-     reporting a problem) takes a violet no status uses, per scheme like the
-     console's root. */
+     themes take another hue of their own palette. GitOdile itself (what's
+     new, shortcuts, reporting a problem) takes a violet no status uses, per
+     scheme like the console's root. */
   --tone-remote: var(--status-renamed);
   --tone-app: #6a3fd4;
 }
@@ -304,9 +309,9 @@
 @supports (color: light-dark(#000, #fff)) {
   :root {
     --avatar-ring: 0 0 0 2px light-dark(transparent, rgba(0, 0, 0, 0.9));
-    --console-root: light-dark(#6a3fd4, #b79cff);
+    --console-root: light-dark(#6a3fd4, #c399fe);
     --console-root-contrast: light-dark(#ffffff, #1c1233);
-    --tone-app: light-dark(#6a3fd4, #b79cff);
+    --tone-app: light-dark(#6a3fd4, #c399fe);
   }
 }
 
