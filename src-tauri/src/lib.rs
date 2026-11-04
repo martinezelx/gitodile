@@ -280,6 +280,7 @@ pub fn run() {
             ipc::read_history_page,
             ipc::read_saved_version_detail,
             ipc::read_saved_version_file_diff,
+            ipc::read_saved_version_file_markdown,
             ipc::plan_publish,
             ipc::publish,
             ipc::get_branches,

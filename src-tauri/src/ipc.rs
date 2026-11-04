@@ -1680,6 +1680,30 @@ pub(crate) fn read_saved_version_file_diff(
 }
 
 #[tauri::command(async)]
+pub(crate) fn read_saved_version_file_markdown(
+    cache: tauri::State<'_, history::HistoryReadCache>,
+    path: String,
+    snapshot_token: String,
+    commit: String,
+    file_path: String,
+    session_epoch: String,
+) -> Result<MarkdownPreview, AppError> {
+    report_result(
+        "read_saved_version_file_markdown",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            history::read_saved_version_file_markdown_cached(
+                &cache,
+                path,
+                snapshot_token,
+                commit,
+                file_path,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
 pub(crate) fn plan_publish(
     path: String,
     remote: Option<String>,

@@ -143,6 +143,7 @@
     { "name": "read_history_page", "arguments": ["path", "cursor?", "pageSize?", "filters?", "scope?", "sessionEpoch"], "response": "HistoryPage" },
     { "name": "read_saved_version_detail", "arguments": ["path", "snapshotToken", "commit", "sessionEpoch"], "response": "SavedVersionDetail" },
     { "name": "read_saved_version_file_diff", "arguments": ["path", "snapshotToken", "commit", "filePath", "sessionEpoch"], "response": "FileDiff" },
+    { "name": "read_saved_version_file_markdown", "arguments": ["path", "snapshotToken", "commit", "filePath", "sessionEpoch"], "response": "MarkdownPreview" },
     { "name": "plan_publish", "arguments": ["path", "remote?", "upTo?", "sessionEpoch"], "response": "PublishPlan" },
     { "name": "publish", "arguments": ["path", "remote", "stateToken", "upTo?", "runHooks", "sessionEpoch"], "response": "PublishResult" },
     { "name": "get_branches", "arguments": ["path", "sessionEpoch"], "response": "BranchesSnapshot" },

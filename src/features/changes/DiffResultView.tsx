@@ -923,21 +923,16 @@ function DiffHunkList({
     virtualizer.scrollToIndex(rowIndex, { align: "start" });
   }, [hunkTarget.token, viewMode]);
 
-  const [arrivalHunk, setArrivalHunk] = useState<number | null>(null);
+  // The change the arrows stand on, until they move or the diff does: a hunk's
+  // index means another change once the file is read again. Opening a file
+  // stands on nothing, though its first change is the one counted.
+  const [currentHunk, setCurrentHunk] = useState<number | null>(null);
   const previousNavigation = useRef({ filePath, token: hunkTarget.token });
   useEffect(() => {
     const previous = previousNavigation.current;
     previousNavigation.current = { filePath, token: hunkTarget.token };
-    setArrivalHunk(null);
-    if (previous.filePath !== filePath || previous.token === hunkTarget.token || hunkTarget.token === 0) return;
-    setArrivalHunk(hunkTarget.index);
-    // Same attention lifetime as the rest of the app. This is a static outline,
-    // with no animated travel or fade, including under reduced motion.
-    const duration = scrollRef.current ? getComputedStyle(scrollRef.current).getPropertyValue("--attention-duration").trim() : "";
-    const milliseconds = Number.parseFloat(duration) * (duration.endsWith("ms") ? 1 : 1000);
-    const timer = window.setTimeout(() => setArrivalHunk(null), Number.isFinite(milliseconds) ? milliseconds : 2400);
-    return () => window.clearTimeout(timer);
-  }, [filePath, hunkTarget.token]);
+    setCurrentHunk(previous.filePath !== filePath || previous.token === hunkTarget.token || hunkTarget.token === 0 ? null : hunkTarget.index);
+  }, [filePath, hunkTarget.token, hunks]);
 
   useEffect(() => {
     if (!normalizedSearch) return;
@@ -998,20 +993,17 @@ function DiffHunkList({
           // margin with the border's `padding-top`, pushing the chip down
           // and off-center on every hunk after the first.
           const isHunkStart = row.kind !== "marker" && row.hunkIndex > 0 && isFirstRowOfHunk(rows, virtualRow.index);
-          const changed = (candidate: (typeof rows)[number] | undefined): boolean => Boolean(candidate && candidate.hunkIndex === arrivalHunk &&
-            (candidate.kind === "line" ? candidate.line.kind !== "context" : candidate.kind === "pair" &&
-              (candidate.left?.kind === "deletion" || candidate.right?.kind === "addition")));
+          const current = row.hunkIndex === currentHunk && (row.kind === "line" ? row.line.kind !== "context" : row.kind === "pair" &&
+            (row.left?.kind === "deletion" || row.right?.kind === "addition"));
           const edgeClasses = (block: string, column: 0 | 1): string =>
             diffRunEdges(rows, virtualRow.index, column).map((edge) => ` ${block}--${edge}`).join("");
-          const arrival = changed(row);
-          const arrivalClass = arrival ? ` diff-row--arrival${changed(rows[virtualRow.index - 1]) ? "" : " diff-row--arrival-start"}${changed(rows[virtualRow.index + 1]) ? "" : " diff-row--arrival-end"}` : "";
           return (
             <div
               key={virtualRow.key}
               data-index={virtualRow.index}
               data-row-kind={row.kind === "marker" ? "marker" : undefined}
               ref={measureRow}
-              className={`diff-row${isHunkStart ? " diff-row--hunk-start" : ""}${arrivalClass}`}
+              className={`diff-row${isHunkStart ? " diff-row--hunk-start" : ""}${current ? " diff-row--current" : ""}`}
               style={{ position: "absolute", top: 0, left: 0, transform: `translateY(${virtualRow.start}px)` }}
             >
               {row.kind === "marker" ? (

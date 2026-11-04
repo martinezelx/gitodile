@@ -1,8 +1,9 @@
-import { diffArrays, diffLines } from "diff";
+import { diffArrays, diffLines, diffWordsWithSpace } from "diff";
 import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
-import type { Definition, List, Nodes, Root, RootContent } from "mdast";
+import type { Definition, Heading, List, Nodes, Paragraph, PhrasingContent, Root, RootContent, TableCell } from "mdast";
+import { changedWordRanges, WORD_DIFF_LIMITS, type DiffRange } from "./diffDetails";
 import type { DiffHunk } from "./domain";
 
 export type MarkdownChanges = { removed: Set<number>; added: Set<number> };
@@ -40,6 +41,28 @@ function walk(node: Nodes, visit: (node: Nodes) => void, depth = 0): void {
   if (depth > 80) throw new ComparisonLimit();
   visit(node);
   if ("children" in node) node.children.forEach((child) => walk(child, visit, depth + 1));
+}
+
+type HastNode = { type: string; tagName?: string; properties?: Record<string, unknown>; children?: HastNode[] };
+
+function isChangeMark(classes: unknown): boolean {
+  return Array.isArray(classes) && classes.some((value) => value === "markdown-preview__added" || value === "markdown-preview__removed");
+}
+
+/** Markdown-to-HTML puts a code node's properties on the inner `<code>`, but
+ * the block a reader sees is its `<pre>`: marked there, the tint fell line by
+ * line behind the text and the block could never join its neighbour. */
+export function rehypeMarkCodeBlocks(): (tree: HastNode) => void {
+  const lift = (node: HastNode): void => {
+    const code = node.tagName === "pre" ? node.children?.find((child) => child.tagName === "code") : undefined;
+    if (code && isChangeMark(code.properties?.className)) {
+      const { className, "data-markdown-change": stop, ...rest } = code.properties!;
+      node.properties = { ...node.properties, className, ...(stop === undefined ? {} : { "data-markdown-change": stop }) };
+      code.properties = rest;
+    }
+    node.children?.forEach(lift);
+  };
+  return lift;
 }
 
 function mark(node: Nodes, tone: "added" | "removed"): void {
@@ -111,15 +134,176 @@ function prepare(source: string, side: string, keys: WeakMap<Nodes, string>): Ro
 
 export type UnifiedMarkdown = MarkdownChanges & { tree: Root; changeCount: number };
 
+type Phrasing = Paragraph | Heading | TableCell;
+
+/** Stands for an inline that has no text of its own, an image or a break, so
+ * that offsets across a block still line up. */
+const INLINE_OBJECT = "\uFFFC";
+/** Below this share of shared text two blocks are a rewrite, not an edit, and
+ * marks scattered over a rewrite read worse than none. */
+const MIN_SHARED_TEXT = 0.4;
+
+function phrasingText(children: PhrasingContent[]): string {
+  return children.map((child) => child.type === "text" || child.type === "inlineCode" ? child.value
+    : "children" in child ? phrasingText(child.children as PhrasingContent[]) : INLINE_OBJECT).join("");
+}
+
+/** The inline text of a replaced block that lines up with its replacement. */
+function phrasingPairs(oldNode: RootContent, newNode: RootContent): Array<[Phrasing, Phrasing]> {
+  if ((oldNode.type === "paragraph" && newNode.type === "paragraph") || (oldNode.type === "heading" && newNode.type === "heading")) return [[oldNode, newNode]];
+  if (oldNode.type === "tableRow" && newNode.type === "tableRow" && oldNode.children.length === newNode.children.length) {
+    return oldNode.children.map((cell, index): [Phrasing, Phrasing] => [cell, newNode.children[index]]);
+  }
+  if (oldNode.type === "listItem" && newNode.type === "listItem" && oldNode.children.length === 1 && newNode.children.length === 1) {
+    const [before] = oldNode.children;
+    const [after] = newNode.children;
+    if (before.type === "paragraph" && after.type === "paragraph") return [[before, after]];
+  }
+  return [];
+}
+
+/** One range per changed phrase: words split only by spaces read as one mark,
+ * and a change of spacing alone marks nothing. */
+function phraseRanges(ranges: DiffRange[], text: string): DiffRange[] {
+  const phrases: DiffRange[] = [];
+  for (const { start, end } of ranges) {
+    const value = text.slice(start, end);
+    const trimmed = value.trim();
+    if (trimmed === "") continue;
+    const from = start + value.indexOf(trimmed);
+    const to = from + trimmed.length;
+    const last = phrases[phrases.length - 1];
+    if (last && text.slice(last.end, from).trim() === "") last.end = to;
+    else phrases.push({ start: from, end: to });
+  }
+  return phrases;
+}
+
+function changedWord(children: PhrasingContent[]): PhrasingContent {
+  return { type: "emphasis", children, data: { hName: "span", hProperties: { className: ["markdown-preview__word"] } } };
+}
+
+function wrapRanges(children: PhrasingContent[], ranges: DiffRange[], offset = { value: 0 }): PhrasingContent[] {
+  return children.flatMap((child): PhrasingContent[] => {
+    if ("children" in child) {
+      child.children = wrapRanges(child.children as PhrasingContent[], ranges, offset) as typeof child.children;
+      return [child];
+    }
+    if (child.type !== "text" && child.type !== "inlineCode") {
+      offset.value += INLINE_OBJECT.length;
+      return [child];
+    }
+    const start = offset.value;
+    const end = start + child.value.length;
+    offset.value = end;
+    const touching = ranges.filter((range) => range.start < end && range.end > start);
+    if (touching.length === 0) return [child];
+    if (child.type === "inlineCode") return [changedWord([child])];
+    const pieces: PhrasingContent[] = [];
+    let cursor = start;
+    for (const range of touching) {
+      const from = Math.max(range.start, start);
+      const to = Math.min(range.end, end);
+      if (from > cursor) pieces.push({ type: "text", value: child.value.slice(cursor - start, from - start) });
+      pieces.push(changedWord([{ type: "text", value: child.value.slice(from - start, to - start) }]));
+      cursor = to;
+    }
+    if (cursor < end) pieces.push({ type: "text", value: child.value.slice(cursor - start) });
+    return pieces;
+  });
+}
+
+/** Marks what differs inside replaced blocks, on the budget the text diff's own
+ * exact fragments use. Running out leaves the remaining blocks marked whole. */
+function markChangedWords(replacements: Array<[RootContent, RootContent]>): void {
+  const started = performance.now();
+  let characters = 0;
+  let pairs = 0;
+  for (const [oldNode, newNode] of replacements) {
+    for (const [oldBlock, newBlock] of phrasingPairs(oldNode, newNode)) {
+      if (++pairs > 256 || performance.now() - started > 20) return;
+      const before = phrasingText(oldBlock.children);
+      const after = phrasingText(newBlock.children);
+      const size = before.length + after.length;
+      characters += size;
+      if (characters > 65_536) return;
+      if (size > 4096 || before === after) continue;
+      const changes = diffWordsWithSpace(before, after, WORD_DIFF_LIMITS);
+      if (!changes) continue;
+      const solid = (text: string): number => text.replace(/\s/g, "").length;
+      const shared = changes.filter((part) => !part.added && !part.removed).map((part) => part.value).join("");
+      if (!/[\p{L}\p{N}]/u.test(shared) || solid(shared) < Math.max(solid(before), solid(after)) * MIN_SHARED_TEXT) continue;
+      const { oldRanges, newRanges } = changedWordRanges(changes);
+      oldBlock.children = wrapRanges(oldBlock.children, phraseRanges(oldRanges, before)) as typeof oldBlock.children;
+      newBlock.children = wrapRanges(newBlock.children, phraseRanges(newRanges, after)) as typeof newBlock.children;
+    }
+  }
+}
+
+export type MarkdownFold = { start: number; count: number };
+
+/** Shorter runs would save less room than the row that replaces them. */
+const MIN_FOLDED_BLOCKS = 4;
+
+function holdsChange(node: Nodes): boolean {
+  return isChangeMark(node.data?.hProperties?.className) || ("children" in node && node.children.some(holdsChange));
+}
+
+/** The long unchanged runs of a document, leaving a block of context either
+ * side of each change and the heading that names its section. A change never
+ * sits inside a fold, so every stop of the change arrows stays on the page.
+ * A footnote renders only from its reference, which could be folded away, so a
+ * changed note keeps the whole document open. */
+export function foldUnchanged(tree: Root): MarkdownFold[] {
+  const blocks = tree.children;
+  if (blocks.some((node) => node.type === "footnoteDefinition" && holdsChange(node))) return [];
+  const kept = blocks.map((node) => node.type === "footnoteDefinition");
+  let heading = -1;
+  let changes = 0;
+  blocks.forEach((node, index) => {
+    if (node.type === "heading") heading = index;
+    if (node.type === "footnoteDefinition" || !holdsChange(node)) return;
+    changes++;
+    if (heading >= 0) kept[heading] = true;
+    for (const near of [index - 1, index, index + 1]) if (near >= 0 && near < blocks.length) kept[near] = true;
+  });
+  if (changes === 0) return [];
+  const folds: MarkdownFold[] = [];
+  for (let index = 0; index < blocks.length; index++) {
+    if (kept[index]) continue;
+    const start = index;
+    while (index + 1 < blocks.length && !kept[index + 1]) index++;
+    const count = index - start + 1;
+    if (count >= MIN_FOLDED_BLOCKS) folds.push({ start, count });
+  }
+  return folds;
+}
+
+/** The document with each fold not yet opened replaced by the row that opens it. */
+export function applyFolds(tree: Root, folds: readonly MarkdownFold[], opened: ReadonlySet<number>): Root {
+  const closed = folds.filter((fold) => !opened.has(fold.start));
+  if (closed.length === 0) return tree;
+  const children: RootContent[] = [];
+  let index = 0;
+  for (const { start, count } of closed) {
+    children.push(...tree.children.slice(index, start));
+    children.push({
+      type: "paragraph", children: [],
+      data: { hName: "button", hProperties: { "data-markdown-fold": String(start), "data-markdown-fold-count": String(count) } },
+    });
+    index = start + count;
+  }
+  children.push(...tree.children.slice(index));
+  return { ...tree, children };
+}
+
 /** Consecutive removed/added blocks form one stop. Descend through unchanged
  * containers, but never create a second stop inside an already marked item. */
 function anchorChanges(tree: Root, offset = 0): number {
   let count = offset;
   let changing = false;
   const visit = (node: Nodes): void => {
-    const classes = node.data?.hProperties?.className;
-    const changed = Array.isArray(classes) && classes.some((value) => value === "markdown-preview__added" || value === "markdown-preview__removed");
-    if (changed) {
+    if (isChangeMark(node.data?.hProperties?.className)) {
       if (!changing) {
         node.data!.hProperties!["data-markdown-change"] = String(count++);
       }
@@ -152,6 +336,7 @@ export function buildUnifiedMarkdown(before: string | null, after: string | null
     const previous = prepare(before ?? "", "removed", keys);
     const current = prepare(after ?? "", "current", keys);
     const deadline = Date.now() + 60;
+    const replacements: Array<[RootContent, RootContent]> = [];
     const key = (node: Nodes): string => keys.get(node) ?? "";
     const compatible = (oldNode: RootContent, newNode: RootContent): boolean => {
       if (oldNode.type === "list" && newNode.type === "list") return oldNode.ordered === newNode.ordered && oldNode.start === newNode.start;
@@ -214,6 +399,7 @@ export function buildUnifiedMarkdown(before: string | null, after: string | null
               result.push(newNode);
             } else {
               mark(oldNode, "removed"); mark(newNode, "added");
+              replacements.push([oldNode, newNode]);
               result.push(oldNode, newNode);
             }
             oldIndex++;
@@ -230,6 +416,7 @@ export function buildUnifiedMarkdown(before: string | null, after: string | null
 
     const visible = (root: Root): RootContent[] => root.children.filter((node) => node.type !== "definition" && node.type !== "footnoteDefinition");
     const children = merge(visible(previous), visible(current));
+    markChangedWords(replacements);
     // Unreferenced footnotes do not render. Keep both namespaces available to
     // the merged document, colouring old notes only when old references survive.
     for (const node of previous.children) if (node.type === "footnoteDefinition") { mark(node, "removed"); children.push(node); }

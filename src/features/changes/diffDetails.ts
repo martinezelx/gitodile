@@ -1,8 +1,26 @@
-import { diffWordsWithSpace } from "diff";
+import { diffWordsWithSpace, type ChangeObject } from "diff";
 import type { DiffHunk, DiffLine } from "./domain";
 
 /** UTF-16 offsets, matching string slices and syntax/search token positions. */
 export type DiffRange = { start: number; end: number };
+
+/** The bound on one word comparison: past it, a pair keeps its whole-block marks. */
+export const WORD_DIFF_LIMITS = { maxEditLength: 128, timeout: 4 };
+
+/** What a word comparison removed from the first text and added to the second. */
+export function changedWordRanges(changes: readonly ChangeObject<string>[]): { oldRanges: DiffRange[]; newRanges: DiffRange[] } {
+  let oldOffset = 0;
+  let newOffset = 0;
+  const oldRanges: DiffRange[] = [];
+  const newRanges: DiffRange[] = [];
+  for (const part of changes) {
+    if (part.removed) oldRanges.push({ start: oldOffset, end: oldOffset + part.value.length });
+    if (part.added) newRanges.push({ start: newOffset, end: newOffset + part.value.length });
+    if (!part.added) oldOffset += part.value.length;
+    if (!part.removed) newOffset += part.value.length;
+  }
+  return { oldRanges, newRanges };
+}
 
 /** Progressive detail only: the original diff remains the authority. Pair the
  * same consecutive removed/added runs as split view, never across context or
@@ -36,21 +54,12 @@ export function buildDiffDetails(hunks: readonly DiffHunk[]): ReadonlyMap<DiffLi
         const size = before.content.length + after.content.length;
         characters += size;
         if (size > 4096 || characters > 65_536 || before.content === after.content) continue;
-        const changes = diffWordsWithSpace(before.content, after.content, { maxEditLength: 128, timeout: 4 });
+        const changes = diffWordsWithSpace(before.content, after.content, WORD_DIFF_LIMITS);
         // Unrelated lines already have whole-row colour. Avoid suggesting an
         // exact correspondence where the only shared content is punctuation.
         if (!changes || (before.content.trim() !== after.content.trim() &&
           !changes.some((part) => !part.added && !part.removed && /[\p{L}\p{N}]/u.test(part.value)))) continue;
-        let oldOffset = 0;
-        let newOffset = 0;
-        const oldRanges: DiffRange[] = [];
-        const newRanges: DiffRange[] = [];
-        for (const part of changes) {
-          if (part.removed) oldRanges.push({ start: oldOffset, end: oldOffset + part.value.length });
-          if (part.added) newRanges.push({ start: newOffset, end: newOffset + part.value.length });
-          if (!part.added) oldOffset += part.value.length;
-          if (!part.removed) newOffset += part.value.length;
-        }
+        const { oldRanges, newRanges } = changedWordRanges(changes);
         const requiredEntries = Number(oldRanges.length > 0) + Number(newRanges.length > 0);
         if (result.size + requiredEntries <= 512) {
           if (oldRanges.length) result.set(before, oldRanges);

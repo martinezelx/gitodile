@@ -78,6 +78,7 @@ function port(overrides: Partial<HistoryPort> = {}): HistoryPort {
     readFileDiff: vi.fn(async ({ filePath }) => ({
       kind: "text", path: filePath, originalPath: null, change: "changed", hunks: [], truncated: false,
     } satisfies FileDiff)),
+    readFileMarkdown: vi.fn(async () => ({ kind: "ready" as const, beforeContent: null, content: "# New" })),
     readImagePreview: vi.fn(async () => ({ before: null, after: null })),
     ...overrides,
   };
@@ -98,6 +99,16 @@ describe("HistoryController", () => {
     await refresh;
     expect(controller.getSnapshot(query).selectedCommit).toBe(version(1).commit);
     await vi.waitFor(() => expect(controller.getSnapshot(query).detail.detail?.version.commit).toBe(version(1).commit));
+  });
+
+  it("reads a saved document under the loaded snapshot, and refuses before there is one", async () => {
+    const readFileMarkdown = vi.fn(async () => ({ kind: "ready" as const, beforeContent: null, content: "# New" }));
+    const controller = createHistoryController(port({ readFileMarkdown }));
+    await expect(controller.readFileMarkdown(query, version(1).commit, "guide.md")).rejects.toThrow();
+    expect(readFileMarkdown).not.toHaveBeenCalled();
+    await controller.refresh(query);
+    await controller.readFileMarkdown(query, version(1).commit, "guide.md");
+    expect(readFileMarkdown).toHaveBeenCalledWith({ ...query, snapshotToken: "snapshot-1", commit: version(1).commit, filePath: "guide.md" });
   });
 
   it.each([null, "list"])("selects and reads only the first displayed file for saved layout %s, including cached details", async (view) => {

@@ -53,19 +53,21 @@ existing data is left untouched. See [ADR 0009](docs/adr/0009-use-only-the-canon
   incarnation isolated with an opaque session epoch.
 - Inspect the working tree in plain language, including staged, unstaged,
   untracked, deleted, renamed, conflicted, and ignored states.
-- Review and copy readable, syntax-colored text diffs with solid added bars,
-  dashed removed bars and soft tints in Changes and History. Paired edits show
-  exact changed fragments and spacing; split headings identify each side and
-  change navigation briefly outlines its destination. Inspect binary or
+- Review and copy readable, syntax-colored text diffs with filled added capsules,
+  outlined removed capsules and soft tints in Changes and History. Paired edits
+  show exact changed fragments and spacing; split headings identify each side and
+  change navigation marks where it stands. Inspect binary or
   oversized-file states, and navigate large change lists with virtualization
   and bounded native payloads.
-- Read `.md` and `.markdown` documents in Changes with **Markdown preview** by default.
+- Read `.md` and `.markdown` documents in Changes and History with **Markdown preview** by default.
   **View** retains the text diff modes and remembers a separate Markdown preference.
   If preview is unavailable, the text diff opens with an explanation and a retry option.
   The read-only preview compares the last saved document with the current working
-  copy (up to 128 KiB each), highlighting removed and added Markdown blocks in
-  one unified formatted document, including tables and task lists. HTML is hidden;
-  links and images stay inactive. Change arrows navigate affected block groups.
+  copy, or in History a saved version with the one before it (up to 128 KiB each),
+  highlighting removed and added Markdown blocks and the words that differ in one
+  unified formatted document, including tables and task lists. Long unchanged runs
+  fold away. HTML is hidden; links and images stay inactive. Change arrows navigate
+  affected block groups.
   Oversized documents can show bounded changed fragments from the available diff,
   with a partial-preview notice and gaps; full text modes remain available.
 - Resolve a paused merge, whoever started it, on the **Overlapping changes**

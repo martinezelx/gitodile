@@ -116,16 +116,14 @@ function LineTotals({ added, removed }: { added: number; removed: number }): Rea
     <p className="overview-detail__lines" aria-label={t.overviewDetailLines(added, removed)}>
       <span className="overview-detail__added" aria-hidden="true">+{added}</span>
       <span className="overview-detail__removed" aria-hidden="true">−{removed}</span>
-      {/* One bar, the added share's colour easing into the removed one's. */}
-      <span
-        className="overview-detail__bar"
+      {/* One capsule, filled for the added share and outlined for the removed;
+          with only one side there is nothing to join, and with neither (a
+          binary file, a rename) no share to draw. */}
+      {total > 0 && <span
+        className={`overview-detail__bar overview-detail__bar--${added && removed ? "joined" : added ? "added" : "removed"}`}
         aria-hidden="true"
-        style={{
-          "--added-share": `${total ? (added / total) * 100 : 100}%`,
-          // With only one side there is nothing to blend into.
-          ...(added && removed ? {} : { "--bar-blend": "0px" }),
-        } as React.CSSProperties}
-      />
+        style={{ "--added-share": `${(added / total) * 100}%` } as React.CSSProperties}
+      />}
     </p>
   );
 }

@@ -459,6 +459,80 @@ fn detail_reuses_typed_rename_delete_binary_and_too_large_diff_states() {
 }
 
 #[test]
+fn saved_markdown_reads_both_sides_of_each_kind_of_change() {
+    let path = unique_temp_dir("history-markdown");
+    git_init(&path);
+    write_file(&path, "guide.md", "# First\n");
+    write_file(
+        &path,
+        "old [name].md",
+        "# Moved\n\nThe same long paragraph.\n",
+    );
+    write_file(&path, "gone.md", "# Gone\n");
+    write_file(&path, "big.md", "# Small\n");
+    commit_all(&path, "root");
+    write_file(&path, "guide.md", "# Second\n");
+    write_file(&path, "new.md", "# New\n");
+    write_file(&path, "big.md", &"x".repeat(129 * 1024));
+    fs::rename(
+        Path::new(&path).join("old [name].md"),
+        Path::new(&path).join("new [name].md"),
+    )
+    .unwrap();
+    fs::remove_file(Path::new(&path).join("gone.md")).unwrap();
+    commit_all(&path, "changes");
+    // A later edit must not reach the version being read.
+    write_file(&path, "guide.md", "# Unsaved\n");
+
+    let page = read_history_page(path.clone(), None, Some(50), None, None).unwrap();
+    let cache = HistoryReadCache::default();
+    let read = |commit: &str, file: &str| {
+        read_saved_version_file_markdown_cached(
+            &cache,
+            path.clone(),
+            page.snapshot_token.clone(),
+            commit.to_string(),
+            file.to_string(),
+        )
+    };
+    let ready = |before: Option<&str>, content: Option<&str>| MarkdownPreview::Ready {
+        content: content.map(str::to_string),
+        before_content: before.map(str::to_string),
+    };
+    let (latest, root) = (&page.versions[0].commit, &page.versions[1].commit);
+    assert_eq!(
+        read(latest, "guide.md").unwrap(),
+        ready(Some("# First\n"), Some("# Second\n"))
+    );
+    assert_eq!(
+        read(latest, "new [name].md").unwrap(),
+        ready(
+            Some("# Moved\n\nThe same long paragraph.\n"),
+            Some("# Moved\n\nThe same long paragraph.\n")
+        )
+    );
+    assert_eq!(
+        read(latest, "new.md").unwrap(),
+        ready(None, Some("# New\n"))
+    );
+    assert_eq!(
+        read(latest, "gone.md").unwrap(),
+        ready(Some("# Gone\n"), None)
+    );
+    assert_eq!(
+        read(root, "guide.md").unwrap(),
+        ready(None, Some("# First\n"))
+    );
+    assert_eq!(
+        read(latest, "big.md").unwrap(),
+        MarkdownPreview::too_large()
+    );
+    assert!(read(latest, "unrelated.md").is_err());
+
+    let _ = fs::remove_dir_all(path);
+}
+
+#[test]
 fn unborn_and_oversized_messages_return_truthful_bounded_pages() {
     let unborn = unique_temp_dir("history-unborn");
     git_init(&unborn);

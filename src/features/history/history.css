@@ -810,7 +810,7 @@
 /* The text diff scrolls inside `.diff-code`; a picture has no such inner
    viewport, so it gets one here. Without it this pane's `overflow: hidden`
    clips a tall picture and its captions with no way to reach them. */
-.history-detail__diff .image-diff { flex: 1; min-height: 0; overflow: auto; }
+.history-detail__diff :is(.image-diff, .markdown-preview) { flex: 1; min-height: 0; overflow: auto; }
 .history-diff-state { flex: 1; display: grid; place-items: center; align-content: center; gap: var(--space-3); padding: 20px; color: var(--text-secondary-color); text-align: center; }
 .history-diff-state p { margin: 0; }
 .diff-search-match { border-radius: 2px; background: color-mix(in srgb, var(--status-warning) 55%, transparent); color: inherit; }

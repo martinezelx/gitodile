@@ -29,11 +29,27 @@ describe("Markdown document rendering", () => {
       const target = { index: 1, token: 1 };
       render(<ScreenLifecycleProvider controller={lifecycle}><MarkdownPreviewView state={state} retry={vi.fn()} t={t} comparison={comparison} changeTarget={target} /></ScreenLifecycleProvider>);
       expect(scroll).toHaveBeenCalledOnce();
-      expect(document.querySelector('[data-current-markdown-change]')).toHaveTextContent("Old ending");
+      expect([...document.querySelectorAll('[data-current-markdown-change]')].map((block) => block.textContent)).toEqual(["Old ending", "New ending"]);
       act(() => lifecycle.transition("hidden"));
       act(() => lifecycle.transition("active"));
       expect(scroll).toHaveBeenCalledOnce();
     } finally { Element.prototype.scrollIntoView = original; }
+  });
+
+  it("opens a fold or the whole document, and keeps focus in it", () => {
+    const rest = Array.from({ length: 12 }, (_, index) => `Paragraph ${index}.`).join("\n\n");
+    render(<MarkdownPreviewView state={{ status: "ready", preview: { kind: "ready", beforeContent: `${rest}\n\nOld ending.\n\n${rest}`, content: `${rest}\n\nNew ending.\n\n${rest}` } }} retry={vi.fn()} t={t} />);
+    expect(screen.getByRole("article")).toHaveTextContent("New ending.");
+    expect(screen.queryByText("Paragraph 5.")).not.toBeInTheDocument();
+    const folds = screen.getAllByRole("button", { name: /unchanged blocks/ });
+    expect(folds).toHaveLength(2);
+    fireEvent.click(folds[0]);
+    expect(screen.getAllByText("Paragraph 5.")).toHaveLength(1);
+    expect(screen.getByRole("article")).toHaveFocus();
+    fireEvent.click(screen.getByRole("button", { name: t.changesMarkdownShowAll }));
+    expect(screen.getAllByText("Paragraph 5.")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: /unchanged blocks/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: t.changesMarkdownShowAll })).not.toBeInTheDocument();
   });
 
   it("shows bounded oversized excerpts with an honest notice and inert resources", () => {
@@ -42,7 +58,8 @@ describe("Markdown document rendering", () => {
       { kind: "addition", content: "# New heading", oldLineNumber: null, newLineNumber: 40 },
     ] }], true)!;
     const { container } = render(<MarkdownPreviewView state={{ status: "ready", preview: { kind: "too-large", limitBytes: 131072 } }} retry={vi.fn()} t={t} excerpt={excerpt} />);
-    expect(screen.getByRole("status")).toHaveTextContent("Partial Markdown preview");
+    expect(screen.getByRole("status")).toHaveTextContent("Partial preview");
+    expect(screen.getByRole("img", { name: /Formatting and references may be incomplete/ })).toHaveAttribute("tabindex", "0");
     expect(screen.getByRole("status")).toHaveTextContent("Some changes are omitted");
     expect(screen.getByRole("heading", { name: "Old heading" })).toHaveClass("markdown-preview__removed");
     expect(screen.getByRole("heading", { name: "New heading" })).toHaveClass("markdown-preview__added");
@@ -68,6 +85,9 @@ describe("Markdown document rendering", () => {
     expect(screen.getByRole("heading", { name: "Old title" })).toHaveClass("markdown-preview__removed");
     expect(screen.getByRole("heading", { name: "New title" })).toHaveClass("markdown-preview__added");
     expect(screen.getAllByText("Keep this paragraph.")).toHaveLength(1);
+    expect(container.querySelector("pre.markdown-preview__removed")).toHaveTextContent("old()");
+    expect(container.querySelector("pre.markdown-preview__added")).toHaveTextContent("newCall()");
+    expect(container.querySelector("code[class*='markdown-preview__']")).toBeNull();
     expect(screen.getAllByRole("article")).toHaveLength(1);
     expect(screen.getByRole("article")).toHaveAttribute("tabindex", "0");
     expect(screen.getAllByRole("table")).toHaveLength(1);
@@ -81,13 +101,13 @@ describe("Markdown document rendering", () => {
     expect(container.querySelector("li.markdown-preview__removed")).toHaveTextContent("Old item");
     expect(container.querySelector("tr.markdown-preview__added")).toHaveTextContent("New row");
     expect(container.querySelector("pre.markdown-preview__removed, pre .markdown-preview__removed")).toHaveTextContent("old()");
-    expect(screen.getByRole("status")).toHaveTextContent("removed lines");
+    expect(screen.getByRole("status")).toHaveTextContent(/−\d+ \+\d+ lines/);
   });
 
   it("shows deleted content and treats formatting-only edits as changes", () => {
     const { rerender } = render(<MarkdownPreviewView state={{ status: "ready", preview: { kind: "ready", beforeContent: "Removed\n", content: null } }} retry={vi.fn()} t={t} />);
     expect(screen.getByText("Removed")).toHaveClass("markdown-preview__removed");
-    expect(screen.getByText(t.changesMarkdownDeleted)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(t.changesMarkdownDeleted);
     rerender(<MarkdownPreviewView state={{ status: "ready", preview: { kind: "ready", beforeContent: "Normal\n", content: "**Normal**\n" } }} retry={vi.fn()} t={t} />);
     expect(document.querySelector(".markdown-preview__added strong")).toHaveTextContent("Normal");
   });
@@ -127,7 +147,7 @@ describe("Markdown document rendering", () => {
   it("keeps the saved side of an empty deleted file and avoids duplicate unchanged documents", () => {
     const { rerender } = render(<MarkdownPreviewView state={{ status: "ready", preview: { kind: "ready", beforeContent: "", content: null } }} retry={vi.fn()} t={t} />);
     expect(screen.getByText(t.changesMarkdownEmpty)).toBeInTheDocument();
-    expect(screen.getByText(t.changesMarkdownDeleted)).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(t.changesMarkdownDeleted);
     rerender(<MarkdownPreviewView state={{ status: "ready", preview: { kind: "ready", beforeContent: "# Same\n", content: "# Same\r\n" } }} retry={vi.fn()} t={t} />);
     expect(screen.getAllByRole("heading", { name: "Same" })).toHaveLength(1);
     expect(screen.getByRole("status")).toHaveTextContent(t.changesMarkdownUnchanged);
@@ -160,8 +180,8 @@ describe("Markdown document rendering", () => {
     render(<MarkdownPreviewView state={{ status: "ready", preview: { kind: "ready", beforeContent: before, content } }} retry={vi.fn()} t={t} />);
     expect(screen.getAllByText("Parent")).toHaveLength(1);
     expect(screen.getAllByText("Keep nested")).toHaveLength(1);
-    expect(screen.getByText("Old nested").closest(".markdown-preview__removed")).not.toBeNull();
-    expect(screen.getByText("New nested").closest(".markdown-preview__added")).not.toBeNull();
+    expect([...document.querySelectorAll(".markdown-preview__removed")].map((block) => block.textContent)).toContain("Old nested");
+    expect([...document.querySelectorAll(".markdown-preview__added")].map((block) => block.textContent)).toContain("New nested");
   });
 
   it("shares unchanged footnote context once when another block changes", () => {

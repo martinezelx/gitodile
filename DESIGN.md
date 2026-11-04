@@ -801,8 +801,9 @@ The main desktop window should broadly support:
      are in the primary ink with their chevron, not the accent.
      Beside it, a **side column that follows the card**: one detail of what
      the next step will move — "What you'll save" (files and the line totals
-     as a bar whose green eases into red around the added share, never a hard
-     edge; with only one side it is one colour), "What you'll decide" (the files with
+     as the diff's capsule on its side: the added share filled, the removed
+     share outlined, joined as a removal running into its addition in
+     Changes; with only one side it is one capsule), "What you'll decide" (the files with
      overlapping parts), "What you'll get" (the incoming versions by title and
      author), or "What you'll publish" (the files the unpublished versions
      carry, "9+ files" while not all are read). No card says anything more
@@ -3569,17 +3570,20 @@ Split text views keep Before/After headings outside the scrolling code, using
 `--surface-code`, the normal inner-strip label scale and a region hairline.
 Changes names the last saved version and current working copy; History names
 its actual comparison base (or empty project) and selected saved version.
-Explicit change-arrow navigation briefly outlines the affected line groups in
-`--text-secondary-color` for `--attention-duration`, inset `--space-1` from the
-panel edges with `--radius-item` at the group's first and last line. The static contour never
-changes row dimensions or animates, including under reduced motion, and only
-an explicit jump starts it; file activation and background refresh do not.
+Explicit change-arrow navigation stands on the affected lines: they deepen to
+`--tint-halo` with a capsule of `--diff-bar-width-current`, as rendered Markdown
+does, until the arrows move, the file changes or the diff is read again. The mark
+never changes row dimensions or animates, including under reduced motion, and
+only an explicit jump starts it; file activation and background refresh do not.
+Forced colours draw an outline in its place.
 Forced colours underline changed fragments as well as retaining the
 filled/outlined capsules.
 
-Changes offers **Markdown preview** in its View picker for `.md` and `.markdown`
-text files that are not conflicted, selecting it by default. Remember explicit
-Markdown choices across sessions independently of code-file view choices.
+Changes and History offer **Markdown preview** in their View picker for `.md`
+and `.markdown` text files that are not conflicted, selecting it by default.
+Remember explicit Markdown choices across sessions independently of code-file
+view choices. History compares a saved version with the one before it, read from
+both saved trees, and its info mark says so.
 If a read fails or the document exceeds size/comparison limits, show the text
 diff with an explanation; keep the preference and offer retry through View.
 It compares complete saved/current documents,
@@ -3588,23 +3592,41 @@ tint, and no minus/plus sign, in one unified document. Each block is one
 closed capsule at its inline start (a table row's on its first cell); the
 removed one is outlined and the added one filled, so the two read apart by
 shape and not by colour alone. A removed block directly followed by its added
-block joins it as in a text diff, trading its paragraph gap for padding so
-both tints meet. A changed code block scrolls inside its code so its capsule
+block joins it as in a text diff, trading its paragraph gap for padding and
+the corners at the join (a marked block has `--radius-item`) so both tints
+meet. The mark sits on a code block's `<pre>`, never its inner `<code>`.
+Inside a replaced paragraph, heading, table cell or one-paragraph list item, what
+differs carries `--tint-halo-focus` of its diff colour, as a text diff's exact
+fragments do, and forced colours underline it. Blocks sharing under 40% of
+their text are a rewrite and stay marked whole; so do code blocks. Long unchanged
+runs fold into the text diff's own gap marker ("Show 12 unchanged blocks"), which
+opens with a click, leaving one block of context either side of a change and the heading of its
+section; "Show all" on the notice line opens every fold. A change never sits
+inside a fold, and a changed footnote keeps the document unfolded, because a
+footnote only renders from its reference. A changed code block scrolls inside its code so its capsule
 stays in place. Unchanged context appears once; a replacement shows the removed block
 before the added block at the same position. Compatible lists, tables and quotes
 merge their items/rows so shared context stays in place. New files show additions;
-deleted files retain their saved content and disclose deletion. A summary counts source-line
-changes and explains the block-level granularity. Document typography stays on
-the solid diff surface, with a compact read-only notice. The change arrows step
-between groups of affected blocks; diff search remains hidden while previewing.
+deleted files retain their saved content and disclose deletion. One quiet line
+above the document counts source-line changes (`−3 +5 lines`); how it was read
+— read-only, the comparison, the block-level granularity — waits behind its info
+mark, in a tooltip a keyboard reaches too. Document typography stays on the
+solid diff surface. Headings keep the app's scale, a step below a page's: `h1`
+at `--text-display`. An image that is not loaded is a small neutral capsule with
+its glyph. The change arrows step between groups of affected blocks, and the
+group they stand on deepens to `--tint-halo` with a wider capsule
+(`--diff-bar-width-current`) rather than a box round it, and stays so until they
+move, as a text diff's change does; forced colours keep an outline. Diff search remains hidden while previewing.
 Oversized documents can show isolated changed fragments from the cached text
-diff, clearly labelled partial, with source-line positions and a warning that
-omitted context can affect formatting and references. Separate fragments never
-join into one Markdown construct. Further limits disclose omitted changes;
+diff. The same line says so ("Partial preview: only the changed fragments"),
+each fragment opens with its line as a small dashed divider, and the info mark
+warns that omitted context can affect formatting and references. Separate
+fragments never join into one Markdown construct. Further limits add "Some
+changes are omitted" to the line;
 unavailable excerpts retain the text fallback. Switching back restores the chosen diff mode. Conflicted files
 retain their diff. HTML is hidden, images are text placeholders,
 and links are inert so repository content cannot navigate the desktop WebView
-or load resources. History and word-level rendered changes are deferred.
+or load resources.
 
 **Changes saves from one place, and it is the place the files are.** The
 screen used to offer a version twice: a primary "Save version" in the

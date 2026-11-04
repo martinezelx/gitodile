@@ -239,6 +239,14 @@
      Branches recent list. Half the secondary ink, so the empty ring reads as a
      place and never as a version. Five copies had said it before. */
   --node-ring: color-mix(in srgb, var(--text-secondary-color) 52%, transparent);
+  /* The diff capsule: filled for an addition, outlined for a removal — the
+     gutter of a text diff or rendered Markdown, and Overview's line totals.
+     Mixed in OKLCH, a join passes through a clear warm hue rather than the
+     muddy brown an sRGB mix of red and green gives. */
+  --diff-bar-width: 5px;
+  --diff-bar-width-current: 7px; /* the capsule the change arrows stand on */
+  --diff-bar-outline: 1.5px;
+  --diff-bar-middle: color-mix(in oklch, var(--diff-removed), var(--diff-added));
   /* Deliberately theme-independent (unlike every other --surface-* token):
      a tooltip that flips light/dark with the app loses the one property
      that makes this style work — reliable contrast over *anything* behind

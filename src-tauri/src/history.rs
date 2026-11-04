@@ -16,7 +16,8 @@
 
 use crate::application;
 use crate::changes::{
-    diff_result_from_text, validate_repo_relative_path, FileDiff, EMPTY_TREE_HASH,
+    diff_result_from_text, read_saved_markdown, validate_markdown_path,
+    validate_repo_relative_path, FileDiff, MarkdownPreview, SavedMarkdown, EMPTY_TREE_HASH,
     MAX_DIFF_OUTPUT_BYTES,
 };
 use crate::error::{AppError, AppErrorCode};
@@ -2197,13 +2198,9 @@ pub(crate) fn read_saved_version_file_diff(
     let (repository, _access) =
         application::authorize_repository(&path, "read_saved_version_file_diff", None)?;
     let repository_id = repository.worktree_root.match_key().to_string();
-    read_saved_version_file_diff_authorized(
-        &path,
-        &repository_id,
-        snapshot_token,
-        commit,
-        file_path,
-    )
+    let (base, change) =
+        saved_version_change(&path, &repository_id, &snapshot_token, &commit, &file_path)?;
+    read_file_diff_for_change(&path, &base, &commit, change)
 }
 
 pub(crate) fn read_saved_version_file_diff_cached(
@@ -2217,51 +2214,106 @@ pub(crate) fn read_saved_version_file_diff_cached(
         application::authorize_repository(&path, "read_saved_version_file_diff", None)?;
     let repository_id = repository.worktree_root.match_key().to_string();
     validate_repo_relative_path(&file_path)?;
-    if is_valid_oid(&commit) {
-        if let Some(cached) = cache.read(&repository_id, &snapshot_token, &commit) {
-            if cached_snapshot_is_current(&path, &cached.snapshot)? {
-                let detail = detail_from_cached_read(&path, cached)?;
-                cache.record_detail(&repository_id, &snapshot_token, &commit, &detail);
+    let (base, change) = saved_version_change_cached(
+        cache,
+        &path,
+        &repository_id,
+        &snapshot_token,
+        &commit,
+        &file_path,
+    )?;
+    read_file_diff_for_change(&path, &base, &commit, change)
+}
+
+/// Both sides of one document in a saved version: what it holds there, and
+/// what the version it is compared with held, under its earlier name if it was
+/// renamed. An absent side is a document added or deleted by this version.
+pub(crate) fn read_saved_version_file_markdown_cached(
+    cache: &HistoryReadCache,
+    path: String,
+    snapshot_token: String,
+    commit: String,
+    file_path: String,
+) -> Result<MarkdownPreview, AppError> {
+    let (repository, _access) =
+        application::authorize_repository(&path, "read_saved_version_file_markdown", None)?;
+    let repository_id = repository.worktree_root.match_key().to_string();
+    validate_markdown_path(&file_path)?;
+    let (base, change) = saved_version_change_cached(
+        cache,
+        &path,
+        &repository_id,
+        &snapshot_token,
+        &commit,
+        &file_path,
+    )?;
+    let original = change.original_path.as_deref().unwrap_or(&change.path);
+    validate_repo_relative_path(original)?;
+    let content = match read_saved_markdown(&path, &commit, &change.path)? {
+        SavedMarkdown::Absent => None,
+        SavedMarkdown::TooLarge => return Ok(MarkdownPreview::too_large()),
+        SavedMarkdown::Text(text) => Some(text),
+    };
+    let before_content = match read_saved_markdown(&path, &base, original)? {
+        SavedMarkdown::Absent => None,
+        SavedMarkdown::TooLarge => return Ok(MarkdownPreview::too_large()),
+        SavedMarkdown::Text(text) => Some(text),
+    };
+    Ok(MarkdownPreview::Ready {
+        content,
+        before_content,
+    })
+}
+
+/// The version a file is compared with, and its change, from the cached detail
+/// while its snapshot is current.
+fn saved_version_change_cached(
+    cache: &HistoryReadCache,
+    path: &str,
+    repository_id: &str,
+    snapshot_token: &str,
+    commit: &str,
+    file_path: &str,
+) -> Result<(String, HistoryFileChange), AppError> {
+    if is_valid_oid(commit) {
+        if let Some(cached) = cache.read(repository_id, snapshot_token, commit) {
+            if cached_snapshot_is_current(path, &cached.snapshot)? {
+                let detail = detail_from_cached_read(path, cached)?;
+                cache.record_detail(repository_id, snapshot_token, commit, &detail);
                 let change = detail
                     .files
                     .iter()
                     .find(|change| change.path == file_path)
                     .cloned()
                     .ok_or_else(path_not_changed_error)?;
-                return read_file_diff_for_change(&path, &detail.comparison_base, &commit, change);
+                return Ok((detail.comparison_base, change));
             }
         }
     }
-    read_saved_version_file_diff_authorized(
-        &path,
-        &repository_id,
-        snapshot_token,
-        commit,
-        file_path,
-    )
+    saved_version_change(path, repository_id, snapshot_token, commit, file_path)
 }
 
-fn read_saved_version_file_diff_authorized(
+fn saved_version_change(
     path: &str,
     repository_id: &str,
-    snapshot_token: String,
-    commit: String,
-    file_path: String,
-) -> Result<FileDiff, AppError> {
-    validate_snapshot_and_commit(path, repository_id, &snapshot_token, &commit)?;
-    validate_repo_relative_path(&file_path)?;
-    let row = graph_row_for_commit(path, &commit)?;
+    snapshot_token: &str,
+    commit: &str,
+    file_path: &str,
+) -> Result<(String, HistoryFileChange), AppError> {
+    validate_snapshot_and_commit(path, repository_id, snapshot_token, commit)?;
+    validate_repo_relative_path(file_path)?;
+    let row = graph_row_for_commit(path, commit)?;
     let base = row
         .parents
         .first()
         .map(String::as_str)
         .unwrap_or(EMPTY_TREE_HASH);
-    let (changes, _, _, _) = read_detail_files(path, base, &commit)?;
+    let (changes, _, _, _) = read_detail_files(path, base, commit)?;
     let change = changes
         .into_iter()
         .find(|change| change.path == file_path)
         .ok_or_else(path_not_changed_error)?;
-    read_file_diff_for_change(path, base, &commit, change)
+    Ok((base.to_string(), change))
 }
 
 fn path_not_changed_error() -> AppError {

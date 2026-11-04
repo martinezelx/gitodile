@@ -1,6 +1,6 @@
 # Completed work — 0.5.0
 
-25 completed task records. IDs, parent relationships, completion dates
+29 completed task records. IDs, parent relationships, completion dates
 and accepted deferred criteria are preserved.
 
 ## Version evidence
@@ -21,7 +21,9 @@ console mascot between the welcome and the watermark on the same date and branch
 Task 220 has the issue report copy and open GitHub in one action and guide the
 paste, on the same branch on 2026-11-03. Task 221 gives application updates
 one home in Settings, and task 222 keeps the glyph tones apart and drops the
-open folders' change dots, on the same branch and date. This archive records completed
+open folders' change dots, on the same branch and date. Tasks 223 to 226 give
+Overview's totals the diff's capsule, compact the Markdown preview, bring it to
+History and add its changed words and folds, on the same branch on 2026-11-04. This archive records completed
 implementation, not publication of 0.5.0. See the
 [version closeout](../../0.5.0/README.md) and
 [qualification matrix](../../assets/0.5.0-closure/closure-audit.md).
@@ -57,5 +59,9 @@ implementation, not publication of 0.5.0. See the
 | 220 | 2026-11-03 | [Issue report copies, opens and guides the paste](220-issue-report-copy-and-finish.md) |
 | 221 | 2026-11-03 | [Give application updates one home in Settings](221-one-home-for-app-updates.md) |
 | 222 | 2026-11-03 | [Keep glyph tones apart and spend colour once](222-colour-system-review.md) |
+| 223 | 2026-11-04 | [Draw Overview's line totals as the diff's capsule](223-overview-totals-as-the-diff-capsule.md) |
+| 224 | 2026-11-04 | [Make the Markdown preview compact and join its blocks](224-compact-markdown-preview.md) |
+| 225 | 2026-11-04 | [Offer the Markdown preview in History](225-markdown-preview-in-history.md) |
+| 226 | 2026-11-04 | [Mark changed words, fold unchanged runs and align the two viewers](226-changed-words-and-folds-in-markdown.md) |
 
 Archive organization and assignment rules are in [work/README.md](../../README.md).

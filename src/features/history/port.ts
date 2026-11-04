@@ -1,4 +1,4 @@
-import type { FileDiff, ImagePreview } from "../changes";
+import type { FileDiff, ImagePreview, MarkdownPreview } from "../changes";
 import type { HistoryPage, SavedVersionDetail } from "./domain";
 
 export type HistoryQuery = { projectId: string; sessionEpoch: string };
@@ -99,5 +99,6 @@ export interface HistoryPort {
   readPage(request: HistoryPageRequest): Promise<HistoryPage>;
   readDetail(request: SavedVersionRequest): Promise<SavedVersionDetail>;
   readFileDiff(request: SavedVersionFileRequest): Promise<FileDiff>;
+  readFileMarkdown(request: SavedVersionFileRequest): Promise<MarkdownPreview>;
   readImagePreview(request: SavedVersionImageRequest): Promise<ImagePreview>;
 }

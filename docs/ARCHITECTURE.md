@@ -573,8 +573,9 @@ if an OS watcher cannot be established.
 ### Read-only saved-version history
 
 `history.rs` owns the current-`HEAD` saved-version timeline. It is a read-only
-domain service behind three narrow commands: `read_history_page`,
-`read_saved_version_detail`, and `read_saved_version_file_diff`. The first
+domain service behind four narrow commands: `read_history_page`,
+`read_saved_version_detail`, `read_saved_version_file_diff`, and
+`read_saved_version_file_markdown`. The first
 returns a bounded `HistoryPage`; the detail commands require both its snapshot
 token and a still-reachable commit. All commands require the active project
 session epoch and run under the repository read coordinator. They never fetch,

@@ -85,8 +85,17 @@ and 038 predate that convention, so their already-permanent child IDs remain
 
 Reserved IDs without their own task file are still burned: `062` was folded
 into task 057 and `196` into task 195 by explicit request. The next unused
-top-level ID after the current plan is `223`. Epic 206 owns tasks 037-2 and
+top-level ID after the current plan is `227`. Epic 206 owns tasks 037-2 and
 037-4, which kept their IDs when they moved out of epic 037 on 2026-10-27.
+
+Overview's line totals wear the diff's capsule and a capsule reads as one shape,
+in [223](done/0.5.0/223-overview-totals-as-the-diff-capsule.md). The Markdown
+preview is compact and joins its blocks, in
+[224](done/0.5.0/224-compact-markdown-preview.md), reaches History, in
+[225](done/0.5.0/225-markdown-preview-in-history.md), and marks changed words and
+folds unchanged runs with the text diff's own marks, in
+[226](done/0.5.0/226-changed-words-and-folds-in-markdown.md), all completed on
+2026-11-04 at the user's request.
 
 Every pair of glyph tones stays a clear step apart in all twelve themes, the
 empty version ring is one token and an open folder drops its change dots, in

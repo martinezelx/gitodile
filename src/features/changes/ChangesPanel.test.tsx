@@ -230,7 +230,7 @@ describe("ChangesPanel Markdown preview", () => {
     const tree = { ...workingTree, entries: [{ ...workingTree.entries[0], path: "DESIGN.md" }, { ...workingTree.entries[1], path: "README.md" }] };
     try {
       render(<LanguageProvider><ToastProvider><ControlledChangesPanel projectPath="/repo" workingTree={tree} workingTreeError={null} isCheckingChanges={false} onRefresh={vi.fn()} onPublishNow={vi.fn()} /></ToastProvider></LanguageProvider>);
-      expect(await screen.findByText(/Partial Markdown preview/)).toBeInTheDocument();
+      expect(await screen.findByText(/Partial preview/)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Previous change" })).toBeDisabled();
       await userEvent.click(screen.getByRole("button", { name: "Next change" }));
       expect(scroll).toHaveBeenCalledOnce();
@@ -243,7 +243,7 @@ describe("ChangesPanel Markdown preview", () => {
       expect(mockedInvoke.mock.calls.filter(([name]) => name === "read_file_markdown")).toHaveLength(1);
       expect(mockedInvoke.mock.calls.filter(([name]) => name === "read_file_lines")).toHaveLength(0);
       await userEvent.click(screen.getByRole("button", { name: /^README\.md/ }));
-      await screen.findByText(/Partial Markdown preview/);
+      await screen.findByText(/Partial preview/);
       expect(screen.getByRole("button", { name: "Previous change" })).toBeDisabled();
       expect(screen.getByRole("button", { name: "Next change" })).toBeEnabled();
       expect(document.querySelector("[data-current-markdown-change]")).toBeNull();
@@ -999,17 +999,17 @@ describe("ChangesPanel review controls", () => {
 
     expect(await screen.findByText("Change 1 of 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous change" })).toBeDisabled();
-    expect(document.querySelector(".diff-row--arrival")).toBeNull();
+    expect(document.querySelector(".diff-row--current")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Next change" }));
 
     expect(screen.getByText("Change 2 of 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next change" })).toBeDisabled();
-    // This class exposes the transient arrival state; a file switch clears it.
-    expect(document.querySelector(".diff-row--arrival")).not.toBeNull();
+    // This class exposes the change the arrows stand on; a file switch clears it.
+    expect(document.querySelector(".diff-row--current")).not.toBeNull();
     await userEvent.click(screen.getByRole("button", { name: "Next file" }));
     await screen.findByText("brand new");
-    expect(document.querySelector(".diff-row--arrival")).toBeNull();
+    expect(document.querySelector(".diff-row--current")).toBeNull();
   });
 
   it("finds text in the open difference, and its one X closes the find", async () => {
