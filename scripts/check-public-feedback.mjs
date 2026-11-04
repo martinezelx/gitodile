@@ -4,9 +4,10 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { load } from "js-yaml";
 import feedbackContract from "../src/app/issueReportContract.json" with { type: "json" };
-import { GUIDANCE_END, GUIDANCE_START, updateFeedbackReadme } from "./release/public-release.mjs";
 
 export { feedbackContract };
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Validate the actual YAML, including duplicate keys, rather than grepping IDs. */
 export function validateFeedbackForms(files, contract = feedbackContract) {
@@ -47,60 +48,27 @@ export function validateFeedbackSettings(repository, reporting, labels) {
   }
 }
 
-export function validatePublicationReadme(readme) {
-  assert.equal((readme.match(new RegExp(GUIDANCE_START, "g")) ?? []).length, 1, "Missing or duplicate download guidance start marker");
-  assert.equal((readme.match(new RegExp(GUIDANCE_END, "g")) ?? []).length, 1, "Missing or duplicate download guidance end marker");
-  assert.match(readme, /Tauri updater-signed Windows x86-64 NSIS installers, Linux x86-64 AppImages and their application-update files/);
-  assert.match(readme, /Windows packages through 1\.0\.0 intentionally lack Authenticode/);
-  assert.match(readme, /Los instaladores NSIS de Windows x86-64 firmados para el actualizador de Tauri/);
-  assert.match(readme, /Los paquetes de Windows hasta 1\.0\.0 carecen intencionadamente de Authenticode/);
-  assert.match(readme, /macOS is not yet qualified and no macOS package is published/);
-  assert.match(readme, /macOS todavía no está cualificado y no se publica ningún paquete para macOS/);
-  assert.match(readme, /https:\/\/github\.com\/martinezelx\/gitodile-desktop/);
-  assert.doesNotMatch(readme, /project-gitodile/);
-}
-
 async function check() {
-  const args = process.argv.slice(2);
-  assert.ok(args.length === 0 || (args.length === 2 && args[0] === "--local") || (args.length === 1 && args[0] === "--publication-plan"), "Usage: check-public-feedback.mjs [--local <feedback checkout> | --publication-plan]");
   const names = [...Object.values(feedbackContract.bugTemplates), ...Object.values(feedbackContract.featureTemplates), "config.yml"];
-  let files;
-  let readme = null;
-  if (args[0] === "--local") {
-    files = Object.fromEntries(await Promise.all(names.map(async (name) => [name, await readFile(path.join(args[1], ".github/ISSUE_TEMPLATE", name), "utf8")])));
-  } else {
-    const headers = { Accept: "application/vnd.github+json", "User-Agent": "GitOdile-feedback-contract" };
-    const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const api = async (endpoint) => {
-      const response = await fetch(`https://api.github.com/repos/${feedbackContract.repository}${endpoint}`, {
-        headers, signal: AbortSignal.timeout(15_000), redirect: "error",
-      });
-      assert.ok(response.ok, `GitHub ${endpoint}: HTTP ${response.status}`);
-      return response.json();
-    };
-    const [repository, reporting, labels] = await Promise.all([
-      api(""), api("/private-vulnerability-reporting"), api("/labels?per_page=100"),
-    ]);
-    validateFeedbackSettings(repository, reporting, labels);
-    // Read a single commit so edits during this check cannot mix form versions.
-    const commit = await api(`/commits/${encodeURIComponent(repository.default_branch)}`);
-    files = Object.fromEntries(await Promise.all(names.map(async (name) => {
-      const file = await api(`/contents/.github/ISSUE_TEMPLATE/${name}?ref=${commit.sha}`);
-      assert.equal(file.encoding, "base64", `${name}: unexpected content encoding`);
-      return [name, Buffer.from(file.content, "base64").toString("utf8")];
-    })));
-    if (args[0] === "--publication-plan") {
-      const file = await api(`/contents/README.md?ref=${commit.sha}`);
-      assert.equal(file.encoding, "base64", "README.md: unexpected content encoding");
-      readme = Buffer.from(file.content, "base64").toString("utf8");
-    }
-    console.log(`Public feedback settings verified at ${commit.sha}.`);
-  }
+  const files = Object.fromEntries(await Promise.all(names.map(async (name) => [name, await readFile(path.join(ROOT, ".github/ISSUE_TEMPLATE", name), "utf8")])));
   validateFeedbackForms(files);
-  if (readme !== null) validatePublicationReadme(updateFeedbackReadme(readme));
   console.log("Feedback forms match the app contract in English and Spanish.");
-  if (readme !== null) console.log("Planned public download guidance is valid and idempotent.");
+
+  const headers = { Accept: "application/vnd.github+json", "User-Agent": "GitOdile-feedback-contract" };
+  const token = process.env.GH_TOKEN || process.env.GITHUB_TOKEN;
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const api = async (endpoint) => {
+    const response = await fetch(`https://api.github.com/repos/${feedbackContract.repository}${endpoint}`, {
+      headers, signal: AbortSignal.timeout(15_000), redirect: "error",
+    });
+    assert.ok(response.ok, `GitHub ${endpoint}: HTTP ${response.status}`);
+    return response.json();
+  };
+  const [repository, reporting, labels] = await Promise.all([
+    api(""), api("/private-vulnerability-reporting"), api("/labels?per_page=100"),
+  ]);
+  validateFeedbackSettings(repository, reporting, labels);
+  console.log("Public feedback settings verified.");
 }
 
 if (import.meta.url.startsWith("file:") && process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

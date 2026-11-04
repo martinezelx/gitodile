@@ -1,0 +1,61 @@
+name: Bug report (English)
+description: Report unexpected GitOdile behavior
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        A GitHub account is required. Review your report before submitting it.
+        Thanks for reporting. One thing before you start: this issue will be
+        **public and permanently indexed**, so please do not paste access
+        tokens, authenticated remote URLs, or source code you are not free to
+        share. Found a security vulnerability? Report it
+        [privately](https://github.com/martinezelx/gitodile/security/advisories/new)
+        instead.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, and what GitOdile did instead.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: false
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: false
+  - type: textarea
+    id: repository
+    attributes:
+      label: Repository state
+      description: >-
+        Anything about the project that might matter — its rough size, whether
+        it has a remote, unsaved changes, a merge in progress, submodules, a
+        network drive. Skip whatever does not apply.
+    validations:
+      required: false
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: System information
+      description: >-
+        Available versions are filled in when you report from inside the app
+        (More actions ⋯ → Report an issue). Otherwise use
+        About → Copy system info and paste the block here. Some values may be
+        unavailable. If the app cannot open, describe your system and the app
+        version you installed, if known.
+      render: text
+    validations:
+      required: true

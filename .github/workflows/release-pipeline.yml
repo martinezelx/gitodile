@@ -461,7 +461,7 @@ jobs:
       - name: Require the live public destination contract
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/check-public-feedback.mjs --publication-plan
+        run: node scripts/check-public-feedback.mjs
       - name: Derive publication mode and immutable notes path
         id: release
         run: |

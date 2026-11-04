@@ -26,7 +26,7 @@ The application can contact:
   uses the chosen credentials, downloads no project contents, is cancellable
   and is never triggered just by opening the overlay;
 - the configured GitOdile update feed when update checks are enabled;
-- the public GitHub feedback repository when the user chooses to report an
+- the public GitHub repository when the user chooses to report an
   issue or security problem.
 - GitHub when the user explicitly detects/checks GitHub CLI accounts, activates
   a saved account, signs out, or starts browser authorization from Settings.

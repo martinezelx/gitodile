@@ -17,6 +17,12 @@ Implementation contracts fixed on 2026-09-09 are recorded in the
 their executable fixture. They refine this decision without changing its two
 channels, hosting, signing, or publication architecture.
 
+[ADR 0045](0045-keep-source-issues-and-releases-in-one-repository.md)
+(2026-11-04) replaces the two repositories below with one,
+`martinezelx/gitodile`. Everything below about a separate source repository, a
+public feedback repository and its README is historical; hosting, signing,
+publication order and the installed-update contract still apply.
+
 An amendment accepted on 2026-09-11 makes source visibility explicitly
 irrelevant to the release trust boundary. The source repository may be public
 or private; signing keys, OS certificates, protected build evidence and the

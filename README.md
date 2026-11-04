@@ -10,7 +10,7 @@
   <p>A calmer way to understand your project, save your work, and collaborate.</p>
 
   <p>
-    <a href="https://github.com/martinezelx/gitodile-desktop/actions/workflows/ci.yml"><img src="https://github.com/martinezelx/gitodile-desktop/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status on main" /></a>
+    <a href="https://github.com/martinezelx/gitodile/actions/workflows/ci.yml"><img src="https://github.com/martinezelx/gitodile/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI status on main" /></a>
     <a href="https://github.com/martinezelx/gitodile/releases/latest"><img src="https://img.shields.io/github/v/release/martinezelx/gitodile?label=latest%20release&amp;color=287d64" alt="Latest public release" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0--only-blue" alt="License: AGPL-3.0-only" /></a>
     <a href="#architecture"><img src="https://img.shields.io/badge/built%20with-Tauri%202%20%2B%20React%20%2B%20Rust-555555" alt="Built with Tauri 2, React and Rust" /></a>
@@ -103,8 +103,7 @@ and the app's connection guidance.
 ## Downloads and platform status
 
 Get testing builds from the **[public releases](https://github.com/martinezelx/gitodile/releases)**.
-This repository contains the desktop source; downloads, release notes, and user
-issues live in [martinezelx/gitodile](https://github.com/martinezelx/gitodile).
+Source, issues, downloads, and release notes all live in this repository.
 
 | Platform | Package | Status |
 | --- | --- | --- |
@@ -115,13 +114,14 @@ issues live in [martinezelx/gitodile](https://github.com/martinezelx/gitodile).
 Updates use Tauri updater signatures and one release channel. GitOdile checks
 for updates at startup by default, but downloading and installing require your
 action. Updater signatures and operating-system publisher signing are separate;
-see the [code-signing policy](docs/CODE_SIGNING_POLICY.md).
+see the [code-signing policy](docs/CODE_SIGNING_POLICY.md). Earlier installers
+stay available for reinstalling; a withdrawn update may leave the update feed,
+but it is never silently replaced.
 
 ## Versions
 
 Recent published releases are listed below. Each tag opens its full release notes
-and downloads; source tags live in
-[this repository](https://github.com/martinezelx/gitodile-desktop/tags).
+and downloads.
 
 | Tag | Released | Highlights |
 | --- | --- | --- |
@@ -249,8 +249,8 @@ before running `corepack enable`. The project's `packageManager` field selects
 the required pnpm version.
 
 ```bash
-git clone https://github.com/martinezelx/gitodile-desktop.git
-cd gitodile-desktop
+git clone https://github.com/martinezelx/gitodile.git
+cd gitodile
 corepack enable
 pnpm install --frozen-lockfile
 pnpm run tauri dev
@@ -286,7 +286,8 @@ and pull requests are not currently accepted.
 See the [contribution policy](CONTRIBUTING.md).
 
 - **Bug reports:** use the
-  [public issue tracker](https://github.com/martinezelx/gitodile/issues).
+  [public issue tracker](https://github.com/martinezelx/gitodile/issues), with
+  forms in English and Spanish.
   The app's **More actions → Report an issue** prepares a report you can review
   before submitting, without project paths, code, or remote URLs.
   Search existing issues first. Include your GitOdile version, operating system,

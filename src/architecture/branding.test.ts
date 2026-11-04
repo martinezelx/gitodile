@@ -31,10 +31,8 @@ describe("product identity", () => {
     expect(readSource("index.html")).toContain("<title>GitOdile</title>");
   });
 
-  it("points issue reporting at the dedicated public tracker, never the source repository", () => {
+  it("points issue reporting at the public repository", () => {
     expect(FEEDBACK_REPOSITORY_URL).toBe("https://github.com/martinezelx/gitodile");
-    // Source visibility may change; reporting remains on the stable public
-    // tracker so released builds do not depend on that operational choice.
     expect(readSource("src/app/issueReport.ts")).not.toContain("project-gitodile");
     expect(readSource("src/app/TitlebarMenu.tsx")).not.toContain("github.com");
   });
@@ -124,8 +122,8 @@ describe("desktop link permissions", () => {
 
   it("lets About open its source repository and licence", () => {
     for (const url of [
-      "https://github.com/martinezelx/gitodile-desktop",
-      "https://github.com/martinezelx/gitodile-desktop/blob/main/LICENSE",
+      "https://github.com/martinezelx/gitodile",
+      "https://github.com/martinezelx/gitodile/blob/main/LICENSE",
     ]) {
       expect(scopeAllows(openerScope(), url), url).toBe(true);
     }
@@ -144,8 +142,7 @@ describe("desktop link permissions", () => {
       identifier: "opener:allow-open-url",
       allow: [
         { url: "https://github.com/martinezelx/gitodile/*" },
-        { url: "https://github.com/martinezelx/gitodile-desktop" },
-        { url: "https://github.com/martinezelx/gitodile-desktop/*" },
+        { url: "https://github.com/martinezelx/gitodile" },
         { url: "https://git-scm.com/install/windows" },
         { url: "https://git-scm.com/install/mac" },
         { url: "https://git-scm.com/install/linux" },
