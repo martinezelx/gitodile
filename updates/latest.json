@@ -1,0 +1,49 @@
+{
+  "version": "0.4.1",
+  "notes": "Testing release: Windows and Linux installed-update qualification is not complete. This release does not claim platform qualification. Windows Authenticode is deferred.\n\nVersión de prueba: la cualificación de actualización instalada en Windows y Linux no está completa. Esta versión no declara cualificación de plataforma. Authenticode de Windows está aplazado.\n\nGitOdile 0.4.1\n\nHighlights\n\n- Connect Azure Repos with an organization's personal access token, and see every connected GitHub, GitLab and Bitbucket account with its own profile picture.\n- Changes previews Markdown files as one readable document with removed and added blocks marked, and steps between them; long wrapped diff lines no longer overlap.\n- Notifications stay in a quiet inbox across restarts: opening it reads nothing, and each notice can be marked read, unread or removed on its own.\n- Settings is reorganized with a Language and region section, and every screen now shares the same icons, spacing, focus ring and selection, so the app reads as one piece.\n- GitOdile starts with a fifth less JavaScript, scrolls long diffs more smoothly, and keeps your selected file, version, branch and scroll when you come back to a screen.\n\nGitOdile 0.4.1 adds Azure Repos and account pictures, a readable Markdown preview, a quiet notification inbox, a reorganized Settings and a more consistent interface, and it starts faster.\n\nAccounts and cloning\n\n- Connect Azure Repos with a personal access token scoped to one Azure DevOps organization. The token is checked and stored in the operating system's secure credential store per organization, Git receives it only for that organization's addresses, and Settings, Home and Clone offer it beside the other providers. Repository browsing and Microsoft browser sign-in are not included yet, and live Azure transfers have not been qualified.\n- Connected GitHub, GitLab and Bitbucket accounts, including company servers, show the profile picture their provider holds, with the provider's mark at the corner. Pictures are fetched without credentials from the provider's own hosts, cached on this computer, refreshed when an account is checked and deleted when it is removed or signed out. Gravatar is never contacted.\n- Saved versions show their author's initials, yours included.\n\nChanges and History\n\n- Markdown files in Changes open as a preview by default: the saved and current documents merge into one, with removed and added blocks marked and arrows to step between them. Very large documents show their changed fragments, clearly marked as partial. The preview is read-only and never loads images, runs HTML or follows links.\n- Long diff lines that wrap no longer paint over the line below after the pane changes width, and diffs are drawn in the code font chosen in Settings.\n- Returning to Changes, History or Branches keeps the selected file, version or branch, the folded folders and the scroll position. Screens appear without an entry animation, and file lists start in folder view.\n\nNotifications\n\n- The notification panel is a silent inbox of up to 50 entries that survives restarts. Opening, pointing at or scrolling it marks nothing as read; each notice has its own read and remove controls, and \"Mark all as read\" sits beside \"Clear all\".\n- An automatic check that repeats the same news keeps its place and its time instead of arriving again.\n\nSettings and windows\n\n- Settings groups its sections into App, Work and Version control. Language and date formats move to a new Language & region section, where each language is a card written in that language, and a language change fades the window like a theme change. Line endings join the Git section.\n- Navigation explains every destination, its arrows appear on hover or focus, and Restore default resets both which destinations show and their order. Theme, font and icon pickers share one selected state.\n- On macOS, GitOdile uses the system's window controls and moves the overflow menu's entries into a native menu bar. Windows and Linux are unchanged. This has not yet been validated on a Mac.\n- Pressing the titlebar now closes any open menu, popup, calendar or filter list, and the account row in the titlebar menu stays on one line.\n\nA more consistent interface\n\n- Icons, spacing, focus rings, selected rows, notices, disabled controls, small icon buttons and empty states now follow one set of sizes and strengths, so the same kind of thing looks the same on every screen.\n- The status bar gives the project and branch names room before the search field, so both read in full in a window of about 1,100 pixels.\n\nPerformance\n\n- Launch loads about 20% less JavaScript: only the active language's text is loaded, and the Markdown preview loads with Changes rather than at startup.\n- Scrolling a diff no longer re-highlights every visible line on each frame.\n- Opening a project and refreshing its status start fewer Git processes.\n- Dependencies are updated to their latest compatible versions.\n\nPackages\n\n- Windows is provided as an NSIS installer. Authenticode remains deferred, so Windows may show an unknown-publisher or SmartScreen warning.\n- Linux is provided as an AppImage. macOS packages remain deferred.\n- Both packages verify updates with the production Tauri updater key and use the public update feed. Publishing this release does not declare either target qualified.",
+  "highlights": [
+    {
+      "id": "azureReposAndPictures",
+      "icon": "folder-open",
+      "en": "Connect Azure Repos with an organization's personal access token, and see every connected GitHub, GitLab and Bitbucket account with its own profile picture.",
+      "es": "Conecta Azure Repos con el token de acceso personal de una organización, y ve cada cuenta conectada de GitHub, GitLab y Bitbucket con su propia foto de perfil."
+    },
+    {
+      "id": "markdownPreview",
+      "icon": "list-checks",
+      "en": "Changes previews Markdown files as one readable document with removed and added blocks marked, and steps between them; long wrapped diff lines no longer overlap.",
+      "es": "Cambios muestra los archivos Markdown como un documento legible con los bloques quitados y añadidos marcados, y salta entre ellos; las líneas largas del diff ya no se solapan."
+    },
+    {
+      "id": "silentInbox",
+      "icon": "history",
+      "en": "Notifications stay in a quiet inbox across restarts: opening it reads nothing, and each notice can be marked read, unread or removed on its own.",
+      "es": "Las notificaciones se guardan en una bandeja silenciosa entre reinicios: abrirla no marca nada como leído, y cada aviso puede marcarse leído, no leído o quitarse por separado."
+    },
+    {
+      "id": "settingsAndPolish",
+      "icon": "sparkles",
+      "en": "Settings is reorganized with a Language and region section, and every screen now shares the same icons, spacing, focus ring and selection, so the app reads as one piece.",
+      "es": "Ajustes se reorganiza con una sección Idioma y región, y todas las pantallas comparten ya los mismos iconos, espaciado, foco y selección, para que la app se lea como una sola pieza."
+    },
+    {
+      "id": "fasterAndKeepsPlace",
+      "icon": "circle-fading-arrow-up",
+      "en": "GitOdile starts with a fifth less JavaScript, scrolls long diffs more smoothly, and keeps your selected file, version, branch and scroll when you come back to a screen.",
+      "es": "GitOdile arranca con una quinta parte menos de JavaScript, desplaza los diffs largos con más fluidez y conserva el archivo, la versión, la rama y el desplazamiento al volver a una pantalla."
+    }
+  ],
+  "pub_date": "2026-10-28T15:23:51Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTYWk4d1VpQ2Uxa2JGRjJZcmVyNU1pYlVkU2ErZGpiQkRObTBNbkZmaHB6SE4zdzJCeW9DWitGbUVQcUhjVzFodXBSaVp6ZzQvbHdyeEE3bVNzV25CUUxCRFozSDRoZnc0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMjAwOTU2CWZpbGU6R2l0T2RpbGVfMC40LjFfeDY0LXNldHVwLmV4ZQo3QjI4SGg5WVlLTjFCQVd6OHBpLzRrZzkxRTlYdjEyMjk5d2FCYzVwR0k5OFBaaGg4VmxqYkNWS3ZDUmZ3dkRnbWJ1V1hEbmI1RlVTekFhY25hM3lDQT09Cg==",
+      "url": "https://github.com/martinezelx/gitodile/releases/download/v0.4.1/GitOdile_0.4.1_x64-setup.exe",
+      "size": 3287273
+    },
+    "linux-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVTYWk4d1VpQ2Uxa1NQREhrclJSRXZ1UVJaZkxaWmVnZGZPVENvQ2JaQWxVeUdkOW40Q3labTBTZ2JCY1NDNVNNaGFiRE5zMWFtODczMkRRcXJsL2lsRE5vRDMyNDBKNUFBPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzMjAwOTU2CWZpbGU6R2l0T2RpbGVfMC40LjFfYW1kNjQuQXBwSW1hZ2UKYWFsaEl1SFIxUTFHRi82U3Rvcld6cm9yYWROTm1NVVIxWTVQWTlHekJjT0xDOVowak5tQ2Naa1pUbGpqV1p5T3lQRENnS1ZObkdWOXVMdzVQbWJiQnc9PQo=",
+      "url": "https://github.com/martinezelx/gitodile/releases/download/v0.4.1/GitOdile_0.4.1_amd64.AppImage",
+      "size": 83421688
+    }
+  }
+}
