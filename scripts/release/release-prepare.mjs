@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { HIGHLIGHTS_DIRECTORY, applyHighlightsBlock, highlightsFileName, scaffoldHighlights, todayIsoDate } from "./highlights.mjs";
 import { compareReleaseVersions, parseReleaseVersion, readReleaseMetadata, ReleaseValidationError } from "./release-candidate.mjs";
 
-const SOURCE_REPOSITORY = "martinezelx/gitodile-desktop";
+const SOURCE_REPOSITORY = "martinezelx/gitodile";
 const SOURCE_REMOTE = `https://github.com/${SOURCE_REPOSITORY}.git`;
 export const NOTES_PLACEHOLDER = "Replace this comment with curated public release notes before opening the pull request.";
 

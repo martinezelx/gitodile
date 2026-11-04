@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DERIVED_ASSET_NAMES, FEED_FILES, feedsForPromotion, PUBLIC_REPOSITORY, renderPublication, updateFeedbackReadme } from "./public-release.mjs";
+import { DERIVED_ASSET_NAMES, FEED_FILES, feedsForPromotion, PUBLIC_REPOSITORY, renderPublication } from "./public-release.mjs";
 import { ReleaseValidationError } from "./release-candidate.mjs";
 
 function fail(code, message) {
@@ -145,7 +145,7 @@ async function releaseByTag(client, tag) {
 async function publicMain(client) {
   const repository = await client.api("");
   if (repository.visibility !== "public" || repository.archived || repository.default_branch !== "main") {
-    fail("destination_invalid", "feedback destination must be the active public main repository");
+    fail("destination_invalid", "destination must be the active public main repository");
   }
   const ref = await client.api("/git/ref/heads/main");
   return ref.object.sha;
@@ -279,10 +279,6 @@ export async function publish({ directory, token, sourceRun, sourceRepository, f
   const currentFeeds = await loadCurrentFeeds(client);
   const feeds = feedsForPromotion({ ...plan, manifestBytes: rendered.manifestBytes }, currentFeeds);
   const files = Object.fromEntries(Object.entries(feeds).filter(([, bytes]) => bytes !== null).map(([feed, bytes]) => [`updates/${feed}.json`, bytes]));
-  const readme = await readPublicFile(client, "README.md");
-  if (!readme) fail("readme_contract", "public feedback README is missing");
-  const nextReadme = updateFeedbackReadme(readme.bytes.toString("utf8"));
-  if (nextReadme !== readme.bytes.toString("utf8")) files["README.md"] = nextReadme;
   if (Object.keys(files).length > 0) {
     mainSha = await atomicPublicCommit(client, mainSha, files, `release: publish GitOdile ${plan.release.version}`);
   }

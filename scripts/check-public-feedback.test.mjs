@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { dump } from "js-yaml";
-import { feedbackContract, validateFeedbackForms, validateFeedbackSettings, validatePublicationReadme } from "./check-public-feedback.mjs";
-import { updateFeedbackReadme } from "./release/public-release.mjs";
+import { feedbackContract, validateFeedbackForms, validateFeedbackSettings } from "./check-public-feedback.mjs";
 
 function forms() {
   const result = {};
@@ -40,11 +39,5 @@ describe("public feedback publication check", () => {
     const labels = [{ name: "bug" }, { name: "enhancement" }];
     expect(() => validateFeedbackSettings(repository, { enabled: false }, labels)).toThrow(/Private vulnerability reporting/);
     expect(() => validateFeedbackSettings(repository, { enabled: true }, labels)).not.toThrow();
-  });
-  it("validates the planned bilingual enabled-target guidance without exposing source internals", () => {
-    const planned = updateFeedbackReadme("# GitOdile feedback\n");
-    expect(() => validatePublicationReadme(planned)).not.toThrow();
-    expect(() => validatePublicationReadme(planned.replace("Tauri updater-signed Windows x86-64 NSIS installers", "Installers"))).toThrow(/Tauri updater-signed Windows/);
-    expect(() => validatePublicationReadme(`${planned}\n${planned}`)).toThrow(/duplicate/);
   });
 });

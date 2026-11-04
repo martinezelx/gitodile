@@ -88,7 +88,7 @@ jobs:
           GIT_SSH_COMMAND: ssh -i "$RUNNER_TEMP/release-tag-key/id_ed25519" -o IdentitiesOnly=yes -o UserKnownHostsFile="$RUNNER_TEMP/release-tag-key/known_hosts"
         run: |
           set -euo pipefail
-          git remote add release-origin git@github.com:martinezelx/gitodile-desktop.git
+          git remote add release-origin git@github.com:martinezelx/gitodile.git
           existing="$(git ls-remote --refs --tags release-origin "refs/tags/$RELEASE_TAG" | awk '{print $1}')"
           decision="$(EXISTING="$existing" node --input-type=module -e 'import { decideTag } from "./scripts/release/merge-release.mjs"; process.stdout.write(decideTag(process.env.EXISTING || null, process.env.RELEASE_SHA));')"
           if [[ "$decision" == create ]]; then

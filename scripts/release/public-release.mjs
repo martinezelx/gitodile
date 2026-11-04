@@ -8,8 +8,6 @@ import { productionAllowed, validateQualificationRegistry } from "./qualificatio
 
 export const PUBLIC_REPOSITORY = "martinezelx/gitodile";
 export const PUBLIC_RELEASE_ORIGIN = `https://github.com/${PUBLIC_REPOSITORY}/releases/download`;
-export const GUIDANCE_START = "<!-- gitodile-downloads:start -->";
-export const GUIDANCE_END = "<!-- gitodile-downloads:end -->";
 const SOURCE_ARCHIVE = /(?:^|[-_.])(source|src)(?:[-_.]|$)/i;
 const SECRET_NAME = /(?:private[-_.]?key|certificate|credential|secret|token|source[-_.]?archive)/i;
 /** A release published before the qualification registry is complete:
@@ -271,19 +269,6 @@ export function feedsForPromotion(plan, current = {}) {
     result[feed] = plan.manifestBytes;
   }
   return result;
-}
-
-export function updateFeedbackReadme(readme) {
-  const guidance = `${GUIDANCE_START}\n## Downloads / Descargas\n\nTauri updater-signed Windows x86-64 NSIS installers, Linux x86-64 AppImages and their application-update files are attached to each [GitOdile release](https://github.com/${PUBLIC_REPOSITORY}/releases). Releases may be public before installed-update qualification is complete; their notes then say so. Windows packages through 1.0.0 intentionally lack Authenticode and may show SmartScreen or unknown-publisher warnings. macOS is not yet qualified and no macOS package is published. Existing installers remain available for reinstall; a withdrawn update may stop appearing in the update feed but is not silently replaced. [Application source](https://github.com/martinezelx/gitodile-desktop) is maintained separately and signing material is never published.\n\nLos instaladores NSIS de Windows x86-64 firmados para el actualizador de Tauri, las AppImage para Linux x86-64 y sus archivos de actualización se adjuntan a cada [versión de GitOdile](https://github.com/${PUBLIC_REPOSITORY}/releases). Las versiones pueden publicarse antes de completar la cualificación de actualización instalada; sus notas lo indican. Los paquetes de Windows hasta 1.0.0 carecen intencionadamente de Authenticode y pueden mostrar avisos de SmartScreen o de editor desconocido. macOS todavía no está cualificado y no se publica ningún paquete para macOS. Los instaladores anteriores se conservan para reinstalar; una actualización retirada puede dejar de aparecer en el feed de actualizaciones, pero no se sustituye silenciosamente. El [código de la aplicación](https://github.com/martinezelx/gitodile-desktop) se mantiene por separado y el material de firma nunca se publica.\n${GUIDANCE_END}`;
-  if (readme.includes(GUIDANCE_START)) {
-    const pattern = new RegExp(`${GUIDANCE_START}[\\s\\S]*?${GUIDANCE_END}`);
-    if (!pattern.test(readme)) fail("readme_contract", "download guidance markers are malformed");
-    return readme.replace(pattern, guidance);
-  }
-  const cleaned = readme
-    .replace("There is no source code here, and there are no pull requests to send. Issues,\n", "There is no application source code here, and there are no source pull requests to send. Issues,\n")
-    .replace("El código de la aplicación es privado. Este repositorio no contiene código de\nla aplicación ni descargas.", "El código de la aplicación no se mantiene en este repositorio.");
-  return `${cleaned.trimEnd()}\n\n${guidance}\n`;
 }
 
 function parseArgs(argv) {

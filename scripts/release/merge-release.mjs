@@ -11,7 +11,7 @@ import {
 import { isProtectedReleasePath, NOTES_PLACEHOLDER, PROTECTED_RELEASE_PREFIXES } from "./release-prepare.mjs";
 import { extractHighlightsBlock, highlightsFileName, parseHighlights, renderHighlightsBlock } from "./highlights.mjs";
 
-export const SOURCE_REPOSITORY = "martinezelx/gitodile-desktop";
+export const SOURCE_REPOSITORY = "martinezelx/gitodile";
 export const REQUIRED_RELEASE_CHECKS = Object.freeze([
   "Frontend checks",
   "Public feedback contract",

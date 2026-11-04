@@ -82,8 +82,10 @@ no field and the app falls back to the notes. See
 Only the `publish` job enters a destination environment and receives
 `GITODILE_PUBLIC_RELEASE_TOKEN`. Use a short-lived GitHub App installation token
 with Contents write access only to `martinezelx/gitodile`; a narrowly
-scoped expiring fine-grained PAT is the temporary fallback. This job does not
-check out the source repository, and it is serialized across every release
+scoped expiring fine-grained PAT is the temporary fallback. The credential must
+be able to bypass the `Protect main` ruleset, because the feed commit goes
+straight to `main`; `GITHUB_TOKEN` cannot. This job does not check out the
+repository, and it is serialized across every release
 through the `gitodile-publication` concurrency group so an older run can never
 race a newer one at the feeds. Source visibility is not an authorization
 boundary. Every release, in either mode, publishes through the one
@@ -125,8 +127,8 @@ before any destination request.
    installed-update pass. After 065-9-7/065-9-8 have recorded both enabled
    targets and production approval, later releases enter `production`. Do not
    edit the notes or qualification registry during a retry.
-5. The `publish` job creates the public lightweight tag at a commit in the
-   feedback repository and reconciles one draft release. Drafts are found by
+5. The `publish` job finds the tag the coordinator created and reconciles one
+   draft release. Drafts are found by
    listing releases, because GitHub does not resolve a draft by its tag.
    Existing bytes are downloaded and hashed. While the release is still a
    draft, nobody could download it, so a missing asset is uploaded and a
@@ -200,12 +202,11 @@ version or promise rollback. Publish a higher-version repair when possible.
 Old signed installers remain available for manual reinstall and updater-key
 rotation bridges.
 
-The `publish` job updates the feedback README download block in the same
-conflict-checked commit as the first feed change. The issue forms are never
-written. The `stage` job runs `check-public-feedback.mjs --publication-plan`,
-which checks their filenames, IDs, labels, private security channel,
-repository settings and the planned README guidance against the live
-destination before the privileged job. It does not repeat the repository gate
+The `publish` job writes only the feed, in one conflict-checked commit. The
+issue forms and the README are never written. The `stage` job runs
+`check-public-feedback.mjs`, which checks the forms' filenames, IDs and labels
+in the checkout and the private security channel and repository settings live,
+before the privileged job. It does not repeat the repository gate
 (`pnpm run check`): that gate already ran in CI on the exact merge SHA and the
 coordinator required it, whereas the staging job checks out protected `main`'s
 current tip. `pnpm run check:publication` remains the local pre-release

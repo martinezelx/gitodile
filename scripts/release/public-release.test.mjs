@@ -31,7 +31,6 @@ import {
   preparePublication,
   renderPublication,
   runPrepareCli,
-  updateFeedbackReadme,
 } from "./public-release.mjs";
 import { ANONYMOUS_RETRY, anonymousHash, atomicPublicCommit, publish, reconcileAssets, validateSourceRun } from "./github-publication.mjs";
 import { tempDir } from "./test-temp.mjs";
@@ -74,7 +73,7 @@ function qualification(enabled = false, pair = PAIR) {
     sourceSha: hash(index, 40),
     signedMatrixSha256: hash(index + 2, 64),
     manifestSha256: hash(index + 3, 64),
-    pipelineRunUrl: `https://github.com/martinezelx/gitodile-desktop/actions/runs/${index + 10}`,
+    pipelineRunUrl: `https://github.com/martinezelx/gitodile/actions/runs/${index + 10}`,
     publicReleaseUrl: `https://github.com/martinezelx/gitodile/releases/tag/v${version}`,
     publicTagCommit: hash(index + 1, 40),
     installerArtifact: asset(key, version, "installer", index + 4),
@@ -107,7 +106,7 @@ function qualification(enabled = false, pair = PAIR) {
         workingNameClearance: { result: "passed", reviewedAt: "2026-09-11T11:00:00Z", referenceUrl: "https://example.com/clearance/065-9-7" },
         publisher: {
           result: "passed",
-          pipelineRunUrl: "https://github.com/martinezelx/gitodile-desktop/actions/runs/99",
+          pipelineRunUrl: "https://github.com/martinezelx/gitodile/actions/runs/99",
           reportSha256: "9".repeat(64),
           ...Object.fromEntries(REQUIRED_PUBLISHER_CHECKS.map((name) => [name, "passed"])),
         },
@@ -376,7 +375,7 @@ test("production rejects shallow, cross-target, wrong-key, off-repository and in
     observedAt: "2026-09-11T12:00:00Z",
     installationMode: "windows_nsis_per_user",
     signedMatrixSha256: "1".repeat(64),
-    runUrl: "https://github.com/martinezelx/gitodile-desktop/actions/runs/1",
+    runUrl: "https://github.com/martinezelx/gitodile/actions/runs/1",
   }];
   expectCode("qualification_required", () => production(shallow));
 
@@ -398,7 +397,7 @@ test("production rejects shallow, cross-target, wrong-key, off-repository and in
   expectCode("qualification_required", () => production(foreignAsset));
 
   const foreignRelease = qualification(true);
-  foreignRelease.targets[0].evidence[0].builds.from.publicReleaseUrl = `https://github.com/martinezelx/gitodile-desktop/releases/tag/v${PAIR.from}`;
+  foreignRelease.targets[0].evidence[0].builds.from.publicReleaseUrl = `https://github.com/martinezelx/gitodile-fork/releases/tag/v${PAIR.from}`;
   expectCode("qualification_required", () => production(foreignRelease));
 
   const wrongFeed = qualification(true);
@@ -632,7 +631,7 @@ function stagedPublication(version, mode) {
 }
 
 function publishStaged(directory, fetchImpl, overrides = {}) {
-  return publish({ directory, token: "t", sourceRun: SOURCE_RUN, sourceRepository: "martinezelx/gitodile-desktop", fetchImpl, retry: FAST_RETRY, ...overrides });
+  return publish({ directory, token: "t", sourceRun: SOURCE_RUN, sourceRepository: "martinezelx/gitodile", fetchImpl, retry: FAST_RETRY, ...overrides });
 }
 
 const SOURCE_RUN = {
@@ -643,13 +642,12 @@ const SOURCE_RUN = {
   conclusion: null,
   path: ".github/workflows/release-pipeline.yml",
   head_branch: "main",
-  repository: { full_name: "martinezelx/gitodile-desktop" },
+  repository: { full_name: "martinezelx/gitodile" },
 };
-const README = "# GitOdile — feedback\n\nThere is no source code here, and there are no pull requests to send. Issues,\n\nEl código de la aplicación es privado. Este repositorio no contiene código de\nla aplicación ni descargas.\n";
 
 test("a first publication creates the draft, publishes it, verifies anonymous bytes and advances the feed", async () => {
   const directory = stagedPublication("0.3.0", "testing");
-  const { state, fetchImpl } = fakeDestination({ initialFiles: { "README.md": README } });
+  const { state, fetchImpl } = fakeDestination();
   const result = await publishStaged(directory, fetchImpl, { token: "destination-token" });
   assert.equal(result.state, "published");
   assert.equal(result.publishedAt, PUBLISHED_AT);
@@ -670,7 +668,7 @@ test("a first publication creates the draft, publishes it, verifies anonymous by
   assert.equal(JSON.parse(state.files["updates/latest.json"]).version, "0.3.0");
   assert.equal(JSON.parse(state.files["updates/latest.json"]).pub_date, PUBLISHED_AT);
   assert.equal(state.files["updates/stable.json"], undefined);
-  assert.match(state.files["README.md"], /gitodile-downloads:start/);
+  assert.equal(state.files["README.md"], undefined, "the publisher writes the feed and nothing else");
   assert.equal(state.tagSha, "c".repeat(40));
   assert.equal(state.mainSha, result.publicCommit);
 });
@@ -679,7 +677,7 @@ test("an interrupted publication resumes from an existing draft that the tag loo
   // The exact state left by run 34907058498: the draft exists with every
   // asset uploaded, and GET /releases/tags/{tag} answers 404 for it.
   const first = stagedPublication("0.3.0", "testing");
-  const seeded = fakeDestination({ initialFiles: { "README.md": README } });
+  const seeded = fakeDestination();
   await assert.rejects(publishStaged(first, async (url, options) => {
     if (String(url).includes("/releases/") && options?.method === "PATCH") throw new Error("network interrupted before publishing the draft");
     return seeded.fetchImpl(url, options);
@@ -713,7 +711,7 @@ test("an interrupted publication resumes from an existing draft that the tag loo
 });
 
 test("a publication interrupted after publishing but before the manifest upload completes it with the recorded time", async () => {
-  const seeded = fakeDestination({ initialFiles: { "README.md": README } });
+  const seeded = fakeDestination();
   let published = false;
   await assert.rejects(publishStaged(stagedPublication("0.3.0", "testing"), async (url, options) => {
     if (published && String(url).startsWith("https://uploads.example/")) throw new Error("upload interrupted after publication");
@@ -736,7 +734,7 @@ test("a publication interrupted after publishing but before the manifest upload 
 test("a stale manifest on a draft is rendered again, and a published manifest can never be replaced", async () => {
   // A draft left by the previous publisher, which staged latest.json from
   // the commit date before publishing.
-  const seeded = fakeDestination({ initialFiles: { "README.md": README } });
+  const seeded = fakeDestination();
   await assert.rejects(publishStaged(stagedPublication("0.3.0", "testing"), async (url, options) => {
     if (String(url).includes("/releases/") && options?.method === "PATCH") throw new Error("interrupted");
     return seeded.fetchImpl(url, options);
@@ -761,7 +759,7 @@ test("a stale manifest on a draft is rendered again, and a published manifest ca
 });
 
 test("a CDN that answers 404 briefly after publication is retried; a persistent 404 stops before the feed", async () => {
-  const seeded = fakeDestination({ initialFiles: { "README.md": README } });
+  const seeded = fakeDestination();
   const notFound = new Map();
   const flaky = (failures) => async (url, options) => {
     if (String(url).startsWith("https://public.example/assets/") && !options?.headers?.Authorization) {
@@ -776,7 +774,7 @@ test("a CDN that answers 404 briefly after publication is retried; a persistent 
   assert.deepEqual(result.feedsChanged, ["latest"]);
   assert.ok([...notFound.values()].every((seen) => seen > 2), "every anonymous download was retried past the 404s");
 
-  const persistent = fakeDestination({ initialFiles: { "README.md": README } });
+  const persistent = fakeDestination();
   await assert.rejects(
     publishStaged(stagedPublication("0.3.0", "testing"), async (url, options) => {
       if (String(url).startsWith("https://public.example/assets/") && !options?.headers?.Authorization) return new Response("gone", { status: 404 });
@@ -793,7 +791,7 @@ test("a re-dispatched pipeline replaces a draft's stale assets but can never tou
   // Run 34909190392 rebuilt v0.2.10 from scratch and met the draft
   // that run 34907058498 had filled with different installer bytes.
   const first = stagedPublication("0.3.0", "testing");
-  const seeded = fakeDestination({ initialFiles: { "README.md": README } });
+  const seeded = fakeDestination();
   await assert.rejects(publishStaged(first, async (url, options) => {
     if (String(url).includes("/releases/") && options?.method === "PATCH") throw new Error("interrupted");
     return seeded.fetchImpl(url, options);
@@ -826,7 +824,7 @@ test("a re-dispatched pipeline replaces a draft's stale assets but can never tou
   assert.equal(seeded.state.files["updates/latest.json"], feedBefore);
 });
 
-test("source workflow and public README contracts reject unsafe provenance and update guidance idempotently", () => {
+test("the source workflow contract rejects unsafe provenance", () => {
   // Shape observed from GET /actions/runs/34905088346: with `run-name` set,
   // the API reports the per-run title in `name`, not the workflow name.
   const run = {
@@ -837,26 +835,19 @@ test("source workflow and public README contracts reject unsafe provenance and u
     conclusion: null,
     path: ".github/workflows/release-pipeline.yml",
     head_branch: "main",
-    repository: { full_name: "martinezelx/gitodile-desktop" },
+    repository: { full_name: "martinezelx/gitodile" },
   };
-  assert.equal(validateSourceRun(run, "martinezelx/gitodile-desktop"), true);
-  assert.equal(validateSourceRun({ ...run, name: "Release v0.2.0 at 977aa58bd3fac28cfcdfa3826ad7074188f9cac5" }, "martinezelx/gitodile-desktop"), true);
-  expectCode("source_run_invalid", () => validateSourceRun({ ...run, name: "Release pipeline" }, "martinezelx/gitodile-desktop"));
-  expectCode("source_run_invalid", () => validateSourceRun({ ...run, name: "Release v0.3.0-beta.1 at 977aa58bd3fac28cfcdfa3826ad7074188f9cac5" }, "martinezelx/gitodile-desktop"));
-  expectCode("source_run_invalid", () => validateSourceRun({ ...run, name: "Release v0.2.0-alpha.1 at 977aa58bd3fac28cfcdfa3826ad7074188f9cac5" }, "martinezelx/gitodile-desktop"));
-  assert.equal(validateSourceRun({ ...run, status: "completed", conclusion: "success" }, "martinezelx/gitodile-desktop"), true);
-  expectCode("source_run_invalid", () => validateSourceRun({ ...run, status: "completed", conclusion: "failure" }, "martinezelx/gitodile-desktop"));
-  expectCode("source_run_invalid", () => validateSourceRun({ ...run, status: "completed", conclusion: null }, "martinezelx/gitodile-desktop"));
-  expectCode("source_run_invalid", () => validateSourceRun({ ...run, event: "workflow_run" }, "martinezelx/gitodile-desktop"));
-  expectCode("source_run_invalid", () => validateSourceRun({ ...run, head_branch: "release/0.3.0" }, "martinezelx/gitodile-desktop"));
-  expectCode("source_run_invalid", () => validateSourceRun({ ...run, path: ".github/workflows/ci.yml" }, "martinezelx/gitodile-desktop"));
-  const first = updateFeedbackReadme("# GitOdile — feedback\n\nThere is no source code here, and there are no pull requests to send. Issues,\n\nEl código de la aplicación es privado. Este repositorio no contiene código de\nla aplicación ni descargas.\n");
-  assert.match(first, /Tauri updater-signed Windows x86-64/);
-  assert.match(first, /intentionally lack Authenticode/);
-  assert.match(first, /their notes then say so/);
-  assert.doesNotMatch(first, /prerelease/i);
-  assert.match(first, /macOS is not yet qualified/);
-  assert.equal(updateFeedbackReadme(first), first);
+  assert.equal(validateSourceRun(run, "martinezelx/gitodile"), true);
+  assert.equal(validateSourceRun({ ...run, name: "Release v0.2.0 at 977aa58bd3fac28cfcdfa3826ad7074188f9cac5" }, "martinezelx/gitodile"), true);
+  expectCode("source_run_invalid", () => validateSourceRun({ ...run, name: "Release pipeline" }, "martinezelx/gitodile"));
+  expectCode("source_run_invalid", () => validateSourceRun({ ...run, name: "Release v0.3.0-beta.1 at 977aa58bd3fac28cfcdfa3826ad7074188f9cac5" }, "martinezelx/gitodile"));
+  expectCode("source_run_invalid", () => validateSourceRun({ ...run, name: "Release v0.2.0-alpha.1 at 977aa58bd3fac28cfcdfa3826ad7074188f9cac5" }, "martinezelx/gitodile"));
+  assert.equal(validateSourceRun({ ...run, status: "completed", conclusion: "success" }, "martinezelx/gitodile"), true);
+  expectCode("source_run_invalid", () => validateSourceRun({ ...run, status: "completed", conclusion: "failure" }, "martinezelx/gitodile"));
+  expectCode("source_run_invalid", () => validateSourceRun({ ...run, status: "completed", conclusion: null }, "martinezelx/gitodile"));
+  expectCode("source_run_invalid", () => validateSourceRun({ ...run, event: "workflow_run" }, "martinezelx/gitodile"));
+  expectCode("source_run_invalid", () => validateSourceRun({ ...run, head_branch: "release/0.3.0" }, "martinezelx/gitodile"));
+  expectCode("source_run_invalid", () => validateSourceRun({ ...run, path: ".github/workflows/ci.yml" }, "martinezelx/gitodile"));
 });
 
 test("publication is the final job of the single release pipeline, derives its mode, and keeps destination credentials out of staging", () => {
@@ -877,7 +868,7 @@ test("publication is the final job of the single release pipeline, derives its m
   assert.match(source, /qualification-evidence\.mjs/);
   assert.doesNotMatch(JSON.stringify(workflow.jobs.stage), /check:publication|libwebkit2gtk/,
     "staging checks the live destination contract only; the repository gate ran on the merge SHA");
-  assert.match(JSON.stringify(workflow.jobs.stage), /check-public-feedback\.mjs --publication-plan/);
+  assert.match(JSON.stringify(workflow.jobs.stage), /check-public-feedback\.mjs/);
   assert.match(source, /derivePublicationMode\(qualification\)/);
   assert.doesNotMatch(source, /published_at|committer\.date|--published-at/,
     "the publication time is GitHub's published_at, read by the publish job; staging must not invent one");
