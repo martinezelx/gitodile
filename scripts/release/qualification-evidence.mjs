@@ -51,7 +51,7 @@ export const REQUIRED_PUBLISHER_CHECKS = Object.freeze([
 
 const SHA256 = /^[0-9a-f]{64}$/;
 const SOURCE_SHA = /^[0-9a-f]{40}(?:[0-9a-f]{24})?$/;
-const RUN_URL = /^https:\/\/github\.com\/martinezelx\/gitodile-desktop\/actions\/runs\/[1-9][0-9]*(?:\/attempts\/[1-9][0-9]*)?$/;
+const RUN_URL = /^https:\/\/github\.com\/martinezelx\/gitodile\/actions\/runs\/[1-9][0-9]*(?:\/attempts\/[1-9][0-9]*)?$/;
 const HTTPS_URL = /^https:\/\//;
 const ASSET_NAME = /^[A-Za-z0-9._-]+$/;
 

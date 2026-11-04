@@ -358,9 +358,26 @@ ${list(art.cover)}
 `;
 }
 
+/** README artwork uses the Home geometry with transparent belly, toes and eyes. */
+export function readmeMascotSvg(ink) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="990" viewBox="${viewBox("body")}">
+  <title>GitOdile</title>
+  <defs>
+    <mask id="eyes" maskUnits="userSpaceOnUse" x="50" y="160" width="1160" height="990" style="mask-type:luminance">
+      <rect x="50" y="160" width="1160" height="990" fill="#ffffff" />
+      <g fill="#000000">${EYES.map((d) => `<path d="${d}" />`).join("")}</g>
+    </mask>
+  </defs>
+  <path d="${[BODY_OUTLINE, BELLY, ...TOES].join(" ")}" fill="${ink}" fill-rule="evenodd" mask="url(#eyes)" />
+</svg>
+`;
+}
+
 /** Every text file this module generates, keyed by path. */
 export function generatedFiles() {
   return {
+    [path.join(root, "docs", "readme", "gitodile-mascot-light.svg")]: readmeMascotSvg("#000000"),
+    [path.join(root, "docs", "readme", "gitodile-mascot-dark.svg")]: readmeMascotSvg("#ffffff"),
     [path.join(assetsDir, "gitodile-mascot.svg")]: mascotSvg("body"),
     [path.join(assetsDir, "gitodile-mascot-head.svg")]: mascotSvg("head"),
     [path.join(brandDir, "gitodile-icon.svg")]: iconSourceSvg({ platform: "default" }),

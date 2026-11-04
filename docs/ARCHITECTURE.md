@@ -1324,8 +1324,8 @@ assets, and browser preferences use **GitOdile** / `gitodile`:
 - browser preferences use `gitodile-*`, without a brand-compatibility reader;
 - recovery schema v1 uses `refs/gitodile/recovery/...` and
   `<git-dir>/gitodile/...`;
-- source links target `https://github.com/martinezelx/gitodile-desktop`; user
-  feedback, releases and downloads target the public `https://github.com/martinezelx/gitodile`.
+- source links, user feedback, releases and downloads all target the public
+  `https://github.com/martinezelx/gitodile`.
 
 The owner explicitly authorized a breaking pre-release identity reset, recorded
 in [ADR 0009](adr/0009-use-only-the-canonical-product-identity.md). Previous-brand
@@ -1357,6 +1357,10 @@ signing, and packaging remain unmeasured release gates, not implied support
 claims.
 
 ### Application icon and Windows shortcuts
+
+The same generator writes the README's light/dark SVGs under `docs/readme/`,
+using the Home mascot geometry with transparent belly, toes and eyes.
+`check:icons` checks these exports alongside the application artwork.
 
 `scripts/icons/mascot.mjs` is the only hand-maintained icon source. It holds
 the mascot as one drawing (ADR 0031), built from the traced shapes in

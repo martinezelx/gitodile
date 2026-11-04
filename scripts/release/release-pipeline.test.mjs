@@ -444,7 +444,7 @@ test("workflows expose no branch publication path and pin external actions", () 
   // repository gate already ran on the exact merge SHA and was required by the
   // coordinator, so repeating it here would test main's tip, not the release.
   const stageContract = pipeline.parsed.jobs.stage.steps.find((step) => step.name === "Require the live public destination contract");
-  assert.equal(stageContract.run, "node scripts/check-public-feedback.mjs --publication-plan");
+  assert.equal(stageContract.run, "node scripts/check-public-feedback.mjs");
   assert.equal(stageContract.env.GITHUB_TOKEN, "${{ github.token }}");
   assert.doesNotMatch(JSON.stringify(pipeline.parsed.jobs.stage), /check:publication|pnpm run check\b|libwebkit2gtk|apt-get|rust-toolchain/,
     "stage must not repeat the repository gate against protected main's current tip");

@@ -165,7 +165,7 @@ for (const [owner, version] of [
   }
 }
 const readme = fs.readFileSync(path.join(root, "README.md"), "utf8");
-for (const expected of [packageJson.version, packageJson.packageManager, packageJson.engines.node]) {
+for (const expected of [`Current development version: **${packageJson.version}**.`, packageJson.packageManager, packageJson.engines.node]) {
   if (!readme.includes(expected)) errors.push(`README.md must mention current package metadata: ${expected}`);
 }
 

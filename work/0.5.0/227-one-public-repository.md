@@ -97,14 +97,14 @@ Migration, in this order, each step confirmed by the maintainer:
 # Acceptance criteria
 
 - [ ] An installed 0.4.1 detects, downloads, verifies and installs 0.5.0.
-- [ ] The feed URL and all assets of v0.3.0, v0.4.0 and v0.4.1 answer
+- [x] The feed URL and all assets of v0.3.0, v0.4.0 and v0.4.1 answer
       anonymously under `martinezelx/gitodile`, with hashes equal to the hub's.
 - [ ] A release merge tags, builds and publishes, including its feed commit to
       the protected `main`, with no manual step.
-- [ ] `check:feedback` passes with no second repository.
+- [x] `check:feedback` passes with no second repository.
 - [ ] The issue report in the app opens the form in `martinezelx/gitodile`.
-- [ ] `git remote` and the clone instructions use the final name.
-- [ ] The feed answered throughout, apart from the gap between the two renames.
+- [x] `git remote` and the clone instructions use the final name.
+- [x] The feed answered throughout, apart from the gap between the two renames.
 - [ ] `pnpm run check` passes.
 
 # Relevant files
@@ -139,8 +139,27 @@ contract does not change.
 
 # Implementation notes
 
-Complete this section during implementation.
+Migration steps 1 to 6 ran on 2026-11-04. The repository changes landed through
+pull request 71, merged minutes before the rename rather than after it; nothing
+ran in between, because only a release merge reads `SOURCE_REPOSITORY`.
+
+Additions to the plan:
+
+- Private vulnerability reporting was off on the code repository and had to be
+  enabled before the rename, because `check:feedback` requires it.
+- The publication token keeps access to both repositories until the hub is
+  archived, so replacing the secret never broke the old path.
+- The modernized README on `main` had lost the `Current development version`
+  line that `release:prepare` and the coordinator read. The merge into
+  `release/0.5.0` restores it, and `check-docs.mjs` now requires the exact line.
 
 # Validation
 
-Not started.
+- Seed commit `439a22c`: the token passed `Protect main`, feed byte-identical.
+- Releases v0.3.0, v0.4.0 and v0.4.1 recreated: all 24 assets equal the hub's by
+  SHA-256 after downloading them back.
+- After the rename, anonymously: the feed answered 200 with SHA-256
+  `4569d2fb...` and all 24 asset URLs answered 200; `gitodile-desktop` redirects.
+- `node scripts/check-public-feedback.mjs` passed against the renamed repository.
+- Still open: installed 0.4.1 to 0.5.0, a release merge through the new path, and
+  the issue form opened from the app.

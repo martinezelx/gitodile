@@ -463,8 +463,8 @@ describe("About dialog", () => {
     expect(dialog).toHaveTextContent("GNU AGPL v3.0 only");
     await userEvent.click(screen.getByRole("button", { name: "View license" }));
     await userEvent.click(screen.getByRole("button", { name: "View source code" }));
-    expect(openUrl).toHaveBeenNthCalledWith(1, "https://github.com/martinezelx/gitodile-desktop/blob/main/LICENSE");
-    expect(openUrl).toHaveBeenNthCalledWith(2, "https://github.com/martinezelx/gitodile-desktop");
+    expect(openUrl).toHaveBeenNthCalledWith(1, "https://github.com/martinezelx/gitodile/blob/main/LICENSE");
+    expect(openUrl).toHaveBeenNthCalledWith(2, "https://github.com/martinezelx/gitodile");
   });
   it("reports the product and the machine, and leaves release notes to Settings", () => {
     renderOverlays();

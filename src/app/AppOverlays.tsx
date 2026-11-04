@@ -614,8 +614,8 @@ export function AppOverlays({
                 against the diagnostics below. */}
             <div className="about-dialog__legal about-dialog__legal--bare">
               <span>{t.aboutLicense}</span>
-              <button type="button" onClick={() => void openUrl("https://github.com/martinezelx/gitodile-desktop/blob/main/LICENSE").catch(() => undefined)}>{t.aboutViewLicense}</button>
-              <button type="button" onClick={() => void openUrl("https://github.com/martinezelx/gitodile-desktop").catch(() => undefined)}>{t.aboutViewSource}</button>
+              <button type="button" onClick={() => void openUrl("https://github.com/martinezelx/gitodile/blob/main/LICENSE").catch(() => undefined)}>{t.aboutViewLicense}</button>
+              <button type="button" onClick={() => void openUrl("https://github.com/martinezelx/gitodile").catch(() => undefined)}>{t.aboutViewSource}</button>
             </div>
             <div className="about-dialog__rule" aria-hidden="true" />
             {(systemInfo || webviewVersion || gitVersion) && (

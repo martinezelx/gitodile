@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    # The publisher commits only the feed; it changes no source.
+    paths-ignore: ["updates/**"]
   pull_request:
 
 permissions:

@@ -1,10 +1,23 @@
-# Security Policy
+# Security policy
 
-GitOdile is pre-release software and does not yet provide a formal support window.
+## Reporting a vulnerability
 
-Please avoid filing public issues for vulnerabilities that could expose credentials, execute unintended commands, corrupt repositories, or disclose private source code. Contact the repository owner privately through GitHub until a dedicated security contact is published.
+Please **do not** open a public issue for a security vulnerability.
 
-Security-sensitive areas include:
+Report it privately through GitHub's
+[private vulnerability reporting](https://github.com/martinezelx/gitodile/security/advisories/new).
+The report is private to you and the maintainers. Publishing an advisory is a
+separate, coordinated action; shipping a fix does not publish your report automatically.
+
+Useful things to include:
+
+- What an attacker can do, and what they need in order to do it.
+- The GitOdile version and operating system you observed it on.
+- Reproduction steps, if you have them.
+
+GitOdile runs local Git operations against a user's own repositories and holds
+repository paths, remote URLs and credential-helper interactions. Security-sensitive
+areas include:
 
 - process execution;
 - path validation;
@@ -13,3 +26,18 @@ Security-sensitive areas include:
 - remote URLs;
 - update delivery;
 - optional AI or telemetry features.
+
+## Supported versions
+
+GitOdile is in alpha. Only the most recent release is supported.
+
+## Español
+
+No abras una incidencia pública para comunicar una vulnerabilidad. Usa el
+[formulario privado de seguridad](https://github.com/martinezelx/gitodile/security/advisories/new).
+Necesitas una cuenta de GitHub. El informe es privado para ti y los responsables
+del proyecto; publicar un aviso de seguridad es una acción posterior coordinada.
+
+Indica qué puede hacer un atacante, qué necesita para hacerlo, la versión de
+GitOdile y del sistema operativo, y los pasos para reproducirlo, si los tienes.
+GitOdile está en fase alfa; solo se mantiene la versión más reciente.
