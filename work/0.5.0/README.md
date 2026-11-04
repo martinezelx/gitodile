@@ -17,6 +17,7 @@ The three-pane conflict editor is not part of this version; it is epic
 | Queue | Task | Scope |
 | --- | --- | --- |
 | 01 | [213 — Frontend flow and visual review](213-frontend-flow-and-visual-review.md) | Approved resolver refinements implemented; complete the remaining frontend review. Backend assumed correct; temporary HTML previews removed after approval. |
+| 02 | [227 — One public repository](227-one-public-repository.md) | Rename the code repository to `gitodile` and bring in issues, releases and the update feed, keeping installed builds updating. |
 
 The maintainer requested this additional frontend review on 2026-10-31 after
 closing the original implementation phase. The original implementation closure
