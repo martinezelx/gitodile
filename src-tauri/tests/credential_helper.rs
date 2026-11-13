@@ -6,16 +6,13 @@ use std::net::TcpListener;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
-/// A helper program from `src-tauri/examples/`, which Cargo builds next to
-/// this test binary for `cargo test`.
+/// A helper program from `src-tauri/examples/`, which Cargo builds with this
+/// test binary for `cargo test`. The same search as `test_support::example_binary`,
+/// which this integration test cannot reach.
 fn example_binary(name: &str) -> std::path::PathBuf {
-    let examples = std::env::current_exe()
-        .expect("locate the test binary")
-        .parent()
-        .and_then(std::path::Path::parent)
-        .expect("the target profile directory")
-        .join("examples");
-    // A plain `cargo test` also links `<name>` beside the hashed
+    use std::path::{Path, PathBuf};
+    let test_binary = std::env::current_exe().expect("locate the test binary");
+    // A plain `cargo test` may also link `<name>` beside the hashed
     // `<name>-<hash>` build; the newest of them is the current source.
     let built = |file: &str| {
         let stem = file.strip_suffix(std::env::consts::EXE_SUFFIX)?;
@@ -26,24 +23,44 @@ fn example_binary(name: &str) -> std::path::PathBuf {
             }))
         .then_some(())
     };
-    let newest = fs::read_dir(&examples)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|entry| built(&entry.file_name().to_string_lossy()).is_some())
-        .max_by_key(|entry| {
-            entry
-                .metadata()
+    // Cargo's original layout keeps examples in `<profile>/examples`; the
+    // newer one gives every unit its own `<profile>/build/<package>/<hash>`.
+    fn collect(
+        directory: &Path,
+        depth: usize,
+        found: &mut Vec<PathBuf>,
+        built: &dyn Fn(&str) -> Option<()>,
+    ) {
+        for entry in fs::read_dir(directory).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if depth > 0 {
+                    collect(&path, depth - 1, found, built);
+                }
+            } else if built(&entry.file_name().to_string_lossy()).is_some() {
+                found.push(path);
+            }
+        }
+    }
+    let newest_under = |directory: &Path| {
+        let mut found = Vec::new();
+        collect(directory, 2, &mut found, &built);
+        found.into_iter().max_by_key(|path| {
+            fs::metadata(path)
                 .and_then(|metadata| metadata.modified())
                 .ok()
         })
-        .map(|entry| entry.path());
-    newest.unwrap_or_else(|| {
-        panic!(
-            "{name} is not built in {}: run `cargo test` without `--lib`, or `cargo build --examples` first",
-            examples.display()
-        )
-    })
+    };
+    test_binary
+        .ancestors()
+        .skip(1)
+        .find_map(newest_under)
+        .unwrap_or_else(|| {
+            panic!(
+                "{name} is not built near {}: run `cargo test` without `--lib`, or `cargo build --examples` first",
+                test_binary.display()
+            )
+        })
 }
 
 #[test]
