@@ -747,6 +747,10 @@ fn each_file_is_kept_marked_and_reset_exactly() {
         .to_vec()
     );
     assert_eq!(read_bytes("content.txt"), content_now);
+    assert_eq!(
+        file(&current, "content.txt").state,
+        ConflictFileState::Unresolved
+    );
 
     // Locked by another program: reported, nothing changed.
     #[cfg(windows)]
