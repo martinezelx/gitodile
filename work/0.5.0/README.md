@@ -16,12 +16,12 @@ The three-pane conflict editor is not part of this version; it is epic
 
 | Queue | Task | Scope |
 | --- | --- | --- |
-| 01 | [213 — Frontend flow and visual review](213-frontend-flow-and-visual-review.md) | Approved resolver refinements implemented; complete the remaining frontend review. Backend assumed correct; temporary HTML previews removed after approval. |
-| 02 | [227 — One public repository](227-one-public-repository.md) | Rename the code repository to `gitodile` and bring in issues, releases and the update feed, keeping installed builds updating. |
+| 01 | [227 — One public repository](227-one-public-repository.md) | Rename the code repository to `gitodile` and bring in issues, releases and the update feed, keeping installed builds updating. |
 
-The maintainer requested this additional frontend review on 2026-10-31 after
-closing the original implementation phase. The original implementation closure
-remains historical evidence; task 213 must finish separately.
+The maintainer requested an additional frontend review on 2026-10-31 after
+closing the original implementation phase. Its applied refinements ship in
+0.5.0; the rest of [213](../0.5.1/213-frontend-flow-and-visual-review.md) moved
+to 0.5.1 on 2026-11-13, so that 0.5.0 proves the update path first.
 
 The maintainer closed the implementation phase on 2026-10-31 under
 [ADR 0042](../../docs/adr/0042-propose-platform-qualification-carryover-for-050.md).

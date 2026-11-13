@@ -191,7 +191,7 @@ authorization ([148-8](after-1.0/148-8-bitbucket-accounts.md)) wait in
 `after-1.0/`.
 
 The additional frontend-only review of the completed 0.5.0 implementation is
-[213](0.5.0/213-frontend-flow-and-visual-review.md). It treats the backend as
+[213](0.5.1/213-frontend-flow-and-visual-review.md). It treats the backend as
 correct and keeps new runtime evidence separate from historical captures.
 Its temporary HTML previews were removed after design approval; the task
 retains the implementation and validation record.

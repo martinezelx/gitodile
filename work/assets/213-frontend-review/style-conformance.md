@@ -6,7 +6,7 @@ comprobación visual en Tauri. Backend fuera de alcance.
 Esta matriz conserva el diagnóstico previo a la implementación. El mantenedor
 aprobó después aplicar la propuesta a la pantalla principal; las correcciones
 efectuadas y su evidencia actual están en
-[la tarea y su validación](../../0.5.0/213-frontend-flow-and-visual-review.md#validation).
+[la tarea y su validación](../../0.5.1/213-frontend-flow-and-visual-review.md#validation).
 
 ## Criterio de aceptación
 
@@ -56,6 +56,6 @@ en geometría, material, lectura y estados; resolverlas antes de marcar el crite
 de coherencia como completo. No se declara «100% validado» con esta inspección.
 
 Fuentes: [DESIGN.md](../../../DESIGN.md),
-[tarea 213](../../0.5.0/213-frontend-flow-and-visual-review.md).
+[tarea 213](../../0.5.1/213-frontend-flow-and-visual-review.md).
 Los HTML fueron prototipos temporales, retirados por petición del mantenedor.
 Esta matriz no cambia código de producto.

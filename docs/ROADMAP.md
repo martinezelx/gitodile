@@ -3,7 +3,7 @@
 This roadmap defines the capability sequence and release gates for GitOdile.
 It is not a calendar promise. Approved implementation scope and acceptance
 criteria live in one folder per planned version under [`work/`](../work/README.md):
-[`0.5.0`](../work/0.5.0/README.md), [`0.6.0`](../work/0.6.0/README.md),
+[`0.5.0`](../work/0.5.0/README.md), [`0.5.1`](../work/0.5.1/README.md), [`0.6.0`](../work/0.6.0/README.md),
 [`0.7.0`](../work/0.7.0/README.md), [`1.0.0`](../work/1.0.0/README.md) and
 [`after-1.0`](../work/after-1.0/README.md).
 
@@ -91,7 +91,8 @@ permanent references and do not change when work moves between versions.
 
 | Version | Theme | Tasks in queue order |
 | --- | --- | --- |
-| [`0.5.0`](../work/0.5.0/README.md) | Collaboration complete | 037-3, 037-6, 037-5, 037-7, 065-4 |
+| [`0.5.0`](../work/0.5.0/README.md) | Collaboration complete | 037-3, 037-6, 037-5, 037-7, 065-4, 227 |
+| [`0.5.1`](../work/0.5.1/README.md) | Collaboration review | 213 |
 | [`0.6.0`](../work/0.6.0/README.md) | Safety visible and reusable | 065-5, 065-6, 064-1 … 064-5; 139 once unblocked |
 | [`0.7.0`](../work/0.7.0/README.md) | Release candidate | 065-7, 065-8, 065-9-13 |
 | [`1.0.0`](../work/1.0.0/README.md) | Ship | Epic 065 acceptance |

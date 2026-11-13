@@ -24,8 +24,12 @@ credentials, publication or platform qualification.
 
 Requested on 2026-10-31 after the original implementation phase closed. The
 [completed inventory](../done/0.5.0/README.md) defines the release boundary:
-037 and its children, 065-4 and its children, and 212. Work stays on the existing
-`release/0.5.0`; the original closure is historical evidence.
+037 and its children, 065-4 and its children, and 212. The original closure is
+historical evidence.
+
+On 2026-11-13 the maintainer moved the rest of this review to `0.5.1`, so that
+`0.5.0` is published first and proves the update path through the single
+repository (task 227). The refinements already applied ship in `0.5.0`.
 
 The full review includes resolver entry points in Overview, Work/Changes,
 Branches, quick switch and the palette; Bring in changes and Get project
