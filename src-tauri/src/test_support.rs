@@ -370,12 +370,7 @@ pub(crate) fn git_commit_series(path: &str, file: Option<&str>, versions: &[(Str
 /// `harness = false` in `Cargo.toml`, so even the build `--all-targets` makes
 /// runs their `main`.
 pub(crate) fn example_binary(name: &str) -> PathBuf {
-    let examples = std::env::current_exe()
-        .expect("locate the test binary")
-        .parent()
-        .and_then(Path::parent)
-        .expect("the target profile directory")
-        .join("examples");
+    let test_binary = std::env::current_exe().expect("locate the test binary");
     // A plain `cargo test` also links `<name>` beside the hashed
     // `<name>-<hash>` build; the newest of them is the current source.
     let built = |file: &str| {
@@ -387,24 +382,33 @@ pub(crate) fn example_binary(name: &str) -> PathBuf {
             }))
         .then_some(())
     };
-    let newest = fs::read_dir(&examples)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|entry| built(&entry.file_name().to_string_lossy()).is_some())
-        .max_by_key(|entry| {
-            entry
-                .metadata()
-                .and_then(|metadata| metadata.modified())
-                .ok()
+    let newest_in = |examples: PathBuf| {
+        fs::read_dir(examples)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|entry| built(&entry.file_name().to_string_lossy()).is_some())
+            .max_by_key(|entry| {
+                entry
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .ok()
+            })
+            .map(|entry| entry.path())
+    };
+    // The test binary sits in `<profile>/deps` with Cargo's original layout
+    // and deeper under `<profile>/build/` with the newer one, so the profile's
+    // `examples` directory is found by walking up rather than at a fixed depth.
+    test_binary
+        .ancestors()
+        .skip(1)
+        .find_map(|directory| newest_in(directory.join("examples")))
+        .unwrap_or_else(|| {
+            panic!(
+                "{name} is not built under {}: run `cargo test` without `--lib`, or `cargo build --examples` first",
+                test_binary.display()
+            )
         })
-        .map(|entry| entry.path());
-    newest.unwrap_or_else(|| {
-        panic!(
-            "{name} is not built in {}: run `cargo test` without `--lib`, or `cargo build --examples` first",
-            examples.display()
-        )
-    })
 }
 
 /// A scenario of a fake CLI: `<directory>/<scenario>`, which the fake reads
