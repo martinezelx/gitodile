@@ -23,7 +23,7 @@ describe("TitlebarMenu outside presses", () => {
       render(<LanguageProvider>
         <div data-tauri-drag-region data-testid="titlebar-drag" />
         <TitlebarMenu
-          onOpenHome={noop} onOpenAbout={noop} onOpenChangelog={noop} onOpenProject={noop}
+          onOpenHome={noop} onOpenAbout={noop} onOpenProject={noop}
           onCreateProject={noop} onCloneProject={noop} onCloseProject={noop} onOpenSettings={noop}
           onOpenShortcuts={noop} hasProject={false} isOpeningProject={false} canReloadWindow
           onReportIssue={noop} isReportingIssue={false}
@@ -47,7 +47,6 @@ describe("TitlebarMenu", () => {
     const props: React.ComponentProps<typeof TitlebarMenu> = {
       onOpenHome: vi.fn(),
       onOpenAbout: vi.fn(),
-      onOpenChangelog: vi.fn(),
       onOpenProject: vi.fn(),
       onCreateProject: vi.fn(),
       onCloneProject: vi.fn(),
@@ -146,28 +145,25 @@ describe("TitlebarMenu", () => {
     expect(screen.queryByRole("menu")).toBeNull();
   });
 
-  it("groups the app's own entries, with the changelog first and About last", async () => {
-    const user = userEvent.setup();
-    const onOpenChangelog = vi.fn();
-    renderMenu({ onOpenChangelog });
-
-    await user.click(screen.getByRole("button", { name: "More actions" }));
-    const names = screen.getAllByRole("menuitem").map((item) => item.textContent);
-    expect(names.slice(-5)).toEqual(["What's new", "Check for updates", "About GitOdile", "Report an issue", "Reload window"]);
-
-    await user.click(screen.getByRole("menuitem", { name: "What's new" }));
-    expect(onOpenChangelog).toHaveBeenCalledOnce();
-    expect(screen.queryByRole("menu")).toBeNull();
-  });
-
-  it("starts the shared application-update flow from More actions", async () => {
+  it("groups the app's own entries, with the update first and About last", async () => {
     const user = userEvent.setup();
     const onCheckAppUpdates = vi.fn();
     renderMenu({ onCheckAppUpdates });
+
     await user.click(screen.getByRole("button", { name: "More actions" }));
+    const names = screen.getAllByRole("menuitem").map((item) => item.textContent);
+    expect(names.slice(-4)).toEqual(["Check for updates", "About GitOdile", "Report an issue", "Reload window"]);
+
     await user.click(screen.getByRole("menuitem", { name: "Check for updates" }));
     expect(onCheckAppUpdates).toHaveBeenCalledOnce();
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  it("marks the trigger and names the next step while a release waits", async () => {
+    const user = userEvent.setup();
+    renderMenu({ appUpdateLabel: "Install 0.6.0…", appUpdateAttention: "Version 0.6.0 is waiting" });
+    await user.click(screen.getByRole("button", { name: "More actions, Version 0.6.0 is waiting" }));
+    expect(screen.getByRole("menuitem", { name: "Install 0.6.0…" })).toBeInTheDocument();
   });
 
   it("keeps reload focusable but unavailable while an operation is unsettled", async () => {

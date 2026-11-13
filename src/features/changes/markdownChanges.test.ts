@@ -1,11 +1,73 @@
 import { describe, expect, it } from "vitest";
-import { buildMarkdownExcerpt, buildUnifiedMarkdown, compareMarkdown } from "./markdownChanges";
+import { applyFolds, buildMarkdownExcerpt, buildUnifiedMarkdown, compareMarkdown, foldUnchanged } from "./markdownChanges";
+import type { Nodes } from "mdast";
 import type { DiffHunk } from "./domain";
 
 const hunk = (oldStart: number, newStart: number, before = "# Old", after = "# New"): DiffHunk => ({
   header: "", oldStart, newStart, oldLines: 1, newLines: 1,
   lines: [{ kind: "deletion", content: before, oldLineNumber: oldStart, newLineNumber: null },
     { kind: "addition", content: after, oldLineNumber: null, newLineNumber: newStart }],
+});
+
+const words = (before: string, after: string): string[] => {
+  const found: string[] = [];
+  const visit = (node: Nodes): void => {
+    if (node.data?.hProperties?.className?.toString().includes("markdown-preview__word")) found.push(toString(node));
+    else if ("children" in node) node.children.forEach(visit);
+  };
+  visit(buildUnifiedMarkdown(before, after)!.tree);
+  return found;
+};
+const toString = (node: Nodes): string => "value" in node ? node.value : "children" in node ? node.children.map(toString).join("") : "";
+
+describe("Changed words inside replaced blocks", () => {
+  it.each([
+    ["a paragraph, as one phrase", "Save your work every single day before you publish.", "Save your work quite often before you publish.", ["every single day", "quite often"]],
+    ["inside emphasis", "Keep **the old name** in the list of things.", "Keep **the new name** in the list of things.", ["old", "new"]],
+    ["inline code, whole", "Run the `old` command before you start.", "Run the `new` command before you start.", ["old", "new"]],
+    ["a list item", "- First entry of the old list\n", "- First entry of the new list\n", ["old", "new"]],
+    ["a table cell", "| Name |\n| --- |\n| The old value here |\n", "| Name |\n| --- |\n| The new value here |\n", ["old", "new"]],
+  ])("marks what differs in %s", (_, before, after, expected) => {
+    expect(words(before, after)).toEqual(expected);
+  });
+
+  it.each([
+    ["a rewrite", "Completely different words live here.", "Nothing at all matches that sentence now."],
+    ["spacing alone", "Same   words here.", "Same words here."],
+    ["a code block", "```\nold value here\n```\n", "```\nnew value here\n```\n"],
+  ])("leaves %s marked whole", (_, before, after) => {
+    expect(words(before, after)).toEqual([]);
+  });
+});
+
+describe("Folding what did not change", () => {
+  const paragraphs = (from: number, to: number): string => Array.from({ length: to - from }, (_, index) => `Paragraph ${from + index}.`).join("\n\n");
+  const unified = (before: string, after: string) => buildUnifiedMarkdown(before, after)!.tree;
+
+  it("keeps a block of context each side of a change and the heading of its section", () => {
+    const shared = `${paragraphs(0, 6)}\n\n# Section\n\n${paragraphs(6, 12)}`;
+    const tree = unified(`${shared}\n\nOld ending.\n\n${paragraphs(12, 18)}`, `${shared}\n\nNew ending.\n\n${paragraphs(12, 18)}`);
+    const folds = foldUnchanged(tree);
+    expect(folds).toEqual([{ start: 0, count: 6 }, { start: 7, count: 5 }, { start: 16, count: 5 }]);
+    for (const { start, count } of folds) {
+      expect(tree.children.slice(start, start + count).some((node) => toString(node).includes("ending"))).toBe(false);
+    }
+  });
+
+  it("opens only the folds it is told to, and folds nothing shorter than the row", () => {
+    const tree = unified(`${paragraphs(0, 8)}\n\nOld.`, `${paragraphs(0, 8)}\n\nNew.`);
+    const [fold] = foldUnchanged(tree);
+    expect(applyFolds(tree, [fold], new Set()).children).toHaveLength(tree.children.length - fold.count + 1);
+    expect(applyFolds(tree, [fold], new Set([fold.start]))).toBe(tree);
+    expect(foldUnchanged(unified(`${paragraphs(0, 4)}\n\nOld.`, `${paragraphs(0, 4)}\n\nNew.`))).toEqual([]);
+  });
+
+  it.each([
+    ["nothing changed", `${paragraphs(0, 10)}`, `${paragraphs(0, 10)}`],
+    ["only a footnote changed", `${paragraphs(0, 10)}\n\nA note[^1].\n\n[^1]: Old note.`, `${paragraphs(0, 10)}\n\nA note[^1].\n\n[^1]: New note.`],
+  ])("keeps the document open when %s", (_, before, after) => {
+    expect(foldUnchanged(unified(before, after))).toEqual([]);
+  });
 });
 
 describe("Markdown source comparison", () => {

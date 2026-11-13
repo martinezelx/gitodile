@@ -8,6 +8,11 @@ import type { AppUpdatesPort } from "./port";
 
 const STARTUP_SETTLE_MS = 5_000;
 export const AUTOMATIC_CHECK_CADENCE_MS = 24 * 60 * 60 * 1_000;
+/** How often an open app asks whether a day has passed since the last check.
+ * The question is about the wall clock, so a laptop that slept for three days
+ * with the app open checks within this tick of waking; the tick itself makes
+ * no request. */
+export const AUTOMATIC_CHECK_TICK_MS = 60 * 60 * 1_000;
 const ACTIVE_STATE_POLL_MS = 150;
 /** How long a check the user asked for stays visibly "checking" at least. A
  * build that cannot check (a development build) answers in a few
@@ -68,7 +73,7 @@ export function createAppUpdatesController(
   let downloadOperationId: string | null = null;
   let pollTimer: Timer | null = null;
   let automaticTimer: Timer | null = null;
-  let lastAutomaticCheckAt: number | null = null;
+  let lastCheckAt: number | null = null;
   let suspended = false;
   let disposed = false;
   let unregisterParticipant: (() => void) | null = null;
@@ -137,17 +142,34 @@ export function createAppUpdatesController(
     automaticTimer = null;
   };
 
+  /** Checks once the app has settled, then once a day while it stays open.
+   * "A day" is measured from the last check of any kind on the wall clock,
+   * not as a timer's running time: a 24-hour timer only fired in a session
+   * that ran for 24 hours, which almost none does. */
   const scheduleAutomaticCheck = (delay: number): void => {
     clearAutomaticTimer();
     if (!snapshot.automaticEnabled || suspended || disposed) return;
     automaticTimer = globalThis.setTimeout(() => {
       automaticTimer = null;
       if (!snapshot.automaticEnabled || suspended || disposed) return;
-      lastAutomaticCheckAt = now();
+      /* A check replaces native's offer, so one over a finished download
+         would throw the download away and offer it again. A release that is
+         only offered may be re-checked: nothing is lost, and a newer one can
+         take its place. */
+      const holdsDownload = snapshot.state.kind === "ready" || snapshot.state.kind === "blocked";
+      /* A retryable failure (offline at launch, GitHub briefly down) tries
+         again on the next tick rather than a day later: one bounded request an
+         hour while it lasts. */
+      const retriesFailure = snapshot.state.kind === "failed" && snapshot.state.error.retryable;
+      const checkedRecently = lastCheckAt !== null && now() - lastCheckAt < AUTOMATIC_CHECK_CADENCE_MS;
+      if (holdsDownload || (checkedRecently && !retriesFailure)) {
+        scheduleAutomaticCheck(AUTOMATIC_CHECK_TICK_MS);
+        return;
+      }
       void check("background").then((state) => {
         if (!disposed) options.onBackgroundCheckSettled?.(state);
       }).finally(() => {
-        scheduleAutomaticCheck(AUTOMATIC_CHECK_CADENCE_MS);
+        scheduleAutomaticCheck(AUTOMATIC_CHECK_TICK_MS);
       });
     }, Math.max(0, delay));
   };
@@ -161,6 +183,7 @@ export function createAppUpdatesController(
     const holdUntil = source === "manual" && manualCheckMinimumMs > 0 && !isReducedMotionRequested()
       ? now() + manualCheckMinimumMs
       : null;
+    lastCheckAt = now();
     if (holdUntil !== null && snapshot.state.kind !== "checking") {
       publish({ state: { kind: "checking", operationId: "", source } });
     }
@@ -190,10 +213,7 @@ export function createAppUpdatesController(
         clearAutomaticTimer();
         return () => {
           suspended = false;
-          if (snapshot.automaticEnabled) {
-            const elapsed = lastAutomaticCheckAt === null ? 0 : now() - lastAutomaticCheckAt;
-            scheduleAutomaticCheck(Math.max(settleMs, AUTOMATIC_CHECK_CADENCE_MS - elapsed));
-          }
+          if (snapshot.automaticEnabled) scheduleAutomaticCheck(settleMs);
         };
       },
     });

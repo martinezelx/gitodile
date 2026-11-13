@@ -237,7 +237,7 @@ export interface BranchesTranslations {
   deleteBranchBlockedActiveLead: string;
   deleteBranchBlockedDefaultLead: string;
   deleteBranchBlockedOperationLead: (name: string) => string;
-  deleteBranchOpenChangesAction: string;
+  deleteBranchOpenConflictsAction: string;
   deleteBranchSwitchAction: string;
   deleteBranchSafeLead: (branch: string) => string;
   /** A branch whose work reached the main branch only as copies: what is on the

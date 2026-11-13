@@ -1518,23 +1518,21 @@ pub(crate) enum MarkdownPreview {
     },
 }
 
+impl MarkdownPreview {
+    pub(crate) fn too_large() -> Self {
+        Self::TooLarge {
+            limit_bytes: MAX_MARKDOWN_PREVIEW_BYTES,
+        }
+    }
+}
+
 pub(crate) fn read_file_markdown(
     path: String,
     file_path: String,
 ) -> Result<MarkdownPreview, AppError> {
     let (_repository, _access) =
         application::authorize_repository(&path, "read_file_markdown", None)?;
-    validate_repo_relative_path(&file_path)?;
-    if !Path::new(&file_path)
-        .extension()
-        .and_then(|ext| ext.to_str())
-        .is_some_and(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))
-    {
-        return Err(AppError::new(
-            AppErrorCode::PathInvalid,
-            "Choose a Markdown document.",
-        ));
-    }
+    validate_markdown_path(&file_path)?;
     let status = run_git(&path, &STATUS_ARGS)?;
     if !status.status.success() {
         return Err(AppError::new(
@@ -1574,60 +1572,10 @@ pub(crate) fn read_file_markdown(
             .and_then(|entry| entry.original_path.as_deref())
             .unwrap_or(&file_path);
         validate_repo_relative_path(base)?;
-        // A successful tree lookup distinguishes an absent file from a broken
-        // object/read. Literal pathspecs also handle names containing brackets.
-        let tree = run_git(
-            &path,
-            &[
-                "--literal-pathspecs",
-                "ls-tree",
-                "-z",
-                "--full-tree",
-                git_stdout(&head).trim(),
-                "--",
-                base,
-            ],
-        )?;
-        if !tree.status.success() {
-            return Err(markdown_read_error());
-        }
-        if tree.stdout.is_empty() {
-            None
-        } else {
-            let header = tree
-                .stdout
-                .split(|byte| *byte == b'\t')
-                .next()
-                .ok_or_else(markdown_read_error)?;
-            let header = std::str::from_utf8(header).map_err(|_| markdown_read_error())?;
-            let fields: Vec<_> = header.split_whitespace().collect();
-            if fields.len() != 3 || fields[1] != "blob" || !matches!(fields[0], "100644" | "100755")
-            {
-                return Err(markdown_read_error());
-            }
-            let spec = fields[2];
-            let size = run_git(&path, &["cat-file", "-s", spec])?;
-            if !size.status.success() {
-                return Err(markdown_read_error());
-            }
-            let bytes = git_stdout(&size)
-                .trim()
-                .parse::<u64>()
-                .map_err(|_| markdown_read_error())?;
-            if bytes > MAX_MARKDOWN_PREVIEW_BYTES {
-                return Ok(MarkdownPreview::TooLarge {
-                    limit_bytes: MAX_MARKDOWN_PREVIEW_BYTES,
-                });
-            }
-            let blob = run_git_capped(
-                &path,
-                &["cat-file", "blob", spec],
-                MAX_MARKDOWN_PREVIEW_BYTES as usize,
-            )?;
-            if !blob.status.success() || blob.limit_exceeded {
-                return Err(markdown_read_error());
-            }
-            Some(decode_markdown(blob.stdout)?)
+        match read_saved_markdown(&path, git_stdout(&head).trim(), base)? {
+            SavedMarkdown::Absent => None,
+            SavedMarkdown::TooLarge => return Ok(MarkdownPreview::too_large()),
+            SavedMarkdown::Text(text) => Some(text),
         }
     } else if head.status.code() == Some(1) {
         None // An unborn branch has no saved document yet.
@@ -1638,6 +1586,86 @@ pub(crate) fn read_file_markdown(
         content,
         before_content,
     })
+}
+
+/// One document as a saved tree holds it.
+pub(crate) enum SavedMarkdown {
+    Absent,
+    TooLarge,
+    Text(String),
+}
+
+pub(crate) fn validate_markdown_path(file_path: &str) -> Result<(), AppError> {
+    validate_repo_relative_path(file_path)?;
+    if !Path::new(file_path)
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("md") || ext.eq_ignore_ascii_case("markdown"))
+    {
+        return Err(AppError::new(
+            AppErrorCode::PathInvalid,
+            "Choose a Markdown document.",
+        ));
+    }
+    Ok(())
+}
+
+pub(crate) fn read_saved_markdown(
+    path: &str,
+    tree: &str,
+    file_path: &str,
+) -> Result<SavedMarkdown, AppError> {
+    // A successful tree lookup distinguishes an absent file from a broken
+    // object/read. Literal pathspecs also handle names containing brackets.
+    let listing = run_git(
+        path,
+        &[
+            "--literal-pathspecs",
+            "ls-tree",
+            "-z",
+            "--full-tree",
+            tree,
+            "--",
+            file_path,
+        ],
+    )?;
+    if !listing.status.success() {
+        return Err(markdown_read_error());
+    }
+    if listing.stdout.is_empty() {
+        return Ok(SavedMarkdown::Absent);
+    }
+    let header = listing
+        .stdout
+        .split(|byte| *byte == b'\t')
+        .next()
+        .ok_or_else(markdown_read_error)?;
+    let header = std::str::from_utf8(header).map_err(|_| markdown_read_error())?;
+    let fields: Vec<_> = header.split_whitespace().collect();
+    if fields.len() != 3 || fields[1] != "blob" || !matches!(fields[0], "100644" | "100755") {
+        return Err(markdown_read_error());
+    }
+    let spec = fields[2];
+    let size = run_git(path, &["cat-file", "-s", spec])?;
+    if !size.status.success() {
+        return Err(markdown_read_error());
+    }
+    let bytes = git_stdout(&size)
+        .trim()
+        .parse::<u64>()
+        .map_err(|_| markdown_read_error())?;
+    if bytes > MAX_MARKDOWN_PREVIEW_BYTES {
+        return Ok(SavedMarkdown::TooLarge);
+    }
+    let blob = run_git_capped(
+        path,
+        &["cat-file", "blob", spec],
+        MAX_MARKDOWN_PREVIEW_BYTES as usize,
+    )?;
+    if !blob.status.success() || blob.limit_exceeded {
+        return Err(markdown_read_error());
+    }
+    Ok(SavedMarkdown::Text(decode_markdown(blob.stdout)?))
 }
 
 fn markdown_read_error() -> AppError {

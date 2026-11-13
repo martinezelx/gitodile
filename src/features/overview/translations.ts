@@ -51,6 +51,8 @@ export interface OverviewTranslations {
   /** The next-step card: the words over its title, by what the card asks. */
   /** The card's three-segment progress, read out: "2 of 3 steps done". */
   overviewNextConflictsTitle: (count: number) => string;
+  overviewNextPausedTitle: string;
+  overviewNextPausedHint: string;
   overviewNextConflictsHint: string;
   overviewNextSaveTitle: (count: number) => string;
   /** "Publish 2 versions to origin"; without a remote name, "Publish 2 versions". */

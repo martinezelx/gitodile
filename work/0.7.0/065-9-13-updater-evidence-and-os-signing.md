@@ -157,14 +157,14 @@ registry described in `docs/release/updater-qualification.md`.
 - `docs/adr/0010-distribute-signed-app-updates-through-public-github-releases.md`,
   `docs/adr/0011-defer-windows-authenticode-and-macos-delivery-until-after-1.0.md`
 - Closed tasks whose open criteria live here:
-  [065-9-5](../done/065-9-5-signed-builds.md),
-  [065-9-6](../done/065-9-6-public-release-publishing.md),
-  [065-9-7](../done/065-9-7-updater-qualification.md),
-  [065-9-8](../done/065-9-8-public-windows-linux-qualification.md),
-  [065-9-9](../done/065-9-9-authenticode-public-delivery.md),
-  [065-9-10](../done/065-9-10-merge-driven-release-preparation.md),
-  [065-9-11](../done/065-9-11-updater-client-and-publisher-hardening.md),
-  and the epic [065-9](../done/065-9-signed-application-updates.md).
+  [065-9-5](../done/0.3.0/065-9-5-signed-builds.md),
+  [065-9-6](../done/0.3.0/065-9-6-public-release-publishing.md),
+  [065-9-7](../done/0.3.0/065-9-7-updater-qualification.md),
+  [065-9-8](../done/0.3.0/065-9-8-public-windows-linux-qualification.md),
+  [065-9-9](../done/0.3.0/065-9-9-authenticode-public-delivery.md),
+  [065-9-10](../done/0.3.0/065-9-10-merge-driven-release-preparation.md),
+  [065-9-11](../done/0.3.0/065-9-11-updater-client-and-publisher-hardening.md),
+  and the epic [065-9](../done/0.3.0/065-9-signed-application-updates.md).
 
 # Dependencies
 

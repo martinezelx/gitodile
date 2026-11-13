@@ -5,7 +5,7 @@ import { APP_ERROR_CODES } from "../shared/i18n";
 describe("IPC contract snapshot", () => {
   it("keeps command names, arguments, response names, errors and watcher payload stable", () => {
     expect(contract.version).toBe(1);
-    expect(contract.commands).toHaveLength(142);
+    expect(contract.commands).toHaveLength(160);
     expect(contract.commands.map((command) => command.name)).toEqual([
       "app_status", "show_main_window", "get_app_update_state", "get_startup_update_confirmation",
       "check_app_update", "download_app_update", "cancel_app_update", "install_app_update",
@@ -18,6 +18,10 @@ describe("IPC contract snapshot", () => {
       "plan_discard_changes",
       "discard_changes", "get_discard_recovery", "list_discard_recoveries",
       "restore_discarded_changes", "delete_discard_recovery",
+      "read_conflict_session", "read_conflict_stage", "read_conflict_side_diff",
+      "resolve_conflict_side", "mark_conflict_resolved", "reset_conflict_file",
+      "open_conflict_file", "check_conflict_working_file",
+      "plan_finish_merge", "finish_merge", "plan_abort_merge", "abort_merge",
       "glab_diagnostics",
       "install_glab",
       "update_glab",
@@ -48,9 +52,9 @@ describe("IPC contract snapshot", () => {
       "set_project_identity", "clear_project_identity", "read_ignore_file", "write_ignore_file",
       "read_project_technology",
       "read_team_sync_status",
-      "check_team_changes", "stop_tracking_remote", "plan_get_team_changes", "get_team_changes", "list_unpublished_versions", "list_incoming_versions",
+      "check_team_changes", "stop_tracking_remote", "plan_get_team_changes", "get_team_changes", "list_integration_sources", "check_integration_source", "plan_bring_in_changes", "bring_in_changes", "start_overlapping_merge", "list_unpublished_versions", "list_incoming_versions",
       "read_commit_file_changes", "read_commit_file_diff", "read_history_page",
-      "read_saved_version_detail", "read_saved_version_file_diff", "plan_publish", "publish",
+      "read_saved_version_detail", "read_saved_version_file_diff", "read_saved_version_file_markdown", "plan_publish", "publish",
       "get_branches", "get_branch_history", "plan_create_branch", "create_branch",
       "plan_switch_branch", "switch_branch", "plan_delete_branch",
       "delete_branch", "plan_clean_up_branches", "clean_up_branches",
@@ -76,7 +80,7 @@ describe("IPC contract snapshot", () => {
       "read_project_remotes", "set_remote_url", "read_project_identity", "set_project_identity",
       "read_project_account", "set_project_account",
       "clear_project_identity", "read_ignore_file", "write_ignore_file",
-      "plan_get_team_changes", "get_team_changes",
+      "plan_get_team_changes", "get_team_changes", "list_integration_sources", "check_integration_source", "plan_bring_in_changes", "bring_in_changes", "start_overlapping_merge",
       "plan_publish", "publish",
       "plan_create_branch", "create_branch", "plan_switch_branch",
       "switch_branch", "plan_delete_branch", "delete_branch",
@@ -84,7 +88,11 @@ describe("IPC contract snapshot", () => {
       "plan_rename_branch", "rename_branch",
       "plan_discard_changes", "discard_changes", "get_discard_recovery", "list_discard_recoveries",
       "restore_discarded_changes", "delete_discard_recovery",
-      "read_history_page", "read_saved_version_detail", "read_saved_version_file_diff",
+      "read_conflict_session", "read_conflict_stage", "read_conflict_side_diff",
+      "resolve_conflict_side", "mark_conflict_resolved", "reset_conflict_file",
+      "open_conflict_file", "check_conflict_working_file",
+      "plan_finish_merge", "finish_merge", "plan_abort_merge", "abort_merge",
+      "read_history_page", "read_saved_version_detail", "read_saved_version_file_diff", "read_saved_version_file_markdown",
     ]) {
       const command = contract.commands.find(({ name }) => name === commandName);
       expect(command?.arguments, commandName).toContain("sessionEpoch");

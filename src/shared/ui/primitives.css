@@ -114,7 +114,10 @@
 /* `--hop` (the app's update row, while it checks, verifies or installs): a
    small hop that lands with a squash, twice a second, from the feet so the
    mascot stays standing in its tile. It runs only while that work does, and
-   only where motion is welcome; the app's own setting stops it in base.css. */
+   only where motion is welcome; the app's own setting stops it in base.css.
+   The SVG viewport must let the drawing rise past its resting bounds too;
+   the tile's visible overflow alone cannot prevent the SVG from clipping it. */
+.gitodile-mascot--hop { overflow: visible; }
 @media (prefers-reduced-motion: no-preference) {
   .gitodile-mascot--hop > g {
     transform-box: fill-box;
@@ -271,7 +274,7 @@
 .inclusion-node__mark {
   width: 10px; height: 10px;
   box-sizing: border-box;
-  border: 1.5px solid color-mix(in srgb, var(--text-secondary-color) 52%, transparent);
+  border: 1.5px solid var(--node-ring);
   border-radius: var(--radius-round);
   background: transparent;
   transition: border-color var(--duration-fast), background-color var(--duration-fast), box-shadow var(--duration-fast), opacity var(--duration-fast);
@@ -1865,6 +1868,10 @@ input.docked-composer__field:focus { border-color: var(--focus-ring); background
 /* The actions stay on the right when the row has no note to its left. */
 .app-dialog__foot > .dialog-actions { margin-left: auto; }
 .app-dialog__details > summary { width: fit-content; color: var(--text-secondary-color); font-size: var(--text-label); }
+.app-dialog summary,
+.app-dialog__details > summary { cursor: default; user-select: none; }
+.app-dialog summary:hover,
+.app-dialog__details > summary:hover { color: var(--text-primary-color); }
 .app-dialog__details pre {
   margin: var(--space-2) 0 0; padding: var(--space-3) var(--space-3); border-radius: var(--radius-item);
   background: var(--surface-code); font-family: var(--font-mono); font-size: var(--text-label);

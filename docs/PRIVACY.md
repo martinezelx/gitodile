@@ -78,8 +78,10 @@ Retrieved tokens do not enter command arguments, environment variables, IPC or
 diagnostics. Other hosts and SSH retain their existing setup. See
 [ADR 0022](adr/0022-share-provider-accounts-and-scope-git-access.md).
 
-Issue reports are reviewed by the user before submission. GitOdile excludes
-project paths, source code and remote URLs from the generated report. GitHub's
+Issue reports are reviewed by the user before submission. GitOdile records no
+project paths, source code or command arguments in the generated report. Git's
+bounded error excerpts are kept, with credentials and tokens removed, and may
+name a file or a remote; the user can leave the session activity out. GitHub's
 own terms and privacy policy apply after the user opens or submits through
 GitHub.
 

@@ -1,0 +1,120 @@
+[
+  {
+    "label": "preparedSeparate",
+    "bring": {
+      "outcome": "blocked",
+      "blocker": {
+        "kind": "carryFailed",
+        "path": "notes.txt"
+      },
+      "overlaps": [
+        {
+          "path": "clash.txt",
+          "side": "saved"
+        }
+      ]
+    },
+    "get": {
+      "outcome": "blocked",
+      "blocker": {
+        "kind": "carryFailed",
+        "path": "notes.txt"
+      },
+      "overlaps": [
+        {
+          "path": "clash.txt",
+          "side": "saved"
+        }
+      ]
+    }
+  },
+  {
+    "label": "unsavedAffected",
+    "bring": {
+      "outcome": "overlap",
+      "blocker": null,
+      "overlaps": [
+        {
+          "path": "clash.txt",
+          "side": "saved"
+        },
+        {
+          "path": "clash.txt",
+          "side": "unsaved"
+        }
+      ]
+    },
+    "get": {
+      "outcome": "overlap",
+      "blocker": null,
+      "overlaps": [
+        {
+          "path": "clash.txt",
+          "side": "saved"
+        },
+        {
+          "path": "clash.txt",
+          "side": "unsaved"
+        }
+      ]
+    }
+  },
+  {
+    "label": "untrackedCollision",
+    "bring": {
+      "outcome": "blocked",
+      "blocker": {
+        "kind": "untrackedCollision",
+        "path": "incoming.txt"
+      },
+      "overlaps": [
+        {
+          "path": "clash.txt",
+          "side": "saved"
+        }
+      ]
+    },
+    "get": {
+      "outcome": "blocked",
+      "blocker": {
+        "kind": "untrackedCollision",
+        "path": "incoming.txt"
+      },
+      "overlaps": [
+        {
+          "path": "clash.txt",
+          "side": "saved"
+        }
+      ]
+    }
+  },
+  {
+    "label": "ignoredCollision",
+    "bring": {
+      "outcome": "blocked",
+      "blocker": {
+        "kind": "untrackedCollision",
+        "path": "incoming.txt"
+      },
+      "overlaps": [
+        {
+          "path": "clash.txt",
+          "side": "saved"
+        }
+      ]
+    },
+    "get": {
+      "outcome": "blocked",
+      "blocker": {
+        "kind": "untrackedCollision",
+        "path": "incoming.txt"
+      },
+      "overlaps": [
+        {
+          "path": "clash.txt",
+          "side": "saved"
+        }
+      ]
+    }
+  }
+]

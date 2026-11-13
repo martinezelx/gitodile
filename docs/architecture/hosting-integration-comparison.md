@@ -39,7 +39,7 @@ The approved GitLab route will similarly reuse glab, initially with one verified
 GitLab.com identity; it is not implemented or qualified yet. See
 [github_auth.rs](../../src-tauri/src/github_auth.rs),
 [credentials.rs](../../src-tauri/src/credentials.rs) and
-[task 148-4](../../work/done/148-4-gitlab-accounts.md).
+[task 148-4](../../work/done/0.4.0/148-4-gitlab-accounts.md).
 
 ## Chosen identity and API ownership
 
@@ -79,7 +79,7 @@ and [CloneDialog](https://github.com/cheat2001/angkorgit/blob/cbfe93cc5d19d298f8
   inside adapters, as both projects' architecture intends.
 - Discovery needs an explicit paginated repository contract; existing PR
   adapters are not a substitute. Bound responses, isolate account/session caches
-  and keep secrets native. See [148-5](../../work/done/148-5-provider-repository-browser.md).
+  and keep secrets native. See [148-5](../../work/done/0.4.0/148-5-provider-repository-browser.md).
 - Native keyring ownership is worth evaluating with future own OAuth, but this
   review does not change the approved CLI-based implementation.
 

@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -128,6 +128,8 @@ function controller(plan: GetTeamChangesPlan = basePlan, overrides: Partial<Sync
 function renderDialog(
   syncController: SyncController,
   options: {
+    overlapPort?: Pick<import("./port").BringInPort, "startOverlap">;
+    onPaused?: (session: import("../conflicts").ConflictSession) => Promise<void>;
     intent?: GetTeamIntent;
     canPublish?: boolean;
     runHooks?: boolean;
@@ -147,6 +149,8 @@ function renderDialog(
         <GetTeamChangesDialog
           isOpen
           controller={syncController}
+          overlapPort={options.overlapPort ?? { startOverlap: vi.fn() }}
+          onPaused={options.onPaused ?? vi.fn()}
           projectPath="/repo"
           sessionEpoch="epoch-1"
           intent={options.intent}
@@ -169,7 +173,165 @@ function renderDialog(
 
 const NOTHING_TO_GET = { code: "nothing_to_get", message: "x", remediation: null };
 
+const overlapPlan: GetTeamChangesPlan = {
+  ...mergePlan,
+  forecast: { ...mergePlan.forecast, outcome: "overlap", overlaps: [{ path: "lines.txt", side: "saved" }], overlapCount: 1 },
+};
+
 describe("Get project changes dialog", () => {
+  it.each(["get", "getAndPublish"] as const)("hands a verified upstream pause to the resolver without publishing (%s)", async (intent) => {
+    const paused = { sessionId: "verified-upstream" } as unknown as import("../conflicts").ConflictSession;
+    let finish: (value: { session: typeof paused; recovery: ReturnType<typeof result>["recovery"] }) => void = () => undefined;
+    const startOverlap = vi.fn(() => new Promise<{ session: typeof paused; recovery: ReturnType<typeof result>["recovery"] }>((resolve) => { finish = resolve; }));
+    const onPaused = vi.fn(async () => undefined);
+    const onPublishAfter = vi.fn();
+    const sync = controller(overlapPlan);
+    const { onClose, onApplied } = renderDialog(sync, { intent, onPaused, onPublishAfter, overlapPort: { startOverlap } });
+    await userEvent.click(await screen.findByRole("button", { name: "Resolve in GitOdile" }));
+    expect(startOverlap).toHaveBeenCalledExactlyOnceWith({ projectId: "/repo", sessionEpoch: "epoch-1", source: { kind: "upstream" }, stateToken: overlapPlan.stateToken, recoveryReference: overlapPlan.recovery.reference });
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => finish({ session: paused, recovery: result("completed").recovery }));
+    expect(onPaused).toHaveBeenCalledExactlyOnceWith(paused);
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(onApplied).not.toHaveBeenCalled();
+    expect(sync.get).not.toHaveBeenCalled();
+    expect(onPublishAfter).not.toHaveBeenCalled();
+  });
+
+  it.each(["native", "handoff"] as const)("offers only Close after uncertainty in the %s", async (source) => {
+    const startOverlap = source === "native"
+      ? vi.fn().mockRejectedValue({ code: "merge_outcome_uncertain", message: "Unconfirmed", detail: "start-1", remediation: null })
+      : vi.fn().mockResolvedValue({ session: { sessionId: "verified-upstream" }, recovery: result("completed").recovery });
+    const onPaused = source === "native" ? vi.fn() : vi.fn().mockRejectedValue(new Error("Refresh failed after adoption"));
+    const onPublishAfter = vi.fn();
+    const sync = controller(overlapPlan);
+    const { onPhaseChange } = renderDialog(sync, { intent: "getAndPublish", onPaused, onPublishAfter, overlapPort: { startOverlap } });
+    await userEvent.click(await screen.findByRole("button", { name: "Resolve in GitOdile" }));
+    const alert = await screen.findByRole("alertdialog", { name: "Result not confirmed" });
+    expect(alert).toHaveTextContent(overlapPlan.recovery.reference);
+    if (source === "native") expect(alert).toHaveTextContent("start-1");
+    expect(screen.getAllByRole("button").every((button) => button.textContent === "Close" || button.getAttribute("aria-label") === "Close")).toBe(true);
+    expect(onPhaseChange).toHaveBeenLastCalledWith("uncertain");
+    expect(onPaused).toHaveBeenCalledTimes(source === "native" ? 0 : 1);
+    expect(onPublishAfter).not.toHaveBeenCalled();
+    expect(sync.get).not.toHaveBeenCalled();
+  });
+
+  it("reviews a stale upstream plan instead of retrying the merge", async () => {
+    const startOverlap = vi.fn().mockRejectedValue({ code: "stale_get_team_changes_plan", message: "Moved", remediation: null });
+    const sync = controller(overlapPlan, { planGet: vi.fn().mockResolvedValueOnce(overlapPlan).mockResolvedValue({ ...overlapPlan, stateToken: "reviewed-again" }) });
+    renderDialog(sync, { overlapPort: { startOverlap } });
+    await userEvent.click(await screen.findByRole("button", { name: "Resolve in GitOdile" }));
+    await screen.findByText("Something changed while this was open. This is the updated summary.");
+    expect(startOverlap).toHaveBeenCalledOnce();
+    await userEvent.click(screen.getByRole("button", { name: "Resolve in GitOdile" }));
+    expect(startOverlap).toHaveBeenLastCalledWith(expect.objectContaining({ stateToken: "reviewed-again" }));
+  });
+
+  it("holds resolution for the upstream check and uses its new plan", async () => {
+    let finish: (status: TeamSyncStatus) => void = () => undefined;
+    const refreshRemote = vi.fn(() => new Promise<TeamSyncStatus>((resolve) => { finish = resolve; }));
+    const startOverlap = vi.fn().mockRejectedValue({ code: "merge_start_refused", message: "Refused", remediation: null });
+    const sync = controller(overlapPlan, { planGet: vi.fn().mockResolvedValueOnce(overlapPlan).mockResolvedValue({ ...overlapPlan, stateToken: "after-check" }) });
+    renderDialog(sync, { refreshRemote, overlapPort: { startOverlap } });
+    expect(await screen.findByRole("button", { name: "Resolve in GitOdile" })).toBeDisabled();
+    await act(async () => finish(syncStatus("new-upstream")));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Resolve in GitOdile" })).toBeEnabled());
+    await userEvent.click(screen.getByRole("button", { name: "Resolve in GitOdile" }));
+    expect(startOverlap).toHaveBeenCalledWith(expect.objectContaining({ stateToken: "after-check" }));
+  });
+
+  it.each(["failed", "gone"] as const)("blocks cached overlap resolution when the upstream check is %s", async (check) => {
+    const startOverlap = vi.fn();
+    const refreshRemote = check === "failed" ? vi.fn().mockRejectedValue(new Error("Offline")) : vi.fn().mockResolvedValue({ ...syncStatus(overlapPlan.remoteCommit), state: "upstreamGone" });
+    renderDialog(controller(overlapPlan), { refreshRemote, overlapPort: { startOverlap } });
+    await screen.findByRole("alertdialog");
+    expect(screen.queryByRole("button", { name: "Resolve in GitOdile" })).toBeNull();
+    expect(startOverlap).not.toHaveBeenCalled();
+    expect(screen.queryByText("As far as this computer knows, there are no newer versions to bring in.")).toBeNull();
+  });
+
+  it("keeps keyboard focus in the review after a refused start", async () => {
+    const startOverlap = vi.fn().mockRejectedValue({ code: "merge_start_refused", message: "Refused", remediation: null });
+    renderDialog(controller(overlapPlan), { overlapPort: { startOverlap } });
+    const confirm = await screen.findByRole("button", { name: "Resolve in GitOdile" });
+    confirm.focus();
+    await userEvent.keyboard("{Enter}");
+    const review = await screen.findByRole("button", { name: "Review again" });
+    expect(screen.getByRole("dialog")).toContainElement(document.activeElement as HTMLElement);
+    expect(review).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Resolve in GitOdile" })).toBeNull();
+    expect(startOverlap).toHaveBeenCalledOnce();
+  });
+
+  it.each(["executing", "uncertain"] as const)("ignores a late remote replan while the mutation is %s", async (phase) => {
+    let finishCheck: (status: TeamSyncStatus) => void = () => undefined;
+    let finishPlan: (plan: GetTeamChangesPlan) => void = () => undefined;
+    let finishGet: (value: GetTeamChangesResult) => void = () => undefined;
+    const planGet = vi.fn().mockResolvedValueOnce(mergePlan).mockImplementation(() => new Promise<GetTeamChangesPlan>((resolve) => { finishPlan = resolve; }));
+    const get = vi.fn(() => new Promise<GetTeamChangesResult>((resolve) => { finishGet = resolve; }));
+    const onPublishAfter = vi.fn();
+    const startOverlap = vi.fn();
+    const { onClose } = renderDialog(controller(mergePlan, { planGet, get }), {
+      intent: "getAndPublish", onPublishAfter, overlapPort: { startOverlap },
+      refreshRemote: () => new Promise<TeamSyncStatus>((resolve) => { finishCheck = resolve; }),
+    });
+    const confirm = await screen.findByRole("button", { name: "Get and publish" });
+    await act(async () => finishCheck(syncStatus("moved-upstream")));
+    await waitFor(() => expect(planGet).toHaveBeenCalledTimes(2));
+    // Clean Get may execute its cached review while the remote replan is out.
+    // Rust validates that token; its pending mutation/uncertainty owns the UI.
+    await userEvent.click(confirm);
+    if (phase === "uncertain") await act(async () => finishGet(result("uncertain", "merge")));
+    await act(async () => finishPlan(overlapPlan));
+    expect(screen.queryByRole("button", { name: "Resolve in GitOdile" })).toBeNull();
+    if (phase === "executing") {
+      expect(screen.getByRole("button", { name: "Getting…" })).toBeDisabled();
+      await userEvent.keyboard("{Escape}");
+      expect(onClose).not.toHaveBeenCalled();
+      await act(async () => finishGet(result("uncertain", "merge")));
+    }
+    expect(screen.getByRole("alertdialog", { name: "Result not confirmed" })).toBeInTheDocument();
+    expect(onPublishAfter).not.toHaveBeenCalled();
+    expect(startOverlap).not.toHaveBeenCalled();
+    expect(get).toHaveBeenCalledOnce();
+  });
+
+  it.each(["executing", "uncertain"] as const)("keeps the mutation's %s state when upstream metadata changes", async (phase) => {
+    let finishGet: (value: GetTeamChangesResult) => void = () => undefined;
+    const sync = controller(basePlan, { get: vi.fn(() => new Promise<GetTeamChangesResult>((resolve) => { finishGet = resolve; })) });
+    const onClose = vi.fn();
+    const dialog = (upstreamGone: boolean) => <LanguageProvider><ToastProvider>
+      <GetTeamChangesDialog isOpen controller={sync} overlapPort={{ startOverlap: vi.fn() }} onPaused={vi.fn()} projectPath="/repo" sessionEpoch="epoch-1" runHooks upstreamGone={upstreamGone} onApplied={vi.fn()} onClose={onClose} onPhaseChange={vi.fn()} />
+    </ToastProvider></LanguageProvider>;
+    const view = render(dialog(false));
+    await userEvent.click(await screen.findByRole("button", { name: "Get" }));
+    if (phase === "uncertain") await act(async () => finishGet(result("uncertain")));
+    view.rerender(dialog(true));
+    if (phase === "executing") {
+      expect(screen.getByRole("button", { name: "Getting…" })).toBeDisabled();
+      await userEvent.keyboard("{Escape}");
+      expect(onClose).not.toHaveBeenCalled();
+      await act(async () => finishGet(result("uncertain")));
+    }
+    const uncertain = screen.getByRole("alertdialog", { name: "Result not confirmed" });
+    expect(uncertain).toHaveTextContent(basePlan.recovery.reference);
+    expect(screen.queryByRole("button", { name: "Try again" })).toBeNull();
+    expect(sync.planGet).toHaveBeenCalledOnce();
+  });
+
+  it("does not start a new plan when the upstream check finishes after close", async () => {
+    let finish: (status: TeamSyncStatus) => void = () => undefined;
+    const refreshRemote = () => new Promise<TeamSyncStatus>((resolve) => { finish = resolve; });
+    const sync = controller(overlapPlan);
+    const view = render(<LanguageProvider><ToastProvider><GetTeamChangesDialog isOpen controller={sync} overlapPort={{ startOverlap: vi.fn() }} onPaused={vi.fn()} projectPath="/repo" sessionEpoch="epoch-1" runHooks onApplied={vi.fn()} onClose={vi.fn()} onPhaseChange={vi.fn()} refreshRemote={refreshRemote} /></ToastProvider></LanguageProvider>);
+    await screen.findByRole("button", { name: "Resolve in GitOdile" });
+    view.unmount();
+    await act(async () => finish(syncStatus("late-upstream")));
+    expect(sync.planGet).toHaveBeenCalledOnce();
+  });
+
   it("says in one line what comes in and what of yours stays, without waiting on the network", async () => {
     const sync = controller();
     renderDialog(sync);
@@ -210,13 +372,18 @@ describe("Get project changes dialog", () => {
   });
 
   it("leads with publishing when that is what was asked for", async () => {
-    const onPublishAfter = vi.fn(async () => ({ publishedCount: 2, remote: "origin" }));
-    renderDialog(controller(mergePlan), { intent: "getAndPublish", onPublishAfter });
+    let finishPublish: (value: PublishAfterGet) => void = () => undefined;
+    const onPublishAfter = vi.fn(() => new Promise<PublishAfterGet>((resolve) => { finishPublish = resolve; }));
+    const { onClose } = renderDialog(controller(mergePlan), { intent: "getAndPublish", onPublishAfter });
     expect(await screen.findByRole("heading", { name: "Publish 1 version to origin" })).toBeInTheDocument();
     expect(screen.getByText("First 2 versions come in from Ada and Grace.")).toBeInTheDocument();
     expect(screen.getByText(/Then your version and the merge version are published to origin/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Get and publish" }));
     await waitFor(() => expect(onPublishAfter).toHaveBeenCalled());
+    await userEvent.keyboard("{Escape}");
+    expect(onClose).not.toHaveBeenCalled();
+    await act(async () => finishPublish({ publishedCount: 2, remote: "origin" }));
+    expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("keeps the project up to date and offers to retry when only the publish fails", async () => {
@@ -239,7 +406,7 @@ describe("Get project changes dialog", () => {
     expect(await screen.findByText("Your unsaved edits to README.md stay unsaved, on top of the incoming ones.")).toBeInTheDocument();
   });
 
-  it("refuses overlaps with the files and no way through", async () => {
+  it("keeps mixed saved and unsaved overlaps blocked with save guidance", async () => {
     const sync = controller({
       ...mergePlan,
       forecast: {
@@ -249,13 +416,19 @@ describe("Get project changes dialog", () => {
         overlapCount: 3,
       },
     });
-    renderDialog(sync);
-    const alert = await screen.findByRole("alertdialog", { name: "Your changes and origin's overlap" });
+    const onSaveVersion = vi.fn();
+    const startOverlap = vi.fn();
+    renderDialog(sync, { onSaveVersion, overlapPort: { startOverlap } });
+    const alert = await screen.findByRole("dialog", { name: /Review overlapping changes/ });
     expect(alert).toHaveTextContent("src/auth.ts");
     expect(alert).toHaveTextContent("your saved version");
     expect(alert).toHaveTextContent("your unsaved changes");
     expect(alert).toHaveTextContent("And 1 more.");
     expect(screen.queryByRole("button", { name: /Get/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Resolve in GitOdile" })).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Save version" }));
+    expect(onSaveVersion).toHaveBeenCalledOnce();
+    expect(startOverlap).not.toHaveBeenCalled();
     expect(sync.get).not.toHaveBeenCalled();
   });
 
@@ -303,11 +476,22 @@ describe("Get project changes dialog", () => {
     expect(screen.getByText("Something changed while this was open. This is the updated summary.")).toBeInTheDocument();
   });
 
-  it("reports an uncertain result with its recovery evidence", async () => {
-    renderDialog(controller(basePlan, { get: vi.fn(async () => result("uncertain")) } as Partial<SyncController>));
-    await userEvent.click(await screen.findByRole("button", { name: "Get" }));
-    expect(await screen.findByRole("alertdialog", { name: "Result not confirmed" })).toBeInTheDocument();
-    expect(screen.getByText(/refs\/gitodile\/recovery\/v1\/get-team-changes\/worktree-a\/1/)).toBeInTheDocument();
+  it.each(["native", "refresh", "stale-refresh"])("preserves recovery and offers only Close after uncertainty in %s", async (mode) => {
+    const completed = result(mode === "native" ? "uncertain" : "completed");
+    completed.recovery.unsavedReference = "refs/gitodile/recovery/v1/get-team-changes-unsaved/worktree-a/1";
+    const sync = controller(mergePlan, { get: vi.fn(async () => completed) });
+    const onPublishAfter = vi.fn();
+    const { onApplied, onPhaseChange } = renderDialog(sync, { intent: "getAndPublish", onPublishAfter });
+    onApplied.mockRejectedValue(mode === "stale-refresh" ? { code: "stale_get_team_changes_plan", message: "refresh failed", remediation: null } : new Error("refresh failed after native update"));
+    await userEvent.click(await screen.findByRole("button", { name: "Get and publish" }));
+    const alert = await screen.findByRole("alertdialog", { name: "Result not confirmed" });
+    expect(alert).toHaveTextContent(completed.recovery.reference);
+    expect(alert).toHaveTextContent(completed.recovery.unsavedReference);
+    expect(screen.getAllByRole("button").every((button) => button.textContent === "Close" || button.getAttribute("aria-label") === "Close")).toBe(true);
+    expect(onPhaseChange).toHaveBeenLastCalledWith("uncertain");
+    expect(sync.get).toHaveBeenCalledOnce();
+    expect(sync.planGet).toHaveBeenCalledOnce();
+    expect(onPublishAfter).not.toHaveBeenCalled();
   });
 
   it("offers nothing to get from a branch whose remote branch is gone", async () => {
@@ -329,9 +513,9 @@ describe("Get project changes dialog", () => {
     expect(screen.queryByRole("button", { name: "Get" })).not.toBeInTheDocument();
   });
 
-  it("closes a deterministic refusal without offering a retry", async () => {
+  it.each(["git_operation_in_progress", "no_shared_history", "shallow_history", "unsupported_merge_setup"])("closes a deterministic %s refusal without offering a retry", async (code) => {
     renderDialog(controller(basePlan, {
-      planGet: vi.fn().mockRejectedValue({ code: "git_operation_in_progress", message: "x", remediation: null }),
+      planGet: vi.fn().mockRejectedValue({ code, message: "x", remediation: null }),
     } as Partial<SyncController>));
     expect(await screen.findByRole("alertdialog", { name: "The update stopped safely" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();

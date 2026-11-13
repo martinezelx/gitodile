@@ -12,6 +12,8 @@ describe("bounded local notification history", () => {
   it("round-trips typed notices and independent update acknowledgment", () => {
     const history = { notifications: [entry], acknowledgedUpdateVersion: "0.4.1" };
     expect(parseNotificationHistory(serializeNotificationHistory(history))).toEqual(history);
+    const ready = { notifications: [{ ...entry, details: { ...entry.details, ready: true as const } }], acknowledgedUpdateVersion: null };
+    expect(parseNotificationHistory(serializeNotificationHistory(ready))).toEqual(ready);
   });
 
   it("never serializes detailed error reasons or unrecognized entry fields", () => {
@@ -35,6 +37,7 @@ describe("bounded local notification history", () => {
       { details: { kind: "teamChangesAvailable", behind: -1, remoteCommit: null } },
       { details: { kind: "changesPublished", versionCount: "1", destination: null } },
       { details: { kind: "upstreamGone", branch: [], remote: null } },
+      { details: { kind: "appUpdateAvailable", version: "0.4.2", ready: false } },
     ].map((change) => ({ ...envelope, notifications: [{ ...entry, ...change }] })),
   ])("rejects unsupported or malformed history %#", (value) => {
     expect(() => parseNotificationHistory(JSON.stringify(value))).toThrow();

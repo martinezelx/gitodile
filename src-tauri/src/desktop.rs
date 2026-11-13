@@ -109,6 +109,187 @@ pub(crate) fn reveal_git_location(target: String) -> Result<(), AppError> {
         .map_err(|error| error.with_remediation("Copy the path and open it yourself."))
 }
 
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) enum DesktopPlatform {
+    Windows,
+    MacOs,
+    Linux,
+}
+
+impl DesktopPlatform {
+    pub(crate) fn current() -> Self {
+        if cfg!(windows) {
+            Self::Windows
+        } else if cfg!(target_os = "macos") {
+            Self::MacOs
+        } else {
+            Self::Linux
+        }
+    }
+}
+
+/// Types Windows runs, installs, imports or follows rather than opens, on
+/// top of whatever `PATHEXT` lists on this machine: shortcuts, installers,
+/// registry files, scripts and control-panel items among them.
+const WINDOWS_RUNNABLE: &[&str] = &[
+    "appref-ms",
+    "appx",
+    "appxbundle",
+    "application",
+    "bat",
+    "cmd",
+    "com",
+    "cpl",
+    "diagcab",
+    "exe",
+    "gadget",
+    "hta",
+    "inf",
+    "jar",
+    "js",
+    "jse",
+    "library-ms",
+    "lnk",
+    "msc",
+    "msi",
+    "msix",
+    "msixbundle",
+    "msp",
+    "mst",
+    "pif",
+    "ps1",
+    "psm1",
+    "reg",
+    "scf",
+    "scr",
+    "search-ms",
+    "searchconnector-ms",
+    "settingcontent-ms",
+    "url",
+    "vbe",
+    "vbs",
+    "website",
+    "ws",
+    "wsc",
+    "wsf",
+    "wsh",
+    "xbap",
+];
+
+/// Types macOS launches, installs or follows rather than opens.
+const MACOS_RUNNABLE: &[&str] = &[
+    "action", "app", "command", "fileloc", "inetloc", "jar", "mpkg", "pkg", "prefpane", "saver",
+    "terminal", "tool", "webloc", "workflow",
+];
+
+/// Types a Linux desktop launches rather than opens.
+const LINUX_RUNNABLE: &[&str] = &["appimage", "desktop", "jar", "run"];
+
+/// Whether the system's "open" would run `name` as a program (or install,
+/// import or follow it) instead of showing it in an application. On macOS
+/// and Linux a file with an executable bit is launched as well, so it counts
+/// whatever its name. On Windows a name ending in dots or spaces is the name
+/// without them, and an alternate data stream (`:`) is never opened.
+pub(crate) fn runs_instead_of_opening(
+    platform: DesktopPlatform,
+    name: &str,
+    executable_bit: bool,
+    path_ext: Option<&str>,
+) -> bool {
+    let name = match platform {
+        DesktopPlatform::Windows => {
+            if name.contains(':') {
+                return true;
+            }
+            name.trim_end_matches(['.', ' '])
+        }
+        DesktopPlatform::MacOs | DesktopPlatform::Linux => {
+            if executable_bit {
+                return true;
+            }
+            name
+        }
+    };
+    let Some((_, extension)) = name.rsplit_once('.') else {
+        return false;
+    };
+    let extension = extension.to_lowercase();
+    match platform {
+        DesktopPlatform::Windows => {
+            WINDOWS_RUNNABLE.contains(&extension.as_str())
+                || path_ext.is_some_and(|list| {
+                    list.split(';').any(|item| {
+                        item.trim()
+                            .trim_start_matches('.')
+                            .eq_ignore_ascii_case(&extension)
+                    })
+                })
+        }
+        DesktopPlatform::MacOs => MACOS_RUNNABLE.contains(&extension.as_str()),
+        DesktopPlatform::Linux => LINUX_RUNNABLE.contains(&extension.as_str()),
+    }
+}
+
+#[cfg(unix)]
+pub(crate) fn has_executable_bit(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+pub(crate) fn has_executable_bit(_metadata: &std::fs::Metadata) -> bool {
+    false
+}
+
+/// Refuses a file the system would run instead of open, pointing the reader
+/// at its folder so they can choose the application themselves. Checked
+/// before anything else happens, so a refusal changes nothing.
+pub(crate) fn ensure_opens_as_document(
+    target: &Path,
+    executable_bit: bool,
+) -> Result<(), AppError> {
+    let name = target
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or_default();
+    let path_ext = std::env::var("PATHEXT").ok();
+    if runs_instead_of_opening(
+        DesktopPlatform::current(),
+        name,
+        executable_bit,
+        path_ext.as_deref(),
+    ) {
+        return Err(AppError::new(
+            AppErrorCode::FileRunsAsProgram,
+            "Your system would run this file as a program instead of opening it.",
+        )
+        .with_remediation("Show it in its folder and open it with an app you choose."));
+    }
+    Ok(())
+}
+
+/// Opens a file the caller has already proved is one of the project's and
+/// passed through [`ensure_opens_as_document`], in the application the system
+/// uses for its type. Never `GIT_EDITOR` or `core.editor`: those are shell
+/// command lines.
+pub(crate) fn open_in_default_application(target: &Path) -> Result<(), AppError> {
+    // A canonical Windows path is a verbatim `\\?\C:\…` one, which not every
+    // application accepts on its command line; the drive form names the same
+    // file.
+    let shown = target.to_str().and_then(|text| text.strip_prefix(r"\\?\"));
+    let target = match shown {
+        Some(plain) if !plain.starts_with("UNC\\") => Path::new(plain),
+        _ => target,
+    };
+    tauri_plugin_opener::open_path(target, None::<&str>).map_err(|_| {
+        AppError::new(
+            AppErrorCode::PathUnusable,
+            "No app on this computer opened this file.",
+        )
+        .with_remediation("Show it in its folder and open it with an app you choose.")
+    })
+}
+
 fn reveal_in_file_manager(path: &Path) -> Result<(), AppError> {
     tauri_plugin_opener::reveal_item_in_dir(path).map_err(|_| {
         AppError::new(
@@ -136,5 +317,45 @@ pub(crate) fn show_main_window(window: tauri::Window) {
     if let Some(main) = window.get_webview_window("main") {
         let _ = main.show();
         let _ = main.set_focus();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn what_the_system_would_run_is_never_opened() {
+        use DesktopPlatform::*;
+        let path_ext = Some(".COM;.EXE;.BAT;.CMD;.VBS;.JS;.WSF;.MSC;.CUSTOM");
+        for (platform, name, executable_bit, runs) in [
+            (Windows, "notes.txt", false, false),
+            (Windows, "Makefile", false, false),
+            (Windows, ".gitattributes", false, false),
+            (Windows, "setup.EXE", false, true),
+            (Windows, "setup.exe. ", false, true),
+            (Windows, "link.lnk", false, true),
+            (Windows, "site.url", false, true),
+            (Windows, "keys.reg", false, true),
+            (Windows, "tool.custom", false, true),
+            (Windows, "notes.txt:hidden.exe", false, true),
+            // Windows ignores the bit: only the type decides there.
+            (Windows, "script.sh", true, false),
+            (MacOs, "notes.md", false, false),
+            (MacOs, "run.command", false, true),
+            (MacOs, "Thing.app", false, true),
+            (MacOs, "build", true, true),
+            (MacOs, "setup.exe", false, false),
+            (Linux, "notes.md", false, false),
+            (Linux, "launcher.desktop", false, true),
+            (Linux, "Tool.AppImage", false, true),
+            (Linux, "script.sh", true, true),
+        ] {
+            assert_eq!(
+                runs_instead_of_opening(platform, name, executable_bit, path_ext),
+                runs,
+                "{platform:?} {name}"
+            );
+        }
     }
 }

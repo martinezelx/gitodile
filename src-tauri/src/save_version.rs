@@ -89,10 +89,13 @@ fn run_git_with_global_override(
 /// exposes in Settings. A single `--get-regexp` call resolves both keys at
 /// once — same effective-value precedence as two separate `--get` calls,
 /// one fewer Git process on a path that runs on every plan and save.
-fn identity_configured(path: &str, config_override: Option<&str>) -> Result<bool, AppError> {
+pub(crate) fn identity_configured(
+    path: &str,
+    config_override: Option<&str>,
+) -> Result<bool, AppError> {
     let output = run_git_with_global_override(
         path,
-        &["config", "--get-regexp", "^user\\.(name|email)$"],
+        &["config", "--null", "--get-regexp", "^user\\.(name|email)$"],
         config_override,
     )?;
     if !output.status.success() {
@@ -103,16 +106,13 @@ fn identity_configured(path: &str, config_override: Option<&str>) -> Result<bool
 
     let mut has_name = false;
     let mut has_email = false;
-    for line in git_stdout(&output).lines() {
-        let Some((key, value)) = line.split_once(' ') else {
-            continue;
-        };
-        if value.trim().is_empty() {
-            continue;
-        }
+    // NUL separates records; the first newline separates the key and value.
+    // A valueless key has no newline. It masks an inherited value too.
+    for entry in String::from_utf8_lossy(&output.stdout).split('\0') {
+        let (key, value) = entry.split_once('\n').unwrap_or((entry, ""));
         match key {
-            "user.name" => has_name = true,
-            "user.email" => has_email = true,
+            "user.name" => has_name = !value.trim().is_empty(),
+            "user.email" => has_email = !value.trim().is_empty(),
             _ => {}
         }
     }
@@ -630,7 +630,7 @@ fn hook_exists(path: &str) -> bool {
         return false;
     };
     let hooks_dir = Path::new(&git_dir_raw).join("hooks");
-    ["pre-commit", "commit-msg"]
+    ["pre-commit", "prepare-commit-msg", "commit-msg"]
         .iter()
         .any(|name| hooks_dir.join(name).is_file())
 }
@@ -640,7 +640,7 @@ fn hook_exists(path: &str) -> bool {
 /// signing failure text before falling back to "a hook rejected this" (when a
 /// hook is actually present) and finally a generic failure. The raw stderr
 /// always rides along as `detail`, never as the primary `message`.
-fn classify_commit_failure(path: &str, stderr: &str, run_hooks: bool) -> AppError {
+pub(crate) fn classify_commit_failure(path: &str, stderr: &str, run_hooks: bool) -> AppError {
     let lowered = stderr.to_lowercase();
     let looks_like_signing_failure = lowered.contains("gpg failed to sign")
         || lowered.contains("unable to sign")

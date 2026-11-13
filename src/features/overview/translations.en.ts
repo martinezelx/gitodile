@@ -48,6 +48,8 @@ export const en: OverviewTranslations = {
   overviewPublishAll: (count) => (count === 1 ? "Publish all" : `Publish all ${count}`),
   overviewNextConflictsTitle: (count) =>
     count === 1 ? "1 file has overlapping changes" : `${count} files have overlapping changes`,
+  overviewNextPausedTitle: "Combining is paused",
+  overviewNextPausedHint: "No file overlaps any more. Open the overlapping changes to finish combining or stop it.",
   overviewNextConflictsHint: "Choose what stays in each part. Nothing is saved until you finish.",
   overviewNextSaveTitle: (count) => (count === 1 ? "Save your change" : `Save your ${count} changes`),
   overviewNextPublishTitle: (count, remote) => {
@@ -108,10 +110,10 @@ export const en: OverviewTranslations = {
   overviewNextSeeWhy: "See why",
   overviewNextOverlapTitle: (remote) => `Your changes and ${remote ?? "the remote"}'s overlap`,
   overviewNextOverlapHint: (path, more) =>
-    `${path} changes the same lines on both sides${more > 0 ? ` (and ${more} more)` : ""}. They can't be combined in GitOdile yet.`,
+    `${path} changes the same lines on both sides${more > 0 ? ` (and ${more} more)` : ""}. Review them before getting project changes.`,
   overviewNextNoteClear: "Nothing of yours overlaps.",
   overviewNextNoteCanCombine: "They don't overlap: they can be combined.",
-  overviewNextNoteOverlap: "Nothing comes in until they stop overlapping.",
+  overviewNextNoteOverlap: "Nothing is published.",
   overviewNextNoteIncomingClear: (count, remote) =>
     `${count === 1 ? "1 new version" : `${count} new versions`} on ${remote ?? "the remote"} ${count === 1 ? "doesn't" : "don't"} touch your files.`,
   overviewNextNoteIncomingCombined: (count, remote, file, fileCount) =>

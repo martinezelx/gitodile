@@ -5,14 +5,14 @@ import { EMPTY_TEAM_SYNC_STATE, type TeamSyncStatus, type TeamSyncViewState } fr
 
 /** Per-project view: `settings` lives outside any session (see `app/App.tsx`), so
  * a session only ever remembers which project screen it was last showing. */
-export type ProjectView = "overview" | "workbench" | "branches" | "console";
+export type ProjectView = "overview" | "workbench" | "branches" | "console" | "conflicts";
 
 /** The two views of the Work screen (task 126). Which one is showing is the
  * session's to remember: Back and Forward move
  * between screens, and a project left on History comes back to History. */
 export type WorkbenchTab = "changes" | "history";
 
-export type ProjectMutationKind = "save" | "publish" | "discard" | "branch" | "sync";
+export type ProjectMutationKind = "save" | "publish" | "discard" | "branch" | "sync" | "resolve";
 export type ProjectMutationPhase =
   | "planning"
   | "executing"
@@ -98,6 +98,7 @@ export const initialProjectSessionsState: ProjectSessionsState = {
 
 export type ProjectSessionsAction =
   | { type: "open"; project: RepositoryInfo }
+  | { type: "refreshProject"; project: RepositoryInfo }
   | { type: "restore"; projects: RepositoryInfo[]; activeId: string | null }
   | { type: "activate"; id: string }
   | { type: "close"; id: string }
@@ -237,6 +238,17 @@ export function projectSessionsReducer(
   action: ProjectSessionsAction,
 ): ProjectSessionsState {
   switch (action.type) {
+    case "refreshProject": {
+      const id = action.project.path;
+      const session = state.byId[id];
+      // Background discovery refreshes facts only. It cannot activate a
+      // project, reopen a closed one, or update a newer incarnation.
+      if (!actionMatchesEpoch(session, action.project.sessionEpoch)) return state;
+      return {
+        ...state,
+        byId: { ...state.byId, [id]: { ...session, project: action.project } },
+      };
+    }
     case "open": {
       const id = action.project.path;
       const existing = state.byId[id];
@@ -287,7 +299,7 @@ export function projectSessionsReducer(
       }
       const activeId =
         state.activeId ??
-        (action.activeId !== null && byId[action.activeId] ? action.activeId : order[order.length - 1]);
+        (action.activeId === null ? null : byId[action.activeId] ? action.activeId : order[order.length - 1]);
       return { order, byId, activeId };
     }
 

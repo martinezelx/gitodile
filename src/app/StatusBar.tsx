@@ -37,6 +37,7 @@ export type StatusBarProps = {
   onToggleFavouriteBranch?: (name: string) => void;
   teamSync: TeamSyncViewState;
   onSwitchBranch: (target: string) => void;
+  onBringIn?: (name: string) => void;
   /** Where the quick switch makes a new branch, inside its own popup. */
   branchCreate?: BranchCreateContext;
   onSeeAllBranches: () => void;
@@ -209,6 +210,7 @@ export function StatusBar({
   onToggleFavouriteBranch,
   teamSync,
   onSwitchBranch,
+  onBringIn,
   branchCreate,
   onSeeAllBranches,
   onCheckTeamChanges,
@@ -333,6 +335,7 @@ export function StatusBar({
               favouriteBranches={favouriteBranches}
               onToggleFavourite={onToggleFavouriteBranch}
               onSwitch={onSwitchBranch}
+              onBringIn={onBringIn}
               create={branchCreate}
               onSeeAll={onSeeAllBranches}
               workingTree={{ state: workingTreeState, description: changesLabel }}

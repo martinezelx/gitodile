@@ -25,7 +25,7 @@ describe("HistoryScreen lifecycle", () => {
     let finishScope!: () => void;
     const pendingScope = new Promise<void>((resolve) => { finishScope = resolve; });
     const controller = createHistoryController({
-      readPage: vi.fn(async () => emptyPage("token-1")), readDetail: vi.fn(), readFileDiff: vi.fn(), readImagePreview: vi.fn(),
+      readPage: vi.fn(async () => emptyPage("token-1")), readDetail: vi.fn(), readFileDiff: vi.fn(), readFileMarkdown: vi.fn(), readImagePreview: vi.fn(),
     });
     const query = { projectId: "/repo", sessionEpoch: "epoch-1" };
     vi.spyOn(controller, "setScope").mockReturnValue(pendingScope);
@@ -44,6 +44,7 @@ describe("HistoryScreen lifecycle", () => {
       readPage: vi.fn(async () => emptyPage("unexpected")),
       readDetail: vi.fn(),
       readFileDiff: vi.fn(),
+      readFileMarkdown: vi.fn(),
       readImagePreview: vi.fn(),
     };
     const controller = createHistoryController(port);
@@ -73,6 +74,7 @@ describe("HistoryScreen lifecycle", () => {
       readPage: vi.fn(async () => emptyPage("token-1")),
       readDetail: vi.fn(),
       readFileDiff: vi.fn(),
+      readFileMarkdown: vi.fn(),
       readImagePreview: vi.fn(),
     };
     const controller = createHistoryController(port);
@@ -119,6 +121,7 @@ describe("HistoryScreen lifecycle", () => {
       readPage: vi.fn(async () => emptyPage("token-1")),
       readDetail: vi.fn(),
       readFileDiff: vi.fn(),
+      readFileMarkdown: vi.fn(),
       readImagePreview: vi.fn(),
     };
     const controller = createHistoryController(port);

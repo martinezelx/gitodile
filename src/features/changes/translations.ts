@@ -1,14 +1,24 @@
 export interface ChangesTranslations {
+  changesDiffBefore: string;
+  changesDiffAfter: string;
+  changesDiffSaved: string;
+  changesDiffWorkingCopy: string;
+  changesDiffEmptyBase: string;
+
   changesMarkdownPreview: string;
   changesMarkdownFallback: string;
   changesMarkdownExcerpt: string;
   changesMarkdownExcerptLimited: string;
-  changesMarkdownExcerptPosition: (oldLine: number, newLine: number) => string;
+  changesMarkdownExcerptDetail: string;
+  changesMarkdownExcerptPosition: (line: number) => string;
   changesMarkdownUnified: string;
   changesMarkdownDeleted: string;
   changesMarkdownUnchanged: string;
   changesMarkdownComplex: string;
   changesMarkdownCounts: (removed: number, added: number) => string;
+  changesMarkdownBlocks: string;
+  changesMarkdownFold: (blocks: number) => string;
+  changesMarkdownShowAll: string;
   changesMarkdownLoading: string;
   changesMarkdownError: string;
   changesMarkdownEmpty: string;
@@ -83,6 +93,8 @@ export interface ChangesTranslations {
   changesDiffConflictUnavailable: string;
   changesDiffConflictBinary: string;
   changesDiffConflictTooLarge: string;
+  changesConflictsNotice: (count: number) => string;
+  changesConflictsReview: string;
   changesDiffAriaLabel: (path: string) => string;
   changesDiffHiddenLines: (count: number) => string;
   changesDiffShowHiddenLines: (count: number) => string;

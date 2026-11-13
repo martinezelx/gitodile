@@ -102,6 +102,8 @@
 .changes-status-notice > .secondary-button svg { width: var(--icon-row); height: var(--icon-row); }
 .changes-status-notice--danger { outline: 1px solid var(--status-danger); outline-offset: -1px; }
 .changes-status-notice--danger > svg { color: var(--status-danger); }
+/* Files overlap: the way to the screen that explains them (task 037-3). */
+.changes-status-notice--attention > svg { color: var(--status-warning); }
 /* The result of a discard that was never confirmed. Sits under the header,
    full width, so the Undo is where the eye already is after the list changed
    under it. */
@@ -485,8 +487,9 @@
 .changes-file-row--tree .changes-file-item { padding-block: var(--space-2); align-items: center; }
 
 /* A folder in a file tree, shared by Changes and a saved version's files in
-   History: caret, folder, name, then what it holds — the kinds of change as
-   dots and how many files — so a folded folder still says it. */
+   History: caret, folder, name, then what it holds — how many files and, while
+   folded, the kinds of change as dots. An open folder drops the dots: its
+   files below say their kind, so the colour is spent once. */
 .file-tree-folder {
   flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: var(--space-2);
   padding: 0 var(--space-3) 0 var(--space-2); border: 0; border-radius: var(--radius-item);
@@ -810,30 +813,78 @@
 /* Document typography lives on the same solid surface as the diff. Reset
    base styles locally so lists, headings and tables keep Markdown's shape. */
 .markdown-preview { width: 100%; min-width: 0; color: var(--text-primary-color); }
-.markdown-preview__summary { padding: var(--space-3) var(--space-4); color: var(--text-secondary-color); font-size: var(--text-label); }
-.markdown-preview__document .markdown-preview__removed { background: color-mix(in srgb, var(--diff-removed) var(--tint-fill), transparent); border-inline-start: 3px solid var(--diff-removed); }
-.markdown-preview__document .markdown-preview__added { background: color-mix(in srgb, var(--diff-added) var(--tint-fill), transparent); border-inline-start: 3px solid var(--diff-added); }
-.markdown-preview__document .markdown-preview__removed + .markdown-preview__added { margin-top: var(--space-2); }
-.markdown-preview__document :is(.markdown-preview__added, .markdown-preview__removed):not(tr)::before { display: inline; margin-inline-end: .4em; font-family: var(--font-mono); }
-.markdown-preview__document .markdown-preview__added:not(tr)::before,
-.markdown-preview__document tr.markdown-preview__added > :first-child::before { content: "+ "; color: var(--diff-added); }
-.markdown-preview__document .markdown-preview__removed:not(tr)::before,
-.markdown-preview__document tr.markdown-preview__removed > :first-child::before { content: "− "; color: var(--diff-removed); }
+.markdown-preview__document .markdown-preview__removed { background: var(--diff-removed-fill); }
+.markdown-preview__document .markdown-preview__added { background: var(--diff-added-fill); }
+/* Every marked block is one closed capsule. A table row carries it on its
+   first cell, which every engine can position. Each block resets the join
+   state, so a marked block nested in a joined one does not inherit it. */
+.markdown-preview__document :is(.markdown-preview__added, .markdown-preview__removed) {
+  --diff-cap-start: 1; --diff-cap-end: 1; --diff-join-end: 0; --diff-bar-start: initial; --diff-bar-end: initial;
+}
+.markdown-preview__document :is(.markdown-preview__added, .markdown-preview__removed):not(tr),
+.markdown-preview__document tr:is(.markdown-preview__added, .markdown-preview__removed) > :first-child { position: relative; }
+/* A changed code block scrolls inside its code, so its bar stays put. */
+.markdown-preview__document pre:is(.markdown-preview__added, .markdown-preview__removed) { overflow-x: visible; }
+.markdown-preview__document pre:is(.markdown-preview__added, .markdown-preview__removed) > code { display: block; overflow-x: auto; }
+/* A removal straight before its addition joins it, as in a text diff: one
+   capsule and one tint blending across the shared edge. The block gap goes,
+   and becomes padding where the block has none of its own (a code block and
+   a table cell do), so the two fills meet. */
+.markdown-preview__document .markdown-preview__removed:has(+ .markdown-preview__added) {
+  --diff-cap-end: 0; --diff-join-end: 1; --diff-bar-end: var(--diff-bar-middle);
+  margin-bottom: 0;
+  background: linear-gradient(to bottom, var(--diff-removed-fill) calc(100% - var(--space-2)), var(--diff-fill-middle));
+}
+.markdown-preview__document .markdown-preview__removed + .markdown-preview__added {
+  --diff-cap-start: 0; --diff-bar-start: var(--diff-bar-middle);
+  margin-top: 0;
+  background: linear-gradient(to bottom, var(--diff-fill-middle), var(--diff-added-fill) var(--space-2));
+}
+.markdown-preview__document .markdown-preview__removed:not(tr, pre):has(+ .markdown-preview__added) { padding-bottom: .5em; }
+.markdown-preview__document .markdown-preview__removed + .markdown-preview__added:not(tr, pre) { padding-top: .5em; }
+/* A marked block has a code block's corners, and gives them up at the join. */
+.markdown-preview__document .markdown-preview__removed:has(+ .markdown-preview__added) { border-end-start-radius: 0; border-end-end-radius: 0; }
+.markdown-preview__document .markdown-preview__removed + .markdown-preview__added { border-start-start-radius: 0; border-start-end-radius: 0; }
+/* The capsule and the tint mark a block; no `+`/`−` sign, which brought a
+   diff's vocabulary into prose and indented the changed text. The removed
+   capsule is outlined so the two read apart by shape as well as by red and
+   green. A little space keeps the text off the bar; a code block and a table
+   cell already have padding of their own. */
+.markdown-preview__document :is(.markdown-preview__added, .markdown-preview__removed):not(tr, pre) { padding-block: var(--space-1); padding-inline-start: 1em; border-radius: var(--radius-item); }
 .markdown-preview__notice {
-  padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--border-subtle);
+  display: flex; align-items: center; gap: var(--space-2);
+  padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--border-subtle);
   color: var(--text-secondary-color); font-size: var(--text-label);
 }
+.markdown-preview__info { display: grid; place-items: center; flex: none; border-radius: var(--radius-pill); }
+.markdown-preview__info svg { width: var(--icon-row); height: var(--icon-row); }
+.markdown-preview__info:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .markdown-preview__document {
-  max-width: 860px; margin: 0 auto; padding: clamp(var(--space-4), 4vw, 40px);
+  max-width: 860px; margin: 0 auto; padding: var(--space-4);
   font-size: var(--text-lead); line-height: var(--leading-code); overflow-wrap: anywhere;
 }
 .markdown-preview__document > :first-child { margin-top: 0; }
-.markdown-preview__excerpt + .markdown-preview__excerpt { border-top: 1px dashed var(--border-subtle); margin-top: var(--space-4); padding-top: var(--space-4); }
-.markdown-preview__document [data-current-markdown-change] { outline: 2px solid var(--text-secondary-color); outline-offset: 3px; }
-.markdown-preview__document :where(h1, h2, h3, h4, h5, h6) { margin: 1.5em 0 .6em; font-weight: var(--weight-heading); line-height: var(--leading-snug); }
-.markdown-preview__document h1 { font-size: var(--text-hero); }
-.markdown-preview__document h2 { font-size: var(--text-display); }
-.markdown-preview__document h3 { font-size: var(--text-title); }
+.markdown-preview__excerpt + .markdown-preview__excerpt { margin-top: var(--space-3); }
+/* Where a fragment sits, as the rule that divides it from the one before. */
+.markdown-preview__position { display: flex; align-items: center; gap: var(--space-2); margin: 0 0 var(--space-2); color: var(--text-secondary-color); font-size: var(--text-caption); }
+.markdown-preview__position::after { content: ""; flex: 1; border-top: 1px dashed var(--border-subtle); }
+/* The change the arrows stand on says so in the view's own marks, a deeper
+   tint and a wider capsule, rather than a box drawn round them. It stays until
+   the reader moves on, in a text diff as in a document. */
+:is(.markdown-preview__document [data-current-markdown-change], .diff-row--current) {
+  --diff-added-fill: color-mix(in srgb, var(--diff-added) var(--tint-halo), transparent);
+  --diff-removed-fill: color-mix(in srgb, var(--diff-removed) var(--tint-halo), transparent);
+  --diff-fill-middle: color-mix(in srgb, var(--diff-removed-fill), var(--diff-added-fill));
+  --diff-bar-width: var(--diff-bar-width-current);
+}
+/* Forced colours drop the tint, so the box comes back there. */
+@media (forced-colors: active) {
+  :is(.markdown-preview__document [data-current-markdown-change], .diff-row--current) { outline: 2px solid Highlight; outline-offset: -2px; }
+}
+.markdown-preview__document :where(h1, h2, h3, h4, h5, h6) { margin: 1.2em 0 .4em; font-weight: var(--weight-heading); line-height: var(--leading-snug); }
+.markdown-preview__document h1 { font-size: var(--text-display); }
+.markdown-preview__document h2 { font-size: var(--text-title); }
+.markdown-preview__document h3 { font-size: var(--text-subtitle); }
 .markdown-preview__document :where(h4, h5, h6) { font-size: var(--text-lead); }
 .markdown-preview__document :where(p, ul, ol, blockquote, pre, table) { margin: 0 0 1em; }
 .markdown-preview__document :where(ul, ol) { padding-left: 1.8em; }
@@ -842,14 +893,31 @@
 .markdown-preview__document li > :where(ul, ol) { margin-bottom: 0; }
 .markdown-preview__document blockquote { padding: 0 1em; border-left: 3px solid var(--border-subtle); color: var(--text-secondary-color); }
 .markdown-preview__document code { font-family: var(--font-mono); font-size: var(--text-body); background: var(--surface-hover); padding: .15em .3em; border-radius: var(--radius-item); }
-.markdown-preview__document pre { padding: var(--space-4); background: var(--surface-hover); overflow-x: auto; border-radius: var(--radius-item); }
+.markdown-preview__document pre { padding: var(--space-3) var(--space-4); background: var(--surface-hover); overflow-x: auto; border-radius: var(--radius-item); }
 .markdown-preview__document pre code { padding: 0; background: transparent; overflow-wrap: normal; }
 .markdown-preview__document table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
 .markdown-preview__document :where(th, td) { padding: var(--space-2) var(--space-3); border: 1px solid var(--border-subtle); text-align: start; }
 .markdown-preview__document th { font-weight: var(--weight-heading); background: var(--surface-hover); }
 .markdown-preview__document hr { border: 0; border-top: 1px solid var(--border-subtle); margin: var(--space-5) 0; }
+/* What differs inside a replaced block, as the text diff marks its fragments. */
+.markdown-preview__word { border-radius: 2px; }
+.markdown-preview__removed .markdown-preview__word { background: color-mix(in srgb, var(--diff-removed) var(--tint-halo-focus), transparent); }
+.markdown-preview__added .markdown-preview__word { background: color-mix(in srgb, var(--diff-added) var(--tint-halo-focus), transparent); }
+/* A long unchanged run is the text diff's own gap, on the document's measure. */
+.markdown-preview__document .diff-hunk__marker { margin: 0 0 1em; }
+.markdown-preview__show-all {
+  flex: none; margin-inline-start: auto; padding: 0 var(--space-2); border: 0; border-radius: var(--radius-pill);
+  background: transparent; color: var(--text-secondary-color); font: inherit;
+}
+.markdown-preview__show-all:hover { background: var(--surface-hover); color: var(--text-primary-color); }
+.markdown-preview__show-all:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .markdown-preview__link { text-decoration: underline; text-underline-offset: 3px; }
-.markdown-preview__image { color: var(--text-secondary-color); font-style: italic; }
+/* What was not loaded, as an object in the line rather than part of its text. */
+.markdown-preview__image {
+  display: inline-flex; align-items: center; gap: var(--space-1); max-width: 100%; padding: 0 var(--space-2);
+  border-radius: var(--radius-pill); background: var(--surface-hover); color: var(--text-secondary-color); font-size: var(--text-caption);
+}
+.markdown-preview__image svg { flex: none; width: var(--icon-row); height: var(--icon-row); }
 .markdown-preview__document .contains-task-list { list-style: none; }
 .markdown-preview__document input[type="checkbox"] { margin-inline-end: .5em; }
 .changes-diff__truncated {
@@ -923,19 +991,110 @@
 .diff-hunk__marker--static { display: block; padding: var(--space-1) var(--space-4); }
 .diff-line { display: grid; grid-template-columns: 48px 16px 1fr; align-items: baseline; padding-right: var(--space-4); }
 .diff-line__number { padding: 0 var(--space-2); text-align: right; color: var(--text-secondary-color); opacity: var(--opacity-muted); font-size: var(--text-caption); user-select: none; }
-.diff-line__sign { text-align: center; user-select: none; }
+/* One capsule language for text diffs and rendered Markdown: filled for an
+   addition, outlined for a removal, opening and closing with each run. The
+   host says which ends are capped. A removal running straight into its
+   addition is joined: the capsule continues, and its colour, its inside and
+   the tint blend over `--space-2` either side of the join. */
+:is(.diff-code, .markdown-preview__document) {
+  --diff-added-fill: color-mix(in srgb, var(--diff-added) var(--tint-fill), transparent);
+  --diff-removed-fill: color-mix(in srgb, var(--diff-removed) var(--tint-fill), transparent);
+  --diff-fill-middle: color-mix(in srgb, var(--diff-removed-fill), var(--diff-added-fill));
+}
+.diff-line, .diff-split-cell { --diff-cap-start: 0; --diff-cap-end: 0; }
+:is(.diff-line--run-start, .diff-split-cell--run-start) { --diff-cap-start: 1; }
+:is(.diff-line--run-end, .diff-split-cell--run-end) { --diff-cap-end: 1; }
+.diff-line--joined-before { --diff-join-end: 1; --diff-bar-end: var(--diff-bar-middle); }
+.diff-line--joined-after { --diff-bar-start: var(--diff-bar-middle); }
+.diff-line__marker { display: flex; justify-content: center; align-self: stretch; user-select: none; }
+:is(.diff-line--addition, .diff-split-cell--addition) .diff-line__marker::before,
+.markdown-preview__document .markdown-preview__added:not(tr)::before,
+.markdown-preview__document tr.markdown-preview__added > :first-child::before,
+:is(.diff-line--deletion, .diff-split-cell--deletion) .diff-line__marker::before,
+.markdown-preview__document .markdown-preview__removed:not(tr)::before,
+.markdown-preview__document tr.markdown-preview__removed > :first-child::before {
+  content: ""; flex: none; width: var(--diff-bar-width);
+  /* Each line draws its own piece of the run's capsule. Where two pieces
+     meet on a fractional pixel both edges are antialiased and a faint seam
+     shows, so a piece that does not open the run reaches 1px up into the
+     one before it — rows paint in order, so it lies over that edge. */
+  margin-block: calc(var(--space-1) * var(--diff-cap-start) - 1px * (1 - var(--diff-cap-start))) calc(var(--space-1) * var(--diff-cap-end));
+  border-start-start-radius: calc(var(--radius-pill) * var(--diff-cap-start));
+  border-start-end-radius: calc(var(--radius-pill) * var(--diff-cap-start));
+  border-end-start-radius: calc(var(--radius-pill) * var(--diff-cap-end));
+  border-end-end-radius: calc(var(--radius-pill) * var(--diff-cap-end));
+  pointer-events: none;
+}
+.markdown-preview__document :is(.markdown-preview__added, .markdown-preview__removed):not(tr)::before,
+.markdown-preview__document tr:is(.markdown-preview__added, .markdown-preview__removed) > :first-child::before { position: absolute; inset-block: 0; inset-inline-start: 0; }
+:is(.diff-line--addition, .diff-split-cell--addition) .diff-line__marker::before,
+.markdown-preview__document .markdown-preview__added:not(tr)::before,
+.markdown-preview__document tr.markdown-preview__added > :first-child::before {
+  background: linear-gradient(to bottom, var(--diff-bar-start, var(--diff-added)), var(--diff-added) var(--space-2));
+}
+/* The outline is a mask over a filled bar: its sides always, a cap where the
+   run ends, and toward a join its inside fills to meet the addition. */
+:is(.diff-line--deletion, .diff-split-cell--deletion) .diff-line__marker::before,
+.markdown-preview__document .markdown-preview__removed:not(tr)::before,
+.markdown-preview__document tr.markdown-preview__removed > :first-child::before {
+  --diff-outline-mask:
+    linear-gradient(to right, #000 var(--diff-bar-outline), transparent var(--diff-bar-outline) calc(100% - var(--diff-bar-outline)), #000 calc(100% - var(--diff-bar-outline))),
+    linear-gradient(to bottom, rgb(0 0 0 / var(--diff-cap-start)) var(--diff-bar-outline), transparent var(--diff-bar-outline)),
+    linear-gradient(to top, rgb(0 0 0 / var(--diff-cap-end)) var(--diff-bar-outline), transparent var(--diff-bar-outline)),
+    linear-gradient(to bottom, transparent calc(100% - var(--space-2)), rgb(0 0 0 / var(--diff-join-end, 0)));
+  background: linear-gradient(to bottom, var(--diff-removed) calc(100% - var(--space-2)), var(--diff-bar-end, var(--diff-removed)));
+  -webkit-mask: var(--diff-outline-mask);
+  mask: var(--diff-outline-mask);
+}
 .diff-line .visually-hidden { user-select: none; }
 .diff-line__content { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+/* Exact edits use the existing focus-halo tint over the row's softer fill,
+   softened by the 2px highlight radius so they sit with the capsules. */
+.diff-inline-change { border-radius: 2px; }
+.diff-inline-change--continues-before { border-start-start-radius: 0; border-end-start-radius: 0; }
+.diff-inline-change--continues-after { border-start-end-radius: 0; border-end-end-radius: 0; }
+.diff-line--addition .diff-inline-change,
+.diff-split-cell--addition .diff-inline-change { background: color-mix(in srgb, var(--diff-added) var(--tint-halo-focus), transparent); }
+.diff-line--deletion .diff-inline-change,
+.diff-split-cell--deletion .diff-inline-change { background: color-mix(in srgb, var(--diff-removed) var(--tint-halo-focus), transparent); }
+.diff-changed-whitespace { position: relative; }
+/* Empty speech alternative: glyphs do not replace or join the source text. */
+.diff-changed-whitespace::after { content: attr(data-whitespace) / ""; position: absolute; inset-inline-start: 0; color: var(--text-secondary-color); pointer-events: none; user-select: none; }
+/* A sibling of the scrolling pre, so headings stay put in either scroll axis. */
+.diff-comparison-headings { flex-shrink: 0; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); padding-inline-end: var(--space-4); border-bottom: 1px solid var(--border-subtle); background: var(--surface-code); }
+.diff-comparison-headings > div { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; padding: var(--space-2) var(--space-3); }
+.diff-comparison-headings > div + div { border-inline-start: 1px solid var(--border-divider); }
+.diff-comparison-headings strong { font-size: var(--text-label); font-weight: var(--weight-strong); }
+.diff-comparison-headings span { font-size: var(--text-caption); color: var(--text-secondary-color); overflow-wrap: anywhere; }
 .syntax-token--comment { color: var(--syntax-comment); font-style: italic; }
 .syntax-token--string { color: var(--syntax-string); }
 .syntax-token--number { color: var(--syntax-number); }
 .syntax-token--keyword { color: var(--syntax-keyword); font-weight: var(--weight-strong); }
 .syntax-token--type { color: var(--syntax-type); }
 .syntax-token--property { color: var(--syntax-property); }
-.diff-line--addition { background: color-mix(in srgb, var(--diff-added) var(--tint-fill), transparent); }
-.diff-line--addition .diff-line__sign, .diff-line--addition .diff-line__content { color: var(--diff-added); }
-.diff-line--deletion { background: color-mix(in srgb, var(--diff-removed) var(--tint-fill), transparent); }
-.diff-line--deletion .diff-line__sign, .diff-line--deletion .diff-line__content { color: var(--diff-removed); }
+.diff-line--addition { background: var(--diff-added-fill); }
+.diff-line--deletion { background: var(--diff-removed-fill); }
+.diff-line--joined-before { background: linear-gradient(to bottom, var(--diff-removed-fill) calc(100% - var(--space-2)), var(--diff-fill-middle)); }
+.diff-line--joined-after { background: linear-gradient(to bottom, var(--diff-fill-middle), var(--diff-added-fill) var(--space-2)); }
+@media (forced-colors: active) {
+  :is(.diff-inline-change, .markdown-preview__word) { text-decoration: underline; text-decoration-thickness: 2px; }
+  /* Forced colours drop backgrounds and masks: the same capsules are drawn
+     with native borders, one filled and one outlined. */
+  :is(.diff-line--addition, .diff-split-cell--addition) .diff-line__marker::before,
+  .markdown-preview__document .markdown-preview__added:not(tr)::before,
+  .markdown-preview__document tr.markdown-preview__added > :first-child::before,
+  :is(.diff-line--deletion, .diff-split-cell--deletion) .diff-line__marker::before,
+  .markdown-preview__document .markdown-preview__removed:not(tr)::before,
+  .markdown-preview__document tr.markdown-preview__removed > :first-child::before {
+    background: none; -webkit-mask: none; mask: none; box-sizing: border-box;
+    border: 0 solid CanvasText; border-inline-width: calc(var(--diff-bar-width) / 2);
+  }
+  :is(.diff-line--deletion, .diff-split-cell--deletion) .diff-line__marker::before,
+  .markdown-preview__document .markdown-preview__removed:not(tr)::before,
+  .markdown-preview__document tr.markdown-preview__removed > :first-child::before {
+    border-width: calc(var(--diff-bar-outline) * var(--diff-cap-start)) var(--diff-bar-outline) calc(var(--diff-bar-outline) * var(--diff-cap-end));
+  }
+}
 .diff-split-row {
   display: grid; grid-template-columns: 40px minmax(0, 1fr) 40px minmax(0, 1fr);
   align-items: stretch; padding-right: var(--space-4);
@@ -944,10 +1103,8 @@
 .diff-split-cell {
   display: grid; grid-template-columns: 14px minmax(0, 1fr); align-items: baseline; min-width: 0;
 }
-.diff-split-cell--addition { background: color-mix(in srgb, var(--diff-added) var(--tint-fill), transparent); }
-.diff-split-cell--addition .diff-line__sign, .diff-split-cell--addition .diff-line__content { color: var(--diff-added); }
-.diff-split-cell--deletion { background: color-mix(in srgb, var(--diff-removed) var(--tint-fill), transparent); }
-.diff-split-cell--deletion .diff-line__sign, .diff-split-cell--deletion .diff-line__content { color: var(--diff-removed); }
+.diff-split-cell--addition { background: var(--diff-added-fill); }
+.diff-split-cell--deletion { background: var(--diff-removed-fill); }
 /* Filler for the side a change does not have: fainter than anything muted,
    so it never competes with the code beside it. */
 .diff-split-cell--empty { background: var(--surface-hover); opacity: 0.35; }

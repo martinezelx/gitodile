@@ -70,6 +70,10 @@ export interface SharedTranslations {
   errorDivergedHistories: string;
   errorStalePublishPlan: string;
   errorStaleGetTeamChangesPlan: string;
+  errorStaleBringInPlan: string;
+  errorShallowHistory: string;
+  errorNoSharedHistory: string;
+  errorUnsupportedMergeSetup: string;
   errorInvalidRefName: string;
   errorAuthenticationFailed: string;
   errorSecureStorageUnavailable: string;
@@ -104,6 +108,17 @@ export interface SharedTranslations {
   errorRecoveryUnavailable: string;
   errorRecoveryConflict: string;
   errorRecoveryFailed: string;
+  errorStaleConflictSession: string;
+  errorConflictActionUnavailable: string;
+  errorConflictMarkersRemain: string;
+  errorConflictChoiceNeeded: string;
+  errorConflictContentNotKept: string;
+  errorMergeStartRefused: string;
+  errorMergeAbortRefused: string;
+  errorMergeOutcomeUncertain: string;
+  errorFileLocked: string;
+  errorConflictCaseCollision: string;
+  errorFileRunsAsProgram: string;
   errorIgnoreFileTooLarge: string;
   errorIgnoreFileNotText: string;
   errorStaleIgnoreFile: string;

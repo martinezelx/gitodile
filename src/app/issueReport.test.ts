@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildIssueReportUrl, FEEDBACK_REPOSITORY_URL } from "./issueReport";
+import { buildIssueReportUrl, FEEDBACK_REPOSITORY_URL, reportWithoutActivity } from "./issueReport";
 import { diagnosticReportFileName } from "./issueReportAdapter";
 
 describe("issue report url", () => {
@@ -48,15 +48,35 @@ describe("an address GitHub will accept", () => {
     expect(sent).toBe("GitOdile 0.2.1\nSystem: Windows 11 (x86_64)\nGit: 2.55.0.windows.3");
   });
 
-  it("stays short whatever the session did", () => {
+  it.each([
+    ["the versions alone", {}],
+    ["a full title and the paste reminder", { title: "x".repeat(120), pasteReminder: "Paste the report GitOdile copied below this line." }],
+  ])("stays short whatever the session did, with %s", (_, options) => {
     // A full buffer encodes to some twelve thousand characters, and GitHub
     // answers a link that long with 414 instead of a prefilled form. The
-    // activity reaches the issue through Copy or the attached file.
-    const url = buildIssueReportUrl(report(200));
+    // activity reaches the issue through the clipboard or the attached file.
+    const url = buildIssueReportUrl(report(200), "en", options);
 
-    expect(url.length).toBeLessThan(500);
+    expect(url.length).toBeLessThan(900);
     expect(url).not.toContain("read_working_tree_status");
     expect(url).not.toContain("Session+activity");
+  });
+
+  it("asks for the paste where it goes, after the versions", () => {
+    const sent = new URL(buildIssueReportUrl(report(3), "en", { pasteReminder: "Paste below." })).searchParams.get("diagnostics");
+
+    expect(sent).toBe("GitOdile 0.2.1\nSystem: Windows 11 (x86_64)\nGit: 2.55.0.windows.3\n\nPaste below.");
+  });
+
+  it.each([
+    ["  Publishing fails  ", "[Bug]: Publishing fails"],
+    ["   ", null],
+  ])("keeps the form's prefix on the reader's title %j", (title, expected) => {
+    expect(new URL(buildIssueReportUrl(report(1), "en", { title })).searchParams.get("title")).toBe(expected);
+  });
+
+  it("leaves the activity out of the text itself, not of a flag beside it", () => {
+    expect(reportWithoutActivity(report(3))).toBe("Environment\n-----------\nGitOdile 0.2.1\nSystem: Windows 11 (x86_64)\nGit: 2.55.0.windows.3");
   });
 
   it("still prefills something when session activity was never rendered", () => {

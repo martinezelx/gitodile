@@ -1,0 +1,49 @@
+[
+  {
+    "name": "get-ff",
+    "integration": "fastForward",
+    "forecast": "clear",
+    "files": 1,
+    "outcome": "completed",
+    "recovery": "refs/gitodile/recovery/v1/get-team-changes/worktree-1f5962a2ce9803c8/1793388454557-4040-4-0",
+    "phases": [
+      "checkingLocalSafety",
+      "creatingRecovery",
+      "updatingFilesAndHistory",
+      "verifying"
+    ],
+    "contained": "nothing_to_get"
+  },
+  {
+    "name": "get-clean",
+    "integration": "merge",
+    "forecast": "clear",
+    "files": 1,
+    "outcome": "completed",
+    "recovery": "refs/gitodile/recovery/v1/get-team-changes/worktree-1f5962a2ce9803c8/1793388457797-4040-6-0",
+    "phases": [
+      "checkingLocalSafety",
+      "combiningVersions",
+      "creatingRecovery",
+      "updatingFilesAndHistory",
+      "verifying"
+    ],
+    "contained": "nothing_to_get"
+  },
+  {
+    "name": "get-empty",
+    "integration": "merge",
+    "forecast": "clear",
+    "files": 0,
+    "outcome": "completed",
+    "recovery": "refs/gitodile/recovery/v1/get-team-changes/worktree-1f5962a2ce9803c8/1793388461419-4040-8-0",
+    "phases": [
+      "checkingLocalSafety",
+      "combiningVersions",
+      "creatingRecovery",
+      "updatingFilesAndHistory",
+      "verifying"
+    ],
+    "contained": "nothing_to_get"
+  }
+]

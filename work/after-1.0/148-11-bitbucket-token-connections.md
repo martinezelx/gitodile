@@ -18,8 +18,8 @@ parent: "148"
 Add Bitbucket Cloud (`bitbucket.org`) as a third hosting product in
 [epic 148](148-connect-github-account.md)'s shared accounts, HTTPS access and
 repository discovery, connected through native Atlassian API tokens the way
-GitHub ([148-9](../done/148-9-github-token-connections.md)) and GitLab
-([148-4](../done/148-4-gitlab-accounts.md)) tokens already work.
+GitHub ([148-9](../done/0.4.0/148-9-github-token-connections.md)) and GitLab
+([148-4](../done/0.4.0/148-4-gitlab-accounts.md)) tokens already work.
 
 # User outcome
 
@@ -31,7 +31,7 @@ publishes changes, without installing any extra tool.
 # Context
 
 Requested by the user on 2026-10-06 after closing
-[148-10](../done/148-10-enterprise-and-self-managed-hosts.md). It takes the freed
+[148-10](../done/0.4.0/148-10-enterprise-and-self-managed-hosts.md). It takes the freed
 queue position 01, ahead of PRs/Actions (148-6/148-7), so those screens are
 built on three products instead of reworked later.
 
@@ -211,11 +211,11 @@ must generalize rather than fork:
 
 # Dependencies
 
-Completed [148-3](../done/148-3-shared-accounts-and-git-access.md),
-[148-9](../done/148-9-github-token-connections.md),
-[148-5](../done/148-5-provider-repository-browser.md),
-[148-4](../done/148-4-gitlab-accounts.md) and
-[148-10](../done/148-10-enterprise-and-self-managed-hosts.md). Real
+Completed [148-3](../done/0.4.0/148-3-shared-accounts-and-git-access.md),
+[148-9](../done/0.4.0/148-9-github-token-connections.md),
+[148-5](../done/0.4.0/148-5-provider-repository-browser.md),
+[148-4](../done/0.4.0/148-4-gitlab-accounts.md) and
+[148-10](../done/0.4.0/148-10-enterprise-and-self-managed-hosts.md). Real
 qualification needs a Bitbucket account and a token created by the user.
 
 # Decisions

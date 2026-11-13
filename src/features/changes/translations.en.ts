@@ -1,6 +1,12 @@
 import type { ChangesTranslations } from "./translations";
 
 export const en: ChangesTranslations = {
+  changesDiffBefore: "Before",
+  changesDiffAfter: "After",
+  changesDiffSaved: "Last saved version",
+  changesDiffWorkingCopy: "Unsaved working copy",
+  changesDiffEmptyBase: "Empty project",
+
   changesSummaryClean: "All changes are saved.",
   changesEmptySavedTitle: "All changes are saved",
   changesEmptyAheadDescription: (count) =>
@@ -74,6 +80,9 @@ export const en: ChangesTranslations = {
   changesDiffConflictUnavailable: "Couldn't read this file's conflict markers.",
   changesDiffConflictBinary: "This file isn't text, so its conflict can't be shown.",
   changesDiffConflictTooLarge: "This conflict is too large to show here.",
+  changesConflictsNotice: (count) =>
+    count === 1 ? "1 file has overlapping changes" : `${count.toLocaleString()} files have overlapping changes`,
+  changesConflictsReview: "Review overlapping changes",
   changesDiffAriaLabel: (path) => `Changes in ${path}`,
   changesDiffHiddenLines: (count) => (count === 1 ? "1 unchanged line" : `${count} unchanged lines`),
   changesDiffShowHiddenLines: (count) =>
@@ -118,14 +127,18 @@ export const en: ChangesTranslations = {
   changesViewAccessible: "Accessible text",
   changesMarkdownPreview: "Markdown preview",
   changesMarkdownFallback: "Showing text changes instead. You can try Markdown preview again from View.",
-  changesMarkdownExcerpt: "Partial Markdown preview · Only changed fragments and their nearby context are shown, using the available text diff. Formatting and references may be incomplete because the rest of the document is omitted.",
-  changesMarkdownExcerptLimited: "Some changes are omitted to keep this preview bounded. More detail is available in the text diff or your editor.",
-  changesMarkdownExcerptPosition: (oldLine, newLine) => `… Previous line ${oldLine} · Current line ${newLine}`,
+  changesMarkdownExcerpt: "Partial preview: only the changed fragments.",
+  changesMarkdownExcerptLimited: "Some changes are omitted.",
+  changesMarkdownExcerptDetail: "Formatting and references may be incomplete because the rest of the document is omitted. More detail is available in the text diff or your editor.",
+  changesMarkdownExcerptPosition: (line) => `Line ${line}`,
   changesMarkdownUnified: "Markdown changes in one document",
   changesMarkdownDeleted: "This file has been deleted. Its previous content is shown below.",
   changesMarkdownUnchanged: "No visible changes between these versions.",
   changesMarkdownComplex: "This document exceeds the formatted comparison limits.",
-  changesMarkdownCounts: (removed, added) => `− ${removed} removed ${removed === 1 ? "line" : "lines"} · + ${added} added ${added === 1 ? "line" : "lines"}. Entire affected blocks are highlighted.`,
+  changesMarkdownCounts: (removed, added) => `−${removed} +${added} lines`,
+  changesMarkdownBlocks: "Entire affected blocks are highlighted.",
+  changesMarkdownFold: (blocks) => `Show ${blocks} unchanged blocks`,
+  changesMarkdownShowAll: "Show all",
   changesMarkdownLoading: "Loading document…",
   changesMarkdownError: "This document could not be read. It may have moved, been deleted, or use an unsupported text encoding.",
   changesMarkdownEmpty: "This document is empty.",

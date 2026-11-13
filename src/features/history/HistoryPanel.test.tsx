@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render as renderInHost, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 const TABS = <div role="tablist" aria-label="Changes or history" />;
 
 import { LanguageProvider } from "../../i18n";
+import { createScreenLifecycleController, ScreenLifecycleProvider } from "../../runtime/screen/module";
 import { createHistoryController } from "./controller";
 import type { HistoryDecoration, HistoryPage, HistoryState, SavedVersionDetail, SavedVersionSummary } from "./domain";
 import { primaryDecoration } from "./HistoryRefBadge";
@@ -97,11 +98,18 @@ function state(count: number, overrides: Partial<HistoryState> = {}): HistorySta
   };
 }
 
+/** The diff pane's document read is a screen effect, so it needs the host. */
+function render(ui: React.ReactElement) {
+  const lifecycle = createScreenLifecycleController("active");
+  return renderInHost(ui, { wrapper: ({ children }) => <ScreenLifecycleProvider controller={lifecycle}>{children}</ScreenLifecycleProvider> });
+}
+
 function controller() {
   const port: HistoryPort = {
     readPage: vi.fn(async () => page(1)),
     readDetail: vi.fn(async () => { throw new Error("not expected"); }),
     readFileDiff: vi.fn(async () => { throw new Error("not expected"); }),
+    readFileMarkdown: vi.fn(async () => { throw new Error("not expected"); }),
     readImagePreview: vi.fn(async () => { throw new Error("not expected"); }),
   };
   return createHistoryController(port);
@@ -113,8 +121,8 @@ function renderPanel(
   watcherState: "starting" | "watching" | "off" | "unavailable" = "watching",
   actions: HistoryBranchActions = {},
   selfEmail: string | null = null,
+  historyController = controller(),
 ) {
-  const historyController = controller();
   const select = vi.spyOn(historyController, "selectVersion");
   const selectFile = vi.spyOn(historyController, "selectFile");
   const setScope = vi.spyOn(historyController, "setScope");
@@ -924,6 +932,54 @@ describe("HistoryPanel", () => {
 
   // The same two arrow pairs the Changes diff header carries. They replaced a
   // footer of labelled buttons that could only step changes, never files.
+  describe("a Markdown document in a saved version", () => {
+    function documentState() {
+      const historyState = state(2);
+      const selected = historyState.versions[0];
+      const detail: SavedVersionDetail = {
+        version: selected,
+        comparisonBase: selected.parents[0] ?? "empty",
+        comparisonIsEmptyTree: false,
+        comparisonIsFirstParent: false,
+        files: [{ path: "docs/guide.md", originalPath: null, category: "changed" }],
+        fileCounts: { changed: 1, new: 0, deleted: 0, renamed: 0, total: 1 },
+        filesTruncated: false,
+        countsAreMinimum: false,
+      };
+      return state(2, {
+        selectedCommit: selected.commit,
+        detail: { detail, isLoading: false, error: null },
+        selectedFilePath: "docs/guide.md",
+        fileDiff: {
+          diff: { kind: "text", path: "docs/guide.md", originalPath: null, change: "changed", truncated: false, hunks: [] },
+          isLoading: false,
+          error: null,
+        },
+      });
+    }
+
+    it("reads both saved sides and says what they are compared with", async () => {
+      const historyController = controller();
+      const read = vi.spyOn(historyController, "readFileMarkdown").mockResolvedValue({ kind: "ready", beforeContent: "# Old\n", content: "# New\n" });
+      const historyState = documentState();
+      renderPanel(historyState, null, "watching", {}, null, historyController);
+
+      expect(await screen.findByRole("heading", { name: "New" })).toHaveClass("markdown-preview__added");
+      expect(read).toHaveBeenCalledWith({ projectId: "/repo", sessionEpoch: "epoch-1" }, historyState.selectedCommit, "docs/guide.md");
+      expect(screen.getByRole("img", { name: /version before this one/ })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Search in the selected file's changes" })).not.toBeInTheDocument();
+    });
+
+    it("falls back to the text diff when the document cannot be read", async () => {
+      const historyController = controller();
+      vi.spyOn(historyController, "readFileMarkdown").mockRejectedValue(new Error("gone"));
+      renderPanel(documentState(), null, "watching", {}, null, historyController);
+
+      expect(await screen.findByText(/This document could not be read/)).toHaveTextContent("Showing text changes instead");
+      expect(screen.queryByRole("article")).not.toBeInTheDocument();
+    });
+  });
+
   it("steps between changed files and between changes with the shared diff controls", async () => {
     const user = userEvent.setup();
     const historyState = state(2);

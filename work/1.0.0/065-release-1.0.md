@@ -42,7 +42,7 @@ is the authoritative release sequence and capability cut.
   [`0.7.0`](../0.7.0/README.md). 065-10 moved to
   [`after-1.0`](../after-1.0/README.md).
 - Complete existing tasks 015, 037, and 064 at their defined dependency points.
-- Complete the read-only project console in [task 134](../done/134-project-git-console.md)
+- Complete the read-only project console in [task 134](../done/0.3.0/134-project-git-console.md)
   before final release hardening; it remains an optional advanced path, not a
   prerequisite for the ordinary guided workflow.
 - Close the settled visual system across the release-candidate surface in task
@@ -94,10 +94,10 @@ is the authoritative release sequence and capability cut.
 - `docs/PRODUCT_STRATEGY.md`
 - `docs/ROADMAP.md`
 - `docs/adr/0006-defer-macos-and-linux-runtime-validation.md`
-- `work/done/015-history-timeline.md`
-- `work/0.5.0/037-guided-conflict-resolution.md`
+- `work/done/0.1.0/015-history-timeline.md`
+- `work/done/0.5.0/037-guided-conflict-resolution.md`
 - `work/0.6.0/064-set-changes-aside-safely.md`
-- `work/done/099-close-the-visual-system-refactor.md`
+- `work/done/0.2.2/099-close-the-visual-system-refactor.md`
 
 # Dependencies
 

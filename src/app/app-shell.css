@@ -89,6 +89,17 @@
 .window-controls { display: flex; align-items: center; gap: var(--space-1); }
 
 .titlebar-menu { position: relative; flex-shrink: 0; }
+/* The update mark borrows the bell's dot (notifications.css) at the same
+   anchor, so two marks in one row read as one vocabulary. */
+.titlebar-menu .titlebar-icon-button { position: relative; }
+.titlebar-menu__dot {
+  position: absolute; top: 7px; right: 7px;
+  width: 8px; height: 8px;
+  border-radius: var(--radius-round);
+  background: var(--accent-primary-fill);
+  box-shadow: 0 0 0 2px var(--surface-app);
+  pointer-events: none;
+}
 .titlebar-menu__list {
   position: absolute;
   z-index: 5;
@@ -120,6 +131,10 @@
 }
 .titlebar-menu__item svg { width: var(--icon-control); height: var(--icon-control); flex-shrink: 0; color: var(--text-secondary-color); }
 .titlebar-menu__item:hover { background: var(--surface-hover); }
+/* The update entry while a release waits: the accent the solid arrow takes
+   wherever a newer version has been found (DESIGN.md § Icons). */
+.titlebar-menu__item--attention,
+.titlebar-menu__item--attention svg { color: var(--accent-primary); }
 /* A shortcut hint, not a keycap: quiet text pushed to the row's end, so it
    teaches the shortcut without competing with the label. */
 .titlebar-menu__shortcut { margin-left: auto; padding-left: var(--space-4); color: var(--text-secondary-color); font-family: inherit; font-size: var(--text-label); }
@@ -523,8 +538,11 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
    its rounded shape leaves inside the square, and the attention dot lost the
    part that overhangs. */
 .status-bar .status-bar__project-avatar { position: relative; flex-shrink: 0; display: inline-grid; overflow: visible; }
+/* 26px: Overview's chip proportion (initials about 62% of its width) at the
+   10px floor, which leaves no smaller type. At 18px two wide bold initials
+   ("MW", "TW") ran past the chip, and at 22px they still crowded it. */
 .status-bar__avatar {
-  width: 18px; height: 18px; display: grid; place-items: center;
+  width: 26px; height: 26px; display: grid; place-items: center;
   border-radius: var(--radius-identity); color: var(--avatar-foreground);
   box-shadow: var(--avatar-ring);
   font-size: var(--text-micro); font-weight: var(--weight-title); letter-spacing: var(--tracking-wide);
@@ -970,11 +988,12 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
   margin: calc(var(--sheet-frame) + 1px) calc(var(--sheet-frame) + 1px) 0;
   border-radius: var(--radius-surface) var(--radius-surface) 0 0;
 }
-/* Work and Branches lay their panes edge to edge on the sheet, so they take no
-   inset at all: the sheet's border is their outer edge and a hairline the
-   one between them. */
+/* Work, Branches and Overlapping changes lay their panes edge to edge on the
+   sheet, so they take no inset at all: the sheet's border is their outer edge
+   and a hairline the one between them. */
 .app-shell--sheet .workspace--workbench,
-.app-shell--sheet .workspace--branches { padding: 0; }
+.app-shell--sheet .workspace--branches,
+.app-shell--sheet .workspace--conflicts { padding: 0; }
 /* Overview's bands run edge to edge too and carry their own insets. Below
    its fit size it scrolls as a page and keeps the bottom inset, which is what
    makes the fade over the strip free at the end of the scroll. Once it fits
@@ -1235,7 +1254,7 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
 .project-settings-dialog__project {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-/* About, the changelog and the shortcut sheet sit on the dialogs' one
+/* About and the shortcut sheet sit on the dialogs' one
    backdrop (`.app-dialog-backdrop`, primitives.css). */
 .about-dialog {
   /* The dialog's own insets and corner-control height, named so its two corner
@@ -1270,10 +1289,18 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
   border-radius: var(--radius-control);
   background: var(--surface-code);
 }
-.issue-report-dialog__report:has(:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: -1px; }
+.issue-report-dialog__report:has(.issue-report-dialog__report-body:focus-visible) { outline: 2px solid var(--focus-ring); outline-offset: -1px; }
+/* The frame's own caption: what the text is, and the one choice that changes it. */
+.issue-report-dialog__report-head {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.issue-report-dialog__report-heading { color: var(--text-primary-color); font-size: var(--text-body); font-weight: var(--weight-strong); }
+.issue-report-dialog__report-head .app-dialog__check { color: var(--text-secondary-color); }
 .issue-report-dialog__report-body {
-  min-height: 180px;
-  max-height: min(44vh, 360px);
+  min-height: 140px;
+  max-height: min(32vh, 280px);
   margin: 0;
   padding: var(--space-3);
   /* The activity log lines up in columns, so wrapping would destroy the one
@@ -1291,6 +1318,13 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
 /* The same box while the report is gathered, its lines as placeholders. */
 .issue-report-dialog__report-body--placeholder { display: grid; align-content: start; gap: var(--space-2); white-space: normal; }
 .issue-report-dialog .issue-report-dialog__status { min-height: 20px; margin: 0; font-size: var(--text-label); }
+/* Finish on GitHub: three one-line steps. The one that is the reader's to do
+   carries the glyph of what to do in primary ink rather than spinning, because
+   nothing runs until they paste; a copy that did not happen is crossed in the
+   warning ink rather than ticked. */
+.issue-report-dialog__step--todo { color: var(--text-primary-color); }
+.issue-report-dialog__step--todo .app-dialog__step-dot { color: var(--accent-primary); }
+.issue-report-dialog__step--missed .app-dialog__step-dot { color: var(--status-warning); }
 /* The failed link and its copy button on one row. */
 .issue-report-dialog__link { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-2); }
 .issue-report-dialog__link input { min-width: 0; font-family: var(--font-mono); }
@@ -1310,13 +1344,11 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
   z-index: 1;
   margin: 0 calc(-1 * var(--space-3)) calc(-1 * var(--about-corner-size)) auto;
 }
-/* The changelog and the shortcut sheet extend About's shell, but they are
-   documents to read rather than an identity card: they share one width (the
-   dialogs' `s`), the dialogs' 28px inset and the action dialogs' header — a
-   40px glyph circle and a `--text-title` heading. */
-.changelog-dialog,
+/* The shortcut sheet extends About's shell, but it is a document to read
+   rather than an identity card: it takes the dialogs' `s` width, their 28px
+   inset and the action dialogs' header — a 40px glyph circle and a
+   `--text-title` heading. */
 .shortcuts-dialog { --document-inset: 28px; width: min(100%, 440px); }
-.about-dialog.changelog-dialog h2,
 .about-dialog.shortcuts-dialog h2 { font-size: var(--text-title); line-height: var(--leading-tight); }
 @media (pointer: coarse) {
   .about-dialog { --about-corner-size: var(--control-height-lg); }
@@ -1519,225 +1551,6 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
   font-variant-numeric: tabular-nums;
 }
 
-/* The changelog is About's shell with a different document inside it, the same
-   way the shortcuts dialog is. Only the release list is its own vocabulary;
-   the backdrop, surface, close button, eyebrow and heading are shared, so the
-   two surfaces cannot drift apart visually. Slightly wider than About because
-   a release note is a sentence, not a label. */
-/* The dialog is a column that never scrolls itself: the header (mark, title,
-   update line and close) stays put and only the release list scrolls under it.
-   The inline padding moves onto the two rows so the scrollbar runs along the
-   dialog's own edge instead of inside the text column.
-
-   Mid-scroll the notes would be cut dead against the header and the dialog's
-   bottom edge. Both cuts get the status bar's fade (see `.status-bar::before`
-   for why it is a smoothstep to the surface colour and not a ramp to
-   `transparent`), here to the dialog's own raised surface. Each band is
-   exactly as tall as the body's padding on its side, so at either end of the
-   scroll it covers only padding and costs nothing; it shows only while there
-   is more to see. The same heights are the body's scroll padding, so a
-   release brought into view by the keyboard stops clear of the fade rather
-   than under it, and the bands stop short of the scrollbar so the thumb stays
-   crisp. */
-.changelog-dialog {
-  --changelog-fade-top: 24px;
-  --changelog-fade-bottom: 32px;
-  display: flex; flex-direction: column;
-  padding-inline: 0; padding-bottom: 0;
-  overflow: hidden;
-}
-.changelog-dialog__body {
-  flex: 1 1 auto; min-height: 0;
-  padding: var(--changelog-fade-top) var(--document-inset) var(--changelog-fade-bottom);
-  overflow-y: auto;
-  scroll-padding-block: var(--changelog-fade-top) var(--changelog-fade-bottom);
-  /* The landing point for focus, not a control: the dialog's own surface
-     already says where focus is. */
-  outline: none;
-}
-.changelog-dialog__header::after,
-.changelog-dialog::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  right: 6px;
-  z-index: 1;
-  pointer-events: none;
-  background: linear-gradient(
-    var(--changelog-fade-direction),
-    var(--surface-raised) 0%,
-    color-mix(in srgb, var(--surface-raised) 95.7%, transparent) 12.5%,
-    color-mix(in srgb, var(--surface-raised) 84.4%, transparent) 25%,
-    color-mix(in srgb, var(--surface-raised) 68.4%, transparent) 37.5%,
-    color-mix(in srgb, var(--surface-raised) 50%, transparent) 50%,
-    color-mix(in srgb, var(--surface-raised) 31.6%, transparent) 62.5%,
-    color-mix(in srgb, var(--surface-raised) 15.6%, transparent) 75%,
-    color-mix(in srgb, var(--surface-raised) 4.3%, transparent) 87.5%,
-    color-mix(in srgb, var(--surface-raised) 0%, transparent) 100%
-  );
-}
-.changelog-dialog__header::after {
-  --changelog-fade-direction: to bottom;
-  top: 100%;
-  height: var(--changelog-fade-top);
-}
-.changelog-dialog::after {
-  --changelog-fade-direction: to top;
-  bottom: 0;
-  height: var(--changelog-fade-bottom);
-}
-/* A glyph on a fill, so it is round — the identity mark belongs to About and
-   is not repeated here. */
-/* Mark, then the title over its update line, then the close control in the
-   row's own corner, so a long translation wraps before it rather than running
-   beneath it. */
-.changelog-dialog__header {
-  display: flex; align-items: center; gap: var(--space-3);
-  position: relative;
-  flex-shrink: 0;
-  min-height: 44px; padding: 0 var(--document-inset);
-}
-.changelog-dialog__heading { flex: 1; min-width: 0; }
-.changelog-dialog__header > .dialog-close-button { align-self: flex-start; margin: var(--space-1) calc(-1 * var(--space-3)) 0 0; }
-/* About's update line, left-aligned under the title instead of centred under
-   a hero. */
-.changelog-dialog .changelog-dialog__update { justify-content: flex-start; flex-wrap: wrap; gap: var(--space-1) var(--space-2); margin: 2px 0 0; }
-.changelog-dialog__update-check { display: inline-flex; align-items: center; gap: var(--space-2); white-space: nowrap; }
-/* A state that asks for action is itself the link, in the attention tint the
-   status would have worn. */
-.changelog-dialog .changelog-dialog__update-action { color: var(--status-warning); }
-.changelog-dialog .changelog-dialog__update-action:hover { color: var(--text-primary-color); }
-.changelog-dialog__mark {
-  width: 40px; height: 40px; flex: none; display: grid; place-items: center;
-  border-radius: var(--radius-round);
-  background: var(--surface-control);
-  color: var(--tone-app);
-}
-.changelog-dialog__mark svg { width: var(--icon-tile); height: var(--icon-tile); }
-/* The running build's notes, open and set apart on the one tinted surface in
-   the dialog: it is the answer the reader came for, so it leads and needs no
-   click. Everything below it is history. */
-.changelog-current {
-  display: grid; gap: var(--space-4);
-  margin: 0; padding: var(--space-4) var(--space-4) var(--space-4);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-surface);
-  background: var(--surface-control);
-}
-.changelog-current .changelog-release__notes,
-.changelog-current .changelog-release__empty { margin: 0; animation: none; }
-.changelog-earlier { margin: var(--space-5) 0 0; }
-.changelog-earlier__heading {
-  margin: 0 0 var(--space-1) var(--space-1);
-  color: var(--text-secondary-color);
-  font-size: var(--text-caption);
-  font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-caps);
-  text-transform: uppercase;
-}
-/* Earlier releases are one line each, so twenty of them still scan. They are
-   rows of one list, so space separates them rather than a rule (DESIGN.md:
-   the hairline divides regions, never rows). */
-.changelog { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
-.changelog-release__trigger {
-  width: 100%;
-  padding: var(--space-2) var(--space-1);
-  border: 0;
-  border-radius: var(--radius-item);
-  background: transparent;
-  color: var(--text-secondary-color);
-  font: inherit;
-  text-align: left;
-}
-.changelog-release__trigger:hover { background: var(--surface-hover); color: var(--text-primary-color); }
-.changelog-release__trigger:active { background: var(--surface-active); }
-.changelog-release__trigger:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-.changelog-release__heading {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-}
-.changelog-release__identity {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  min-width: 0;
-}
-/* A bare chevron: the round fill is for glyphs that state something
-   (DESIGN.md § Radius), and a disclosure only points. */
-.changelog-release__chevron {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  color: var(--text-secondary-color);
-  transition: transform var(--duration-normal), color var(--duration-fast);
-}
-.changelog-release__chevron svg { width: var(--icon-control); height: var(--icon-control); }
-.changelog-release__trigger[aria-expanded="true"] .changelog-release__chevron {
-  transform: rotate(180deg);
-  color: var(--accent-primary);
-}
-.changelog-release h3,
-.changelog-current h3 { margin: 0; font-size: var(--text-body); font-weight: var(--weight-title); font-variant-numeric: tabular-nums; }
-.changelog-current h3 { font-size: var(--text-subtitle); letter-spacing: var(--tracking-tight); }
-.changelog-release__trigger[aria-expanded="true"] h3,
-.changelog-release__trigger:hover h3 { color: var(--text-primary-color); }
-.changelog-release__count { color: var(--text-secondary-color); font-size: var(--text-label); }
-.changelog-release__count::before { content: "· "; }
-.changelog-release__current {
-  flex-shrink: 0;
-  padding: 2px var(--space-2);
-  border-radius: var(--radius-pill);
-  font-size: var(--text-micro);
-  font-weight: var(--weight-title);
-  line-height: var(--leading-tight);
-  letter-spacing: var(--tracking-wide);
-}
-/* Which build the reader is actually running is the one fact a changelog has
-   to answer before any note means anything, so it is the only accented thing
-   in the list.
-
-   The tint is 12%, not more: the label is 10px bold — normal-size text as far
-   as WCAG is concerned — and every extra percent of accent behind accent-
-   colored text moves the two closer together. Measured against
-   `--surface-raised`, 12% holds 4.59:1 on light and 6.90:1 on dark, where 14%
-   fell to 4.47:1 on light and missed AA. The border does the work the fill is
-   not allowed to do. The tint is mixed into `--surface-raised` rather than
-   into transparency so the pill keeps that ratio on the running build's
-   `--surface-control` panel, which alone would pull light themes under AA. */
-.changelog-release__current {
-  border: 1px solid color-mix(in srgb, var(--accent-primary) var(--tint-edge), transparent);
-  background: color-mix(in srgb, var(--accent-primary) var(--tint-fill), var(--surface-raised));
-  color: var(--accent-primary);
-}
-.changelog-release__date {
-  margin-left: auto;
-  flex-shrink: 0;
-  color: var(--text-secondary-color);
-  font-size: var(--text-label);
-}
-/* The list recipe is `.release-highlights` (primitives), shared with the
-   update dialog; the changelog adds its indent and the reveal. */
-.changelog-release__notes {
-  margin: var(--space-2) var(--space-1) var(--space-4) 28px;
-  animation: changelog-notes-enter var(--duration-normal) var(--ease-emphasized);
-}
-/* The one line a highlight-less running build shows instead of a list,
-   indented to where its notes would start. */
-.changelog-release__empty {
-  margin: var(--space-2) var(--space-1) var(--space-4) 28px;
-  color: var(--text-secondary-color);
-  font-size: var(--text-body);
-  line-height: var(--leading-normal);
-}
-@keyframes changelog-notes-enter {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
 .about-details { margin: var(--space-2) 0 0; }
 .about-details div { display: flex; justify-content: space-between; gap: var(--space-5); padding: var(--space-1) 0; }
 .about-details dt { color: var(--text-secondary-color); }
@@ -1878,8 +1691,6 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
 .shortcuts-row:hover .shortcuts-keys kbd:nth-child(3) { animation-delay: var(--duration-normal); }
 
 @media (prefers-reduced-motion: reduce) {
-  .changelog-release__notes { animation: none; }
-  .changelog-release__chevron { transition: none; }
   .titlebar-menu__list { animation: none; }
   .rail-more__menu { animation: none; }
   .sidebar-jump__menu { animation: none; }
@@ -1933,6 +1744,7 @@ button.status-bar__seg:hover { background: var(--surface-hover); }
      edge to edge it takes the inset they gave up. */
   .app-shell--sheet .workspace--workbench .compact-nav-row,
   .app-shell--sheet .workspace--branches .compact-nav-row,
+  .app-shell--sheet .workspace--conflicts .compact-nav-row,
   .app-shell--overview .compact-nav-row { margin: var(--space-3); }
   .workspace { padding-top: 20px; }
   .compact-nav-row { display: flex; align-items: center; gap: var(--space-2); margin-bottom: var(--space-4); }

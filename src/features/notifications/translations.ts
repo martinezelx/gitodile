@@ -29,6 +29,8 @@ export interface NotificationsTranslations {
   notificationChangesPublishedTo: (destination: string) => string;
   notificationAppUpdateTitle: (version: string) => string;
   notificationAppUpdateDescription: string;
+  notificationAppUpdateReadyTitle: (version: string) => string;
+  notificationAppUpdateReadyDescription: string;
   notificationAppUpdateAction: string;
   notificationUpstreamGoneTitle: (branch: string | null, remote: string | null) => string;
   notificationUpstreamGoneDescription: string;

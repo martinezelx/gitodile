@@ -5,7 +5,7 @@
 
 ## Context
 
-Task [148-4](../../work/done/148-4-gitlab-accounts.md) extends the completed
+Task [148-4](../../work/done/0.4.0/148-4-gitlab-accounts.md) extends the completed
 GitHub token/browser/project-discovery experience to GitLab.com. The existing
 registry, project bindings and HTTPS helper already provide source-specific
 selection. Unlike gh, glab stores one identity per host. A username can change;

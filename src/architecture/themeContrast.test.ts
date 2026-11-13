@@ -131,6 +131,27 @@ function contrast(foreground: Rgb, background: Rgb): number {
   return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
 }
 
+/** Perceptual distance between two colours: Euclidean distance in OKLab,
+ * scaled by 100 so about 2 is the smallest step the eye notices. */
+function perceptualDistance(first: Rgb, second: Rgb): number {
+  const oklab = (rgb: Rgb): Rgb => {
+    const [r, g, b] = rgb.map((component) => {
+      const value = component / 255;
+      return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+    });
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    return [
+      0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+      1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+      0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+    ];
+  };
+  const [a, b] = [oklab(first), oklab(second)];
+  return 100 * Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+
 /** A theme's colours, resolved to opaque values, plus the surfaces the
  * stylesheets derive from them. */
 function paletteOf(block: Block) {
@@ -298,6 +319,41 @@ describe("theme contrast contract", () => {
       const { hex, panel } = paletteOf(block);
       const fill = blend(hex("--text-primary-color"), weight, panel);
       measure(failures, block.id, "--node-fill on panel", fill, panel, NON_TEXT_FLOOR);
+    }
+    expect(failures).toEqual([]);
+  });
+
+  // DESIGN.md § Glyph tones: each tone says one kind of thing, so it has to
+  // read apart from every other tone, not only from the surface. The lime
+  // "saved here" and the green "done" sat 4.3 apart in GitOdile Light, the
+  // remote's blue and GitOdile's violet 8.9 in Dark. Normal vision only: under
+  // colour blindness red, amber and green meet in any palette, and the glyph's
+  // shape carries the meaning there. Community themes once gave local and done
+  // one green and the heart danger's red; they now take another of their
+  // palette's own hues for each role.
+  it("keeps every theme's glyph tones a clear step from one another", () => {
+    const toneApp = TOKENS_CSS.match(/--tone-app:\s*light-dark\((#[0-9a-fA-F]{6}),\s*(#[0-9a-fA-F]{6})\)/);
+    expect(toneApp, "tokens.css defines --tone-app per scheme").not.toBeNull();
+    if (!toneApp) return;
+    const failures: string[] = [];
+    for (const block of blocks) {
+      const { hex } = paletteOf(block);
+      const tones: Record<string, Rgb> = {
+        remote: hex("--status-renamed"),
+        local: hex("--tone-local"),
+        done: hex("--status-success"),
+        warning: hex("--status-warning"),
+        danger: hex("--status-danger"),
+        heart: hex("--accent-heart"),
+        app: hexToRgb(block.scheme === "dark" ? toneApp[2] : toneApp[1]),
+      };
+      const names = Object.keys(tones);
+      for (const [index, first] of names.entries()) {
+        for (const second of names.slice(index + 1)) {
+          const distance = perceptualDistance(tones[first], tones[second]);
+          if (distance < 10) failures.push(`${block.id}: ${first} and ${second} are only ${distance.toFixed(1)} apart`);
+        }
+      }
     }
     expect(failures).toEqual([]);
   });

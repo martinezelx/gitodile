@@ -1,0 +1,43 @@
+{
+  "get": {
+    "calls": 1,
+    "plans": 1,
+    "publishes": 0,
+    "applied": 1,
+    "recovery": {
+      "schemaVersion": 1,
+      "recoveryId": "1793392475259-26732-3-0",
+      "reference": "refs/gitodile/recovery/v1/get-team-changes/worktree-1f5962a2ce9803c8/1793392475259-26732-3-0",
+      "createdAtMs": 1793392479382,
+      "operation": "get-team-changes",
+      "ownerId": "worktree-1f5962a2ce9803c8",
+      "branch": "main",
+      "previousCommit": "243117d889f59c5f6e7ca6f29d6eca77db5e4391",
+      "targetCommit": "267b3bb13bc638db163faf87630cbb4e410c7337",
+      "remote": "origin",
+      "destinationBranch": "main",
+      "trackingRef": "refs/remotes/origin/main",
+      "stateToken": "b7f3f2b9fbe099c7",
+      "retentionLimit": 20,
+      "unsavedReference": "refs/gitodile/recovery/v1/get-team-changes-unsaved/worktree-1f5962a2ce9803c8/1793392475259-26732-3-0",
+      "unsavedSnapshot": "2ea3b5f93959bbff15b4adbae94b456b216b4d55"
+    },
+    "observedHead": "267b3bb13bc638db163faf87630cbb4e410c7337"
+  },
+  "large": {
+    "count": 26,
+    "listed": 20,
+    "hasUnsaved": true
+  },
+  "git": {
+    "head": "267b3bb13bc638db163faf87630cbb4e410c7337",
+    "parents": [
+      "243117d889f59c5f6e7ca6f29d6eca77db5e4391",
+      "9ae5000d9e7060f18b5eed6fe59899b5b83d05b8"
+    ],
+    "remote": "9ae5000d9e7060f18b5eed6fe59899b5b83d05b8",
+    "work": "HOOK\nl2\nl3\nl4\nl5\nl6\nl7\nTEAM\n",
+    "unsavedCopy": "HOOK\nl2\nl3\nl4\nl5\nl6\nl7\nl8"
+  },
+  "verified": true
+}

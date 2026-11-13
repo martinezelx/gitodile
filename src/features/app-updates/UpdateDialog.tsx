@@ -1,4 +1,4 @@
-import React, { useId, useRef, useState } from "react";
+import React, { useEffect, useId, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import {
   CheckCircle2,
@@ -6,7 +6,6 @@ import {
   CircleAlert,
   CircleArrowUp,
   CircleFadingArrowUp,
-  ExternalLink,
   Info,
   LoaderCircle,
   ShieldCheck,
@@ -14,8 +13,8 @@ import {
 } from "lucide-react";
 
 import { useLanguage, type Language } from "../../i18n";
-import { formatDate, type LocaleFormats } from "../../shared/i18n";
-import { Dialog, Mascot, ReleaseHighlights, ToolInstallationRow, autoHideScrollbarProps, useModalFocus, type ToolChip } from "../../shared/ui";
+import { formatDate, formatRelativeCheckTime, type LocaleFormats } from "../../shared/i18n";
+import { Dialog, Mascot, ReleaseHighlights, ToolGuideButton, ToolInstallationRow, useModalFocus, type ToolChip } from "../../shared/ui";
 import type { AppUpdatesController, AppUpdatesSnapshot } from "./controller";
 import { isDevelopmentBuild, type StartupUpdateConfirmation, type UpdateCandidate, type UpdateError, type UpdateHighlight, type UpdateState } from "./domain";
 import { appUpdateTranslations, candidateFromState } from "./translations";
@@ -42,14 +41,6 @@ function errorState(state: UpdateState): UpdateError | null {
   return "error" in state ? state.error : null;
 }
 
-/** ISO from the manifest, formatted like the changelog does, or nothing: a
- * date the app cannot read is left out rather than shown as "Invalid Date". */
-function formatPublishedAt(publishedAt: string | null, formats: LocaleFormats): string | null {
-  if (publishedAt === null) return null;
-  const parsed = new Date(publishedAt);
-  return Number.isNaN(parsed.getTime()) ? null : formatDate(parsed, formats);
-}
-
 type StatusTone = "neutral" | "progress" | "success" | "accent" | "warning" | "danger";
 type StatusLine = { tone: StatusTone; icon: React.JSX.Element; message: string };
 
@@ -61,12 +52,6 @@ const MANUAL_DOWNLOAD_CODES: ReadonlySet<UpdateError["code"]> = new Set([
   "http_status", "feed_unavailable", "target_unavailable", "automatic_update_not_enabled",
   "install_handoff_failed", "post_install_unconfirmed", "not_configured", "internal",
 ]);
-
-/** The restarted app is not the version the installer was handed. It is
- * reported once at startup, as a failed state with its own code. */
-function isUnconfirmedRestart(state: UpdateState): boolean {
-  return state.kind === "failed" && state.error.code === "post_install_unconfirmed";
-}
 
 /** The native side sends an empty expected version when the handoff record
  * itself could not be read; the sentence then omits the unknown version. */
@@ -145,13 +130,7 @@ function StatusLine({ line, cause = [], className = "" }: { line: StatusLine; ca
 
 /* States whose status line says more than the Settings row's chip. */
 const ROW_STATUS_STATES: ReadonlySet<UpdateState["kind"]> = new Set([
-  "available", "blocked", "unavailable", "failed",
-]);
-
-/* The dialog has something the Settings row cannot say only once there is a
-   release to read, a transfer to watch or an install to confirm. */
-const DIALOG_STATES: ReadonlySet<UpdateState["kind"]> = new Set([
-  "available", "downloading", "verifying", "ready", "blocked", "installing",
+  "blocked", "unavailable", "failed",
 ]);
 
 function Progress({ state, language }: { state: UpdateState; language: Language }) {
@@ -186,38 +165,6 @@ function Progress({ state, language }: { state: UpdateState; language: Language 
   );
 }
 
-/** The offered release as a card: identity row in the changelog's vocabulary
- * (version, date), then what it brings. A release whose feed
- * carries highlights shows them the way What's new does, in the reader's
- * language; one that carries none (every release before the field existed)
- * falls back to its notes as bounded plain text. */
-function CandidateDetails({ candidate, language }: { candidate: UpdateCandidate; language: Language }) {
-  const { formats } = useLanguage();
-  const t = appUpdateTranslations(language);
-  const publishedAt = formatPublishedAt(candidate.publishedAt, formats);
-  return (
-    <section className="app-update-candidate" aria-labelledby="app-update-candidate-title">
-      <div className="app-update-candidate__identity">
-        <h3 id="app-update-candidate-title">{candidate.version}</h3>
-        {publishedAt && candidate.publishedAt && (
-          <time className="app-update-candidate__date" dateTime={candidate.publishedAt}>{publishedAt}</time>
-        )}
-      </div>
-      {candidate.highlights.length > 0 ? (
-        <>
-          <p className="app-update-candidate__notes-label">{t.highlights}</p>
-          <ReleaseHighlights highlights={candidate.highlights} language={language} />
-        </>
-      ) : (
-        <>
-          <p className="app-update-candidate__notes-label">{t.releaseNotes}</p>
-          <p className="app-update-notes">{candidate.notes.trim() || t.noNotes}</p>
-        </>
-      )}
-    </section>
-  );
-}
-
 /** The chip's short state word, so the row answers "what is this?" at a glance
  * while the status line below says it in full. */
 function describeChip(state: UpdateState, language: Language): ToolChip {
@@ -227,7 +174,7 @@ function describeChip(state: UpdateState, language: Language): ToolChip {
     case "idle": return { label: t.chip.idle, tone: "neutral" };
     case "checking": return { label: t.chip.checking, tone: "neutral", icon: spinner };
     case "current": return { label: t.chip.current, tone: "success", icon: <CheckCircle2 aria-hidden="true" /> };
-    case "available": return { label: t.chip.available, tone: "accent", icon: <CircleArrowUp aria-hidden="true" /> };
+    case "available": return { label: t.chip.available(state.candidate.version), tone: "accent", icon: <CircleArrowUp aria-hidden="true" /> };
     case "downloading": return { label: t.chip.downloading, tone: "neutral", icon: spinner };
     case "verifying": return { label: t.chip.verifying, tone: "neutral", icon: spinner };
     case "ready": return { label: t.chip.ready, tone: "accent", icon: <ShieldCheck aria-hidden="true" /> };
@@ -304,37 +251,46 @@ function EarlierRelease({
   );
 }
 
-/** The integrated What's new: the release the reader is offered (when the feed
- * describes one) or the build they run, then every earlier version as a
- * disclosure. It shows what the changelog dialog shows, in place, so the
- * Updates section answers "what changed?" without a second surface. */
+/** The integrated What's new: the release the reader is offered or the build
+ * they run, then every earlier version as a disclosure. It is the app's only
+ * changelog, so every "What's new" in the app opens here. An offered release
+ * whose feed carries no highlights (every release before the field existed)
+ * shows its notes as bounded plain text instead. */
 function WhatsNewSection({
   releases,
   installed,
   candidate,
   language,
+  reveal,
 }: {
   releases: readonly SettingsReleaseEntry[];
   installed: InstalledRelease;
   candidate: UpdateCandidate | null;
   language: Language;
+  /** Brings the group into view and focus once mounted. */
+  reveal: boolean;
 }): React.JSX.Element | null {
   const { formats } = useLanguage();
   const t = appUpdateTranslations(language);
+  const sectionRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!reveal) return;
+    const section = sectionRef.current;
+    section?.scrollIntoView?.({ block: "start" });
+    section?.focus({ preventScroll: true });
+  }, [reveal]);
   const current = releases.find((release) => release.version === installed.version) ?? releases[0];
   if (!current) return null;
-  /* The offered release leads when the feed describes it; a candidate with no
-     highlights leaves the running build as the thing to read. */
-  const offered: SettingsReleaseEntry | null =
-    candidate && candidate.highlights.length > 0
-      ? { version: candidate.version, date: candidate.publishedAt, highlights: candidate.highlights }
-      : null;
+  const offered: SettingsReleaseEntry | null = candidate && candidate.version !== installed.version
+    ? { version: candidate.version, date: candidate.publishedAt, highlights: candidate.highlights }
+    : null;
   const featured = offered ?? current;
   const earlier = releases.filter((release) => release.version !== featured.version);
   const featuredDate = formatReleaseDate(featured.date, formats);
+  const offeredNotes = offered && offered.highlights.length === 0 ? candidate?.notes.trim() ?? "" : "";
 
   return (
-    <section className="settings-group" aria-labelledby="app-whats-new-title">
+    <section ref={sectionRef} className="settings-group app-whats-new" aria-labelledby="app-whats-new-title" tabIndex={-1}>
       <header className="settings-group__header">
         <h3 id="app-whats-new-title">{t.highlights}</h3>
         <p>{t.whatsNewDescription}</p>
@@ -349,7 +305,9 @@ function WhatsNewSection({
         </div>
         {featured.highlights.length > 0
           ? <ReleaseHighlights highlights={featured.highlights} language={language} />
-          : <p className="whatsnew-empty">{t.whatsNewEmpty}</p>}
+          : offered
+            ? <p className="app-update-notes">{offeredNotes || t.noNotes}</p>
+            : <p className="whatsnew-empty">{t.whatsNewEmpty}</p>}
       </article>
       {earlier.length > 0 && (
         <div className="whatsnew-earlier">
@@ -370,12 +328,45 @@ function WhatsNewSection({
   );
 }
 
-/** The Updates section of Settings: the installed build with its status and
- * actions, the manual download as its own way out, the integrated What's new,
- * then the one switch for the startup check — with the disclosure (GitHub, the
- * 24-hour repeat for long sessions, what is sent) beside it, as DESIGN.md
- * requires. Checking is never started from here on mount; only the button and
- * the switch act. */
+type RowAction = { label: string; run: () => void };
+
+/** The row's one primary: the state's next step, always in the same place.
+ * Checking never downloads, downloading never installs, and installing needs
+ * this button — the hint beside it says what it does first. Work in flight has
+ * no primary: the chip's spinner and the progress already say what is
+ * happening, and a grey button repeating the chip's word offered nothing to
+ * press. A block that a retry cannot clear (this build cannot update itself)
+ * has none either; its cause and the manual download are the way forward. */
+function primaryAction(state: UpdateState, controller: AppUpdatesController, language: Language): RowAction | null {
+  const t = appUpdateTranslations(language);
+  const act = (label: string, run: () => void): RowAction => ({ label, run });
+  switch (state.kind) {
+    case "checking":
+    case "downloading":
+    case "verifying":
+    case "installing": return null;
+    case "available": return act(
+      state.candidate.expectedBytes ? t.downloadSized(formatBytes(state.candidate.expectedBytes, language)) : t.download,
+      () => void controller.download(),
+    );
+    case "ready": return act(t.install, () => void controller.install());
+    case "blocked": return state.error.retryable ? act(t.retry, () => void controller.install()) : null;
+    case "current": return act(t.checkAgain, () => void controller.check());
+    case "failed": return act(state.error.retryable ? t.retry : t.checkAgain, () => void controller.check());
+    case "cancelled": return act(t.retry, () => void controller.check());
+    /* A development build has nothing to check, and the line beside it says
+       why; a disabled button would only repeat it. */
+    case "unavailable": return isDevelopmentBuild(state) ? null : act(t.check, () => void controller.check());
+    case "idle": return act(t.check, () => void controller.check());
+  }
+}
+
+/** The Updates section of Settings, and the one place the app's update lives:
+ * the installed build with its state, the next step, its progress and the
+ * manual download and the one switch for automatic checks — with when it
+ * checks and what is never sent beside it, as DESIGN.md requires — then What's
+ * new. Every other way in (menus, palette, notification, About, the startup
+ * toast) opens this section; nothing checks on mount. */
 export function AppUpdateSettingsControl({
   snapshot,
   controller,
@@ -383,8 +374,8 @@ export function AppUpdateSettingsControl({
   name,
   enabled,
   setEnabled,
-  onOpenDialog,
   releases,
+  revealWhatsNew = false,
 }: {
   snapshot: AppUpdatesSnapshot;
   controller: AppUpdatesController;
@@ -393,40 +384,34 @@ export function AppUpdateSettingsControl({
   name: string;
   enabled: boolean;
   setEnabled: (enabled: boolean) => void;
-  onOpenDialog?: () => void;
   /** The bundled changelog, newest first. The shell owns the release model and
    * passes it in; without it the What's new group stays out. */
   releases?: readonly SettingsReleaseEntry[];
+  /** Opened from a "What's new": land on that group rather than the top. */
+  revealWhatsNew?: boolean;
 }) {
-  const { language } = useLanguage();
+  const { language, formats } = useLanguage();
   const t = appUpdateTranslations(language);
   const state = snapshot.state;
   const candidate = candidateFromState(state);
   const line = describeState(state, language);
+  /* "Up to date" is a claim about a moment; the row names it, in the status
+     bar's wording for a check. */
+  const checkedAt = state.kind === "current" ? Date.parse(state.checkedAt) : Number.NaN;
+  const checkedLine = Number.isNaN(checkedAt)
+    ? null
+    : t.checkedAt(formatRelativeCheckTime(checkedAt, Date.now(), formats.language, t.justNow));
   const detail = describeDetail(state, language);
-  /* Details opens the dialog, where the notes, the progress and the install
-     confirmation live. The cause of a failure is already in the row, so it is
-     offered only when the dialog has something the row does not. */
-  const hasDetails = onOpenDialog !== undefined && DIALOG_STATES.has(state.kind);
-  /* One contextual primary: the state's next step, always in the same place.
-     "Download" starts the transfer and opens the dialog, so the progress and
-     the cancel stay reachable. While a transfer or install runs, "Details"
-     reopens that dialog without starting another operation. Without a dialog
-     host, the busy state stays disabled. */
-  const primary =
-    state.kind === "checking"
-      ? { label: t.chip.checking, disabled: true, run: () => undefined, spinner: true }
-      : state.kind === "available"
-        ? { label: t.download, disabled: false, run: () => { onOpenDialog?.(); void controller.download(); }, spinner: false }
-        : hasDetails
-          ? { label: t.details, disabled: false, run: onOpenDialog, spinner: false }
-          : state.kind === "downloading" || state.kind === "verifying" || state.kind === "installing"
-            ? { label: t.chip[state.kind], disabled: true, run: () => undefined, spinner: true }
-            /* A development build has nothing to check: the line beside
-               it says why, so the button stays, disabled. */
-            : { label: t.check, disabled: isDevelopmentBuild(state), run: () => void controller.check(), spinner: false };
-  /* The build you have, the manual way out, what changed, and how the next one
-     reaches you — none named after the tab it sits in. */
+  const primary = primaryAction(state, controller, language);
+  const error = errorState(state);
+  /* Cancel sits beside the primary while there is something to cancel. A
+     manual check shows "checking" before native names its operation, and
+     there is nothing to cancel until it does. */
+  const cancellable = (state.kind === "checking" && state.operationId !== "") || state.kind === "downloading";
+  const offersManual = error !== null && MANUAL_DOWNLOAD_CODES.has(error.code);
+  const inFlight = state.kind === "checking" || state.kind === "downloading" || state.kind === "verifying" || state.kind === "installing";
+  /* The build you have, every way to the next one and how it reaches you,
+     then what changed — none named after the tab it sits in. */
   return (
     <div className="settings-groups">
       <section className="settings-group">
@@ -437,41 +422,35 @@ export function AppUpdateSettingsControl({
             chip={describeChip(state, language)}
             version={installed.version}
             versionLabel={t.installedLabel}
-            /* The chip already names a settled state; the line speaks only
-               when it adds something: the offered release, a cause or a failure. */
+            facts={checkedLine && <span className="app-update-checked">{checkedLine}</span>}
+            detail={<Progress state={state} language={language} />}
+            /* The chip already names the state and the offered version; the
+               line speaks only when it adds something: a cause or a failure. */
             status={detail.length > 0 || ROW_STATUS_STATES.has(state.kind) ? <StatusLine line={line} cause={detail} /> : null}
-            primaryAction={
-              <button className="primary-button" type="button" disabled={primary.disabled} onClick={primary.run}>
-                {primary.spinner && <LoaderCircle aria-hidden="true" className="icon--spinning" />}
+            /* Ready is the install confirmation: what installing does, said
+               beside the one button that does it. */
+            hint={state.kind === "ready" ? <p className="app-update-hint">{t.installExplanation}</p> : null}
+            /* The manual download is one click away from every settled state,
+               the way the Git and gh rows keep their official guide: a quiet
+               link beside the actions. Work in flight leaves it out, and a
+               cause that recommends it makes it the labelled secondary
+               instead, so it is never offered twice. */
+            docs={offersManual || inFlight ? null : (
+              <ToolGuideButton label={t.manualFromGitHub} onClick={() => void controller.openManualDownload()} />
+            )}
+            recheck={cancellable ? (
+              <button className="secondary-button" type="button" onClick={() => void controller.cancel()}>{t.cancel}</button>
+            ) : offersManual ? (
+              <button className="secondary-button" type="button" onClick={() => void controller.openManualDownload()}>{t.manual}</button>
+            ) : null}
+            primaryAction={primary && (
+              <button className="primary-button" type="button" onClick={primary.run}>
                 {primary.label}
               </button>
-            }
+            )}
           />
-        </div>
-      </section>
-      <section className="settings-group">
-        <header className="settings-group__header">
-          <h3>{t.otherWaysTitle}</h3>
-          <p>{t.otherWaysDescription}</p>
-        </header>
-        <div className="settings-group__body">
-          <div className="settings-row">
-            <div><strong>{t.manual}</strong><p>{t.manualDownloadDescription}</p></div>
-            <div className="settings-row__actions">
-              <button className="secondary-button" type="button" onClick={() => void controller.openManualDownload()}>
-                <ExternalLink aria-hidden="true" />
-                {t.openReleases}
-              </button>
-            </div>
-          </div>
-        </div>
-      </section>
-      {releases && releases.length > 0 && (
-        <WhatsNewSection releases={releases} installed={installed} candidate={candidate} language={language} />
-      )}
-      <section className="settings-group">
-        <header className="settings-group__header"><h3>{t.receivingTitle}</h3></header>
-        <div className="settings-group__body">
+          {/* How the next version reaches you belongs with the build it
+              replaces: one switch needs no group title of its own. */}
           <div className="settings-row">
             <div><strong>{t.automaticLabel}</strong><p>{t.automaticDescription}</p></div>
             <button
@@ -485,6 +464,9 @@ export function AppUpdateSettingsControl({
           </div>
         </div>
       </section>
+      {releases && releases.length > 0 && (
+        <WhatsNewSection releases={releases} installed={installed} candidate={candidate} language={language} reveal={revealWhatsNew} />
+      )}
     </div>
   );
 }
@@ -510,23 +492,26 @@ function mascotForState(state: UpdateState): { motion?: "hop"; progress?: number
 }
 
 /**
- * The update dialog, on the shared dialog shell: GitOdile's own glyph, title, the
- * installed build, then one status line whose tone carries the state, and
- * only under it whatever that state has to show — a cause, the offered
- * release, progress, or what installing will do.
+ * The one update moment that interrupts: the app restarted after an install
+ * and is not on the version it was handed. It says so in one sentence and
+ * offers both ways forward — a fresh check, in Settings › Updates where every
+ * other update state lives, and the manual download. Nothing else opens it.
  */
-export function AppUpdateDialog({
+export function AppUpdateRestartDialog({
   isOpen,
   setOpen,
-  snapshot,
+  confirmation,
   controller,
   installed,
+  onCheckAgain,
 }: {
   isOpen: boolean;
   setOpen: Dispatch<SetStateAction<boolean>>;
-  snapshot: AppUpdatesSnapshot;
+  confirmation: StartupUpdateConfirmation;
   controller: AppUpdatesController;
   installed: InstalledRelease;
+  /** Closes this dialog onto Settings › Updates and checks there. */
+  onCheckAgain: () => void;
 }) {
   const { language, t: appT } = useLanguage();
   const t = appUpdateTranslations(language);
@@ -535,45 +520,11 @@ export function AppUpdateDialog({
   useModalFocus(isOpen, dialogRef, setOpen);
 
   if (!isOpen) return null;
-  const state = snapshot.state;
-  const candidate = candidateFromState(state);
-  const error = errorState(state);
-  const unconfirmed = isUnconfirmedRestart(state);
-  /* A restart on the wrong version is one sentence: the startup receipt and
-     the failure say the same thing, so only the receipt is drawn. */
-  const line: StatusLine = unconfirmed
-    ? { tone: "warning", icon: <CircleAlert aria-hidden="true" />, message: unconfirmedMessage(snapshot.startupConfirmation, language) }
-    : describeState(state, language);
-  const detail = unconfirmed ? [] : describeDetail(state, language);
-  const offersManual = error !== null && MANUAL_DOWNLOAD_CODES.has(error.code);
-  const canRetry = !unconfirmed && (error?.retryable || state.kind === "cancelled");
-  /* A manual check shows "checking" before native names its operation (the
-     controller's placeholder has no id), and there is nothing to cancel yet. */
-  const cancelOperation = (state.kind === "checking" && state.operationId !== "") || state.kind === "downloading";
-  const downloadLabel = candidate?.expectedBytes
-    ? t.downloadSized(formatBytes(candidate.expectedBytes, language))
-    : t.download;
-  const close = () => setOpen(false);
-
-  const version = candidate ? candidate.version : null;
-  /* The title is the state, so the reader knows what this is about before
-     reading further; the status line only says what the title does not. */
-  const title = state.kind === "available" ? t.titleAvailable
-    : state.kind === "downloading" && version ? t.titleDownloading(version)
-      : state.kind === "verifying" && version ? t.titleVerifying(version)
-        : state.kind === "ready" ? t.titleReady
-          : state.kind === "current" ? t.titleCurrent
-            : state.kind === "installing" ? t.titleInstalling
-              : state.kind === "blocked" && state.error.code === "install_blocked" ? t.titleBlocked
-                : unconfirmed ? t.titleUnconfirmed
-                  : t.title;
-  const titleSaysState = state.kind === "available" || state.kind === "ready" || state.kind === "current"
-    || ((state.kind === "downloading" || state.kind === "verifying") && Boolean(version));
-
+  const line: StatusLine = { tone: "warning", icon: <CircleAlert aria-hidden="true" />, message: unconfirmedMessage(confirmation, language) };
   return (
     <Dialog
       size="m"
-      title={title}
+      title={t.titleUnconfirmed}
       titleId="app-update-title"
       subtitle={
         <span className="app-update-dialog__installed" aria-label={`${t.installedLabel} ${installed.version}`}>
@@ -583,32 +534,17 @@ export function AppUpdateDialog({
       descriptionId={descriptionId}
       icon={<CircleFadingArrowUp />}
       tone="app"
-      onClose={close}
+      onClose={() => setOpen(false)}
       closeLabel={appT.commonClose}
       dialogRef={dialogRef}
-      className="app-update-dialog auto-hide-scrollbar"
-      bodyProps={autoHideScrollbarProps<HTMLDivElement>()}
+      className="app-update-dialog"
     >
       <div id={descriptionId} className="app-update-dialog__state">
-        {/* Ready is the install confirmation: what installing does, said
-            before the one button that does it. */}
-        {state.kind === "ready"
-          ? <p className="app-dialog__text">{t.installExplanation}</p>
-          : (!titleSaysState || detail.length > 0) && <StatusLine line={line} cause={detail} />}
+        <StatusLine line={line} />
       </div>
-      {candidate && <CandidateDetails candidate={candidate} language={language} />}
-      <Progress state={state} language={language} />
       <div className="dialog-actions app-update-actions">
-        {offersManual && <button className="secondary-button" type="button" onClick={() => void controller.openManualDownload()}>{t.manual}</button>}
-        {cancelOperation && <button className="secondary-button" type="button" onClick={() => void controller.cancel()}>{t.cancel}</button>}
-        {(state.kind === "available" || state.kind === "ready") && <button className="secondary-button" type="button" onClick={close}>{t.notNow}</button>}
-        {state.kind === "current" && <button className="secondary-button" type="button" onClick={() => void controller.check()}>{t.checkAgain}</button>}
-        {state.kind === "current" && <button className="primary-button" type="button" onClick={close}>{t.close}</button>}
-        {state.kind === "idle" && <button className="primary-button" type="button" onClick={() => void controller.check()}>{t.check}</button>}
-        {unconfirmed && <button className="primary-button" type="button" onClick={() => void controller.check()}>{t.checkAgain}</button>}
-        {state.kind === "available" && <button className="primary-button" type="button" onClick={() => void controller.download()}>{downloadLabel}</button>}
-        {state.kind === "ready" && <button className="primary-button" type="button" onClick={() => void controller.install()}>{t.install}</button>}
-        {canRetry && <button className="primary-button" type="button" onClick={() => void (state.kind === "blocked" ? controller.install() : controller.check())}>{t.retry}</button>}
+        <button className="secondary-button" type="button" onClick={() => void controller.openManualDownload()}>{t.manual}</button>
+        <button className="primary-button" type="button" onClick={() => { setOpen(false); onCheckAgain(); }}>{t.checkAgain}</button>
       </div>
     </Dialog>
   );

@@ -364,19 +364,14 @@ pub(crate) fn git_commit_series(path: &str, file: Option<&str>, versions: &[(Str
     }
 }
 
-/// A helper program from `src-tauri/examples/`. Cargo builds the examples next
-/// to the test binaries for `cargo test` (not for `cargo test --lib`), so no
+/// A helper program from `src-tauri/examples/`. Cargo builds the examples
+/// with the test binaries for `cargo test` (not for `cargo test --lib`), so no
 /// test compiles a fake executable while it runs. They are declared with
 /// `harness = false` in `Cargo.toml`, so even the build `--all-targets` makes
 /// runs their `main`.
 pub(crate) fn example_binary(name: &str) -> PathBuf {
-    let examples = std::env::current_exe()
-        .expect("locate the test binary")
-        .parent()
-        .and_then(Path::parent)
-        .expect("the target profile directory")
-        .join("examples");
-    // A plain `cargo test` also links `<name>` beside the hashed
+    let test_binary = std::env::current_exe().expect("locate the test binary");
+    // A plain `cargo test` may also link `<name>` beside the hashed
     // `<name>-<hash>` build; the newest of them is the current source.
     let built = |file: &str| {
         let stem = file.strip_suffix(std::env::consts::EXE_SUFFIX)?;
@@ -387,24 +382,46 @@ pub(crate) fn example_binary(name: &str) -> PathBuf {
             }))
         .then_some(())
     };
-    let newest = fs::read_dir(&examples)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|entry| built(&entry.file_name().to_string_lossy()).is_some())
-        .max_by_key(|entry| {
-            entry
-                .metadata()
+    // Cargo's original layout keeps examples in `<profile>/examples`, next to
+    // the test binary's `<profile>/deps`; the newer one gives every unit its
+    // own `<profile>/build/<package>/<hash>/out`. A bounded search from each
+    // directory above the test binary finds either without a fixed depth.
+    fn collect(
+        directory: &Path,
+        depth: usize,
+        found: &mut Vec<PathBuf>,
+        built: &dyn Fn(&str) -> Option<()>,
+    ) {
+        for entry in fs::read_dir(directory).into_iter().flatten().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if depth > 0 {
+                    collect(&path, depth - 1, found, built);
+                }
+            } else if built(&entry.file_name().to_string_lossy()).is_some() {
+                found.push(path);
+            }
+        }
+    }
+    let newest_under = |directory: &Path| {
+        let mut found = Vec::new();
+        collect(directory, 2, &mut found, &built);
+        found.into_iter().max_by_key(|path| {
+            fs::metadata(path)
                 .and_then(|metadata| metadata.modified())
                 .ok()
         })
-        .map(|entry| entry.path());
-    newest.unwrap_or_else(|| {
-        panic!(
-            "{name} is not built in {}: run `cargo test` without `--lib`, or `cargo build --examples` first",
-            examples.display()
-        )
-    })
+    };
+    test_binary
+        .ancestors()
+        .skip(1)
+        .find_map(newest_under)
+        .unwrap_or_else(|| {
+            panic!(
+                "{name} is not built near {}: run `cargo test` without `--lib`, or `cargo build --examples` first",
+                test_binary.display()
+            )
+        })
 }
 
 /// A scenario of a fake CLI: `<directory>/<scenario>`, which the fake reads

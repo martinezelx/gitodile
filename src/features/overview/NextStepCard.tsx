@@ -108,7 +108,16 @@ export function NextStepCard({
   let hint: string;
   switch (kind) {
     case "localError": title = t.statusCheckFailedTitle; hint = t.statusCouldntCheck; break;
-    case "conflicts": title = t.overviewNextConflictsTitle(changes.conflicted); hint = t.overviewNextConflictsHint; break;
+    case "conflicts":
+      // Every file resolved, but Git still holds the operation open.
+      if (changes.conflicted === 0) {
+        title = t.overviewNextPausedTitle;
+        hint = t.overviewNextPausedHint;
+      } else {
+        title = t.overviewNextConflictsTitle(changes.conflicted);
+        hint = t.overviewNextConflictsHint;
+      }
+      break;
     case "save": title = t.overviewNextSaveTitle(changes.total); hint = t.overviewJourneyNoteSave; break;
     case "firstSave": title = t.overviewNextFirstSaveTitle; hint = t.overviewNextFirstSaveHint(changes.total); break;
     case "publish": title = t.overviewNextPublishTitle(publish.pending, remote); hint = t.overviewJourneyNoteAhead; break;

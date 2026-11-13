@@ -684,6 +684,7 @@ function BranchDetail({
   onDelete,
   onOpenHistory,
   onPublish,
+  onBringIn,
   onBack,
   renameEditor,
   settle = null,
@@ -716,6 +717,7 @@ function BranchDetail({
   /** Opens the publish flow, which publishes the active branch — offered on
    * that branch only. */
   onPublish?: () => void;
+  onBringIn?: (name: string) => void;
   onBack: () => void;
   /** The strip in its editing state while this branch is being renamed —
    * `BranchRenameStrip`, owned by the panel — drawn in place of the
@@ -912,6 +914,7 @@ function BranchDetail({
               activeName={activeName}
               mainName={mainName}
               route={history?.route ?? null}
+              onBringIn={onBringIn}
             />
 
             {/* One list, not a card for the latest version and a list of the
@@ -1061,9 +1064,10 @@ export function BranchesPanel({
   peekHistory,
   prefetchHistory,
   onPublish,
+  onBringIn,
   onChanged,
   onSaveVersion,
-  onOpenChanges,
+  onOpenConflicts,
   onOpenHistory,
   onOperationStart,
   onOperationFinish,
@@ -1105,6 +1109,7 @@ export function BranchesPanel({
   prefetchHistory?: (name: string, tipCommit: string) => void;
   /** Opens the publish flow for the active branch. */
   onPublish?: () => void;
+  onBringIn?: (name: string) => void;
   /** Called after any successful create/switch/delete so the rest of the
    * app (repository facts, working-tree status, selection) can invalidate
    * itself — see `app/App.tsx`'s `handleBranchChanged`. */
@@ -1112,7 +1117,7 @@ export function BranchesPanel({
   onSaveVersion: () => void;
   /** Navigates to the Changes screen — the only place conflicted files are
    * listed, which is where a blocked "unfinished Git operation" points. */
-  onOpenChanges?: () => void;
+  onOpenConflicts?: () => void;
   /** Opens the History screen reading the named branch, whether or not it is the
    * active one. Nothing is checked out to get there. */
   /** Open History reading this branch, and — when a version is named — with that
@@ -1618,13 +1623,13 @@ export function BranchesPanel({
         onSwitchInstead={() =>
           setDialog(dialog?.kind === "delete" ? { kind: "switch", target: dialog.target } : null)
         }
-        onOpenChanges={
-          onOpenChanges &&
+        onOpenConflicts={
+          onOpenConflicts &&
           (() => {
             // Leaving the screen means the mutation slot has to go back, same
             // as any other way of closing the dialog.
             closeDialog();
-            onOpenChanges();
+            onOpenConflicts();
           })
         }
         onPhaseChange={onOperationPhaseChange}
@@ -1935,6 +1940,7 @@ export function BranchesPanel({
             onDelete={() => openDialog({ kind: "delete", target: selected.name })}
             onOpenHistory={onOpenHistory}
             onPublish={onPublish}
+            onBringIn={onBringIn}
             onBack={() => setShowNarrowDetail(false)}
             renameEditor={
               renaming === selected.name ? (
@@ -1983,6 +1989,7 @@ export function BranchesPanel({
         onClose={closeContextMenu}
         onCopied={() => setAnnouncement(t.branchesNameCopied)}
         onSwitch={(target) => openDialog({ kind: "switch", target })}
+        onBringIn={onBringIn}
         onRename={startRename}
         onDelete={(target) => openDialog({ kind: "delete", target })}
       />

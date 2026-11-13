@@ -1,7 +1,7 @@
 {
   "name": "gitodile",
   "private": true,
-  "version": "0.4.1",
+  "version": "0.5.0",
   "license": "AGPL-3.0-only",
   "type": "module",
   "packageManager": "pnpm@11.17.0",
@@ -17,7 +17,7 @@
     "release:notes": "node scripts/release/release-notes.mjs",
     "icons": "node scripts/icons/generate-icons.mjs",
     "check:release": "node --test scripts/release/*.test.mjs",
-    "check:docs": "node scripts/check-docs.mjs && node scripts/check-app-update-contracts.mjs && node scripts/check-release-highlights.mjs && pnpm run check:release && pnpm run check:icons",
+    "check:docs": "node scripts/check-docs.mjs && node --test scripts/work-layout.test.mjs && node scripts/check-app-update-contracts.mjs && node scripts/check-release-highlights.mjs && pnpm run check:release && pnpm run check:icons",
     "check:icons": "node scripts/icons/mascot.mjs --check && node scripts/icons/build-windows-ico.mjs --check && node scripts/icons/build-nsis-images.mjs --check && node --test scripts/icons/*.test.mjs",
     "check:feedback": "node scripts/check-public-feedback.mjs",
     "check:publication": "pnpm run check && pnpm run check:feedback",

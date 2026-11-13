@@ -1,0 +1,180 @@
+import { describe, expect, it, vi } from "vitest";
+
+import type { FileDiff } from "../changes";
+import type { ProjectRuntime } from "../../runtime/project/runtime";
+import { createConflictsController } from "./controller";
+import type { ConflictSession } from "./domain";
+import type { ConflictsPort } from "./port";
+
+const query = { projectId: "/repo", sessionEpoch: "epoch-1" };
+
+function session(stateToken: string): ConflictSession {
+  return {
+    sessionId: "session",
+    stateToken,
+    origin: "external",
+    operation: {
+      kind: "merge",
+      supported: true,
+      unsupportedReason: null,
+      step: null,
+      current: { name: "main", commit: "a".repeat(40) },
+      incoming: { name: "feature", commit: "b".repeat(40) },
+      operationHeads: ["b".repeat(40)],
+      continueCommand: "git merge --continue",
+      abortCommand: "git merge --abort",
+    },
+    files: [],
+    unresolvedCount: 0,
+    listingComplete: true,
+    snapshot: null,
+    allowedActions: ["abort-merge"],
+  };
+}
+
+/** Runs a warm at once: the idle deferral is the runtime's, not this owner's. */
+const runtime = {
+  scheduleCacheWarm: ({ run }: { run: () => void | Promise<void> }) => {
+    void run();
+    return () => undefined;
+  },
+} as unknown as ProjectRuntime;
+
+function port(read: ConflictsPort["readSession"], overrides: Partial<ConflictsPort> = {}): ConflictsPort {
+  return {
+    readSession: read,
+    readSideDiff: vi.fn(),
+    keepSide: vi.fn(),
+    markResolved: vi.fn(),
+    resetFile: vi.fn(),
+    openFile: vi.fn(),
+    checkWorkingFile: vi.fn(),
+    revealFile: vi.fn(),
+    openProjectFolder: vi.fn(),
+    planFinish: vi.fn(),
+    finish: vi.fn(),
+    planAbort: vi.fn(),
+    abort: vi.fn(),
+    ...overrides,
+  };
+}
+
+describe("conflicts controller", () => {
+  it("reads a session only while files overlap or one is on record", async () => {
+    const read = vi.fn<ConflictsPort["readSession"]>()
+      .mockResolvedValueOnce(session("one"))
+      .mockResolvedValueOnce(null);
+    const controller = createConflictsController(port(read));
+
+    controller.scheduleWarm(runtime, query, false);
+    expect(read).not.toHaveBeenCalled();
+    expect(controller.getSnapshot(query).session).toBeNull();
+
+    controller.scheduleWarm(runtime, query, true);
+    await vi.waitFor(() => expect(controller.getSnapshot(query).session?.stateToken).toBe("one"));
+
+    // The status no longer lists an overlap, but a session is on record: one
+    // more read is how the screen learns the merge ended.
+    controller.scheduleWarm(runtime, query, false);
+    await vi.waitFor(() => expect(controller.getSnapshot(query).session).toBeNull());
+    controller.scheduleWarm(runtime, query, false);
+    expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps the same session for the same token, keeps projects apart and drops answers for a closed one", async () => {
+    let resolveLate!: (value: ConflictSession) => void;
+    const read = vi.fn<ConflictsPort["readSession"]>()
+      .mockResolvedValueOnce(session("one"))
+      .mockResolvedValueOnce(session("one"))
+      .mockResolvedValueOnce(session("other"))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveLate = resolve; }));
+    const controller = createConflictsController(port(read));
+
+    await controller.refresh(query);
+    const first = controller.getSnapshot(query).session;
+    await controller.refresh(query);
+    expect(controller.getSnapshot(query).session).toBe(first);
+
+    // Another open project keeps its own session and place in the list
+    // through this one's mutation and close.
+    const other = { projectId: "/other", sessionEpoch: "epoch-2" };
+    await controller.refresh(other);
+    controller.rememberView(other, { selectedPath: "b.txt" });
+    controller.rememberView(query, { selectedPath: "a.txt" });
+    await controller.mutate(query, async () => session("mutated"));
+
+    const late = controller.refresh(query);
+    controller.close(query);
+    resolveLate(session("two"));
+    await late;
+    expect(controller.getSnapshot(query).session).toBeUndefined();
+    expect(controller.viewMemory(query).selectedPath).toBeNull();
+    expect(controller.getSnapshot(other).session?.stateToken).toBe("other");
+    expect(controller.viewMemory(other).selectedPath).toBe("b.txt");
+  });
+
+  it("makes a mutation's session the cached one, over a read started before it", async () => {
+    let resolveOld!: (value: ConflictSession) => void;
+    const read = vi.fn<ConflictsPort["readSession"]>()
+      .mockResolvedValueOnce(session("one"))
+      .mockReturnValueOnce(new Promise((resolve) => { resolveOld = resolve; }));
+    const controller = createConflictsController(port(read));
+    await controller.refresh(query);
+
+    const older = controller.refresh(query);
+    await controller.mutate(query, async () => session("after"));
+    resolveOld(session("before"));
+    await older;
+    expect(controller.getSnapshot(query)).toMatchObject({ session: { stateToken: "after" }, isLoading: false });
+
+    // A refusal changes nothing the reader decided from.
+    await expect(controller.mutate(query, () => Promise.reject(new Error("stale")))).rejects.toThrow("stale");
+    expect(controller.getSnapshot(query).session?.stateToken).toBe("after");
+  });
+
+  it("checks a file for markers once per state of it, and asks again after a failure", async () => {
+    const checkWorkingFile = vi.fn<ConflictsPort["checkWorkingFile"]>()
+      .mockRejectedValueOnce(new Error("busy"))
+      .mockResolvedValue({ stateToken: "one", markers: { kind: "none" } });
+    const controller = createConflictsController(port(vi.fn(), { checkWorkingFile }));
+
+    await expect(controller.checkWorkingFile(query, "a.txt", "one")).rejects.toThrow("busy");
+    await controller.checkWorkingFile(query, "a.txt", "one");
+    await controller.checkWorkingFile(query, "a.txt", "one");
+    expect(checkWorkingFile).toHaveBeenCalledTimes(2);
+
+    // An edit moves the token: that state is a new question.
+    await controller.checkWorkingFile(query, "a.txt", "two");
+    expect(checkWorkingFile).toHaveBeenCalledTimes(3);
+  });
+
+  it("asks for one side's diff once per pair of objects", async () => {
+    const diff: FileDiff = { kind: "unchanged", path: "a.txt", originalPath: null, change: "changed" };
+    const readSideDiff = vi.fn<ConflictsPort["readSideDiff"]>().mockResolvedValue(diff);
+    const controller = createConflictsController(port(vi.fn(), { readSideDiff }));
+    const sideQuery = { ...query, filePath: "a.txt", side: "current" as const, baseObjectId: "1".repeat(40), sideObjectId: "2".repeat(40) };
+
+    await Promise.all([controller.readSideDiff(sideQuery), controller.readSideDiff(sideQuery)]);
+    expect(controller.peekSideDiff(sideQuery)).toBe(diff);
+    await controller.readSideDiff({ ...sideQuery, sideObjectId: "3".repeat(40) });
+
+    expect(readSideDiff).toHaveBeenCalledTimes(2);
+  });
+  it("takes an ended merge as nothing paused, and leaves the session after a failure", async () => {
+    const read = vi.fn<ConflictsPort["readSession"]>().mockResolvedValue(session("one"));
+    const controller = createConflictsController(port(read));
+    await controller.refresh(query);
+
+    await expect(controller.end(query, () => Promise.reject(new Error("hook")))).rejects.toThrow("hook");
+    expect(controller.getSnapshot(query).session?.stateToken).toBe("one");
+
+    let release: () => void = () => undefined;
+    read.mockReturnValueOnce(new Promise((resolve) => { release = () => resolve(session("two")); }));
+    const pending = controller.refresh(query);
+    await controller.end(query, async () => "done");
+    release();
+    await pending;
+    // The read started before the merge ended can't bring the session back.
+    expect(controller.getSnapshot(query).session).toBeNull();
+  });
+});

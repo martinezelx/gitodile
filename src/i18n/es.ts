@@ -28,6 +28,7 @@ import { es as projectSettingsEs } from "../features/project-settings/translatio
 import { es as publishEs } from "../features/publish/translations.es";
 import { es as branchesEs } from "../features/branches/translations.es";
 import { es as workbenchEs } from "../features/workbench/translations.es";
+import { es as conflictsEs } from "../features/conflicts/translations.es";
 
 /** Each namespace on its own, for the key-parity checks. */
 export const esNamespaces = {
@@ -60,6 +61,7 @@ export const esNamespaces = {
   publish: publishEs,
   branches: branchesEs,
   workbench: workbenchEs,
+  conflicts: conflictsEs,
 };
 
 /* The Spanish dictionary, loaded only when Spanish is the active language
@@ -94,4 +96,5 @@ export const es: Translations = {
   ...publishEs,
   ...branchesEs,
   ...workbenchEs,
+  ...conflictsEs,
 };

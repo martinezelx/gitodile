@@ -2,7 +2,7 @@
 
 - Status: accepted
 - Date: 2026-09-29
-- Implemented by: [epic 138](../../work/done/138-console-git-commands.md)
+- Implemented by: [epic 138](../../work/done/0.3.0/138-console-git-commands.md)
   (Read, Local change and Remote tiers). The History and Destructive tiers,
   and section 5, are [task 139](../../work/0.6.0/139-console-history-and-destructive-commands.md).
 - Section 4 (advanced mode and the read-only default) is replaced by

@@ -4,6 +4,10 @@
 - Date: 2026-10-11
 - Extends: [ADR 0008](0008-store-history-recovery-as-versioned-hidden-refs.md)
   with a snapshot of combined unsaved content
+- Amended by: [ADR 0041](0041-conflict-sessions-and-their-recovery.md), §7 —
+  a real overlap the user chooses to resolve becomes a paused `git merge`
+- Amended 2026-10-29: any local or remote-tracking branch as the source
+  (task 065-4-1), below
 
 ## Context
 
@@ -70,8 +74,67 @@ does not exist yet, so a real overlap must still be refused, but named.
 6. **Publish rides along.** When the remote has moved on, Publish opens the
    same dialog in a "get and publish" form: one confirmation gets, combines
    and then plans and pushes as Publish always does.
-7. **Refuse real overlaps by name.** A saved or unsaved overlap is reported
-   with the files and refused until task 037 can resolve it.
+7. **Name overlaps and require an explicit choice.** The ordinary clean
+   execution still refuses saved and unsaved overlaps by name. For a saved
+   overlap, `start_overlapping_merge` can explicitly start a real paused merge
+   from a branch or the configured upstream, using that workflow's reviewed
+   token and recovery reference (ADR 0041 §7 and §10, task 065-4-2). It disables
+   rerere for that invocation, rejects branch mergeOptions and staged changes,
+   preserves separate unsaved work, and records origin before Git runs.
+   Unsaved work on a path the merge touches still blocks; nothing silently
+   enters resolution, auto-stashes or publishes. The UI handoffs are tasks
+   065-4-3 and 065-4-4.
+
+## Amendment (2026-10-29): bringing in another branch
+
+Task 065-4-1 lets the person bring another branch into the current one with
+the same analysis and execution, so there is one way to combine saved
+versions rather than two.
+
+1. **A source is a commit with a name.** Besides the configured upstream, the
+   source may be a local branch (`refs/heads/<name>`) or a remote-tracking
+   branch, found through that remote's own fetch mapping exactly as a check of
+   it would update it. The plan reads it as this computer has it and never
+   fetches; a remote branch is as fresh as its last check.
+2. **Four answers.** Already contained (nothing to do, no button), fast-forward
+   (as Get, no hooks), merge (a merge version built as in point 3), and an
+   **empty merge**: a merge version whose tree is the current one, because
+   the source's changes are already here in another form. It is offered and
+   says that no file changes, as Git would record it.
+3. **The token names the source.** It binds the workflow (`get` or
+   `bring-in`), the source's remote, branch and ref and its exact commit,
+   beside everything point 2 already bound; a moved source, branch or file is
+   `stale_bring_in_plan`, never a retargeted merge.
+4. **Its own recovery operation.** Records live under
+   `refs/gitodile/recovery/v1/bring-in-changes/`, with the newest 20 kept, so
+   bringing in branches never evicts a team update's record. The record's
+   `remote`, `destinationBranch` and `trackingRef` name the source.
+5. **States a merge cannot start from block by name**, before any analysis:
+   no shared saved version (`no_shared_history`), a shallow copy that lacks
+   the version both sides started from (`shallow_history`), and a sparse
+   checkout (`unsupported_merge_setup`), besides the detached, unborn,
+   in-progress, active-branch and missing-branch states. The merge message is
+   the one `git merge` would write: `Merge branch '<name>'` or `Merge
+   remote-tracking branch '<remote>/<name>'`, followed by ` into <branch>`
+   unless the project's `merge.suppressDest` globs name the branch (only
+   `master` when it is unset). The plan shows that message and its token
+   binds it.
+
+Because the merge version is still built with `commit-tree`,
+`branch.<name>.mergeOptions` and `merge.ff` play no part here; they matter
+only once a real `git merge` runs for overlaps (ADR 0041 §7, task 065-4-2).
+
+The 2026-10-30 integration audit applies point 5's sparse-checkout and
+shared-history guards to Get's planner and executor too. Get must refuse the
+same unsupported working setup before forecasting or changing files, with
+`unsupported_merge_setup`, `shallow_history` or `no_shared_history` guidance.
+An already-contained upstream still answers `nothing_to_get` without mutation.
+
+The audit's pre-commit review also revalidates tracked work, reviewed refs and
+collisions after merge hooks/signing succeed and before recovery/file/history
+updates. A hook's own edits remain on disk and make the old combination stale;
+unrelated untracked hook output is allowed. This closes the interval in which
+an earlier unsaved-content forecast could overwrite a later hook edit.
 
 ## Consequences
 

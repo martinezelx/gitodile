@@ -56,7 +56,7 @@ than creating a second resolver.
 # Relevant files
 
 - `work/0.6.0/064-set-changes-aside-safely.md`
-- `work/0.5.0/037-guided-conflict-resolution.md`
+- `work/done/0.5.0/037-guided-conflict-resolution.md`
 - `src-tauri/src/recovery.rs`
 
 # Dependencies

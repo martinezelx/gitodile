@@ -54,14 +54,19 @@ function buildProps(
       isOpen: false,
       isOpening: false,
       reportText: null,
+      includeActivity: true,
+      title: "",
       failedUrl: null,
       copyReportState: "idle",
       saveState: "idle",
       copyLinkState: "idle",
+      recopied: false,
       dismiss: vi.fn(),
       report: vi.fn(),
       continueToGitHub: vi.fn(),
       retry: vi.fn(),
+      setIncludeActivity: vi.fn(),
+      setTitle: vi.fn(),
       copyReport: vi.fn(),
       saveReport: vi.fn(),
       copyLink: vi.fn(),
@@ -142,7 +147,7 @@ function buildProps(
       cache: createProjectSettingsCache(),
     },
     about: { isOpen: true, setOpen: vi.fn() },
-    changelog: { isOpen: false, setOpen: vi.fn() },
+    appUpdate: { isOpen: false, setOpen: vi.fn(), openUpdates: vi.fn() },
     shortcuts: closedOverlay,
     closeConfirmation: { ...closedOverlay, projectName: null, onConfirm: vi.fn() },
     error: { ...closedOverlay, title: "", message: null },
@@ -461,7 +466,7 @@ describe("About dialog", () => {
     expect(openUrl).toHaveBeenNthCalledWith(1, "https://github.com/martinezelx/gitodile/blob/main/LICENSE");
     expect(openUrl).toHaveBeenNthCalledWith(2, "https://github.com/martinezelx/gitodile");
   });
-  it("reports the product and the machine, and leaves release notes to the changelog", () => {
+  it("reports the product and the machine, and leaves release notes to Settings", () => {
     renderOverlays();
 
     const dialog = screen.getByRole("dialog", { name: "GitOdile See everything. Undo anything." });
@@ -473,9 +478,8 @@ describe("About dialog", () => {
     expect(dialog).toHaveTextContent("Windows 11 (x86_64)");
     expect(dialog).toHaveTextContent("10.0.26200");
     expect(dialog).toHaveTextContent("2.45.0");
-    // The release list lives on its own surface; About keeps only the link to
-    // it, which is what the "What's new" entry opens.
-    expect(dialog.querySelector(".changelog")).not.toBeInTheDocument();
+    // The release list lives in Settings › Updates; About keeps only the link.
+    expect(dialog.querySelector(".whatsnew-release")).not.toBeInTheDocument();
     expect(within(dialog).getByRole("button", { name: "What's new" })).toBeInTheDocument();
   });
 
@@ -491,9 +495,10 @@ describe("About dialog", () => {
     const dialog = screen.getByRole("dialog", { name: "GitOdile See everything. Undo anything." });
     expect(dialog).toHaveTextContent("Up to date");
     await userEvent.click(within(dialog).getByRole("button", { name: "What's new" }));
-    // About closes and the changelog opens, so the two backdrops never stack.
+    // About closes onto Settings › Updates, at What's new, so the two
+    // backdrops never stack.
     expect(props.about.setOpen).toHaveBeenCalledWith(false);
-    expect(props.changelog.setOpen).toHaveBeenCalledWith(true);
+    expect(props.appUpdate?.openUpdates).toHaveBeenCalledWith({ whatsNew: true });
   });
 
   it("keeps the update line quiet when the release model has nothing to say", () => {
@@ -645,7 +650,7 @@ describe("About dialog", () => {
     renderOverlays();
 
     // The sentence is "Made with <heart> by …". Hiding the glyph would read as
-    // "Made with by Luis M. Martínez."
+    // "Made with by Luis Muñoz Martinez."
     const heart = screen.getByRole("img", { name: "love" });
     expect(heart).toHaveTextContent("♥");
     expect(heart).toHaveClass("about-dialog__heart");

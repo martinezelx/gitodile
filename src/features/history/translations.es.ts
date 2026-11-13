@@ -170,6 +170,7 @@ export const es: HistoryTranslations = {
   historyNoChangedFiles: "En esta versión no cambió el contenido de ningún archivo.",
   historyDiffLoading: "Leyendo los cambios…",
   historyDiffError: "No se pudieron leer los cambios de este archivo.",
+  historyMarkdownNotice: "Solo lectura · Comparado con la versión anterior a esta. El HTML se oculta; los enlaces y las imágenes están inactivos.",
   historySelectFilePrompt: "Elige un archivo para ver sus cambios.",
   historyVersionDate: (absolute) => `Guardada el ${absolute}`,
 };

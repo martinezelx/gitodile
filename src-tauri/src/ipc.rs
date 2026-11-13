@@ -24,6 +24,12 @@ use crate::{
     clone::{
         self, CloneOperationRegistry, ClonePlan, CloneProgressPhase, CloneResult, CloneSourceAccess,
     },
+    conflicts::{
+        self,
+        merge::{AbortMergePlan, AbortMergeResult, FinishMergePlan, FinishMergeResult},
+        resolve::{ExpectedStages, SideChoice},
+        ConflictSession, ConflictSide, ConflictStageContent, WorkingFileCheck,
+    },
     console::{
         self, ConsoleHost, ConsoleHostingResult, ConsoleModes, ConsolePlan, ConsoleQueryResult,
         ConsoleRunResult, ConsoleSettings,
@@ -50,8 +56,10 @@ use crate::{
     session,
     status::{self, PendingVersionsResult, WorkingTreeStatus},
     sync::{
-        self, ConnectRemotePlan, ConnectRemoteResult, GetTeamChangesPhase, GetTeamChangesPlan,
-        GetTeamChangesResult, ProjectRemotes, RemoteDiscovery, RemoteHome, TeamSyncStatus,
+        self, BringInChangesPlan, BringInChangesResult, ConnectRemotePlan, ConnectRemoteResult,
+        GetTeamChangesPhase, GetTeamChangesPlan, GetTeamChangesResult, IntegrationSource,
+        IntegrationSources, OverlappingMergeSource, ProjectRemotes, RemoteDiscovery, RemoteHome,
+        StartOverlappingMergeResult, TeamSyncStatus,
     },
     technology::{self, ProjectTechnology},
     tooling::{
@@ -802,6 +810,221 @@ pub(crate) fn restore_discarded_changes(
 }
 
 #[tauri::command(async)]
+pub(crate) fn read_conflict_session(
+    path: String,
+    session_epoch: String,
+) -> Result<Option<ConflictSession>, AppError> {
+    report_result(
+        "read_conflict_session",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::read_conflict_session(path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn read_conflict_stage(
+    path: String,
+    file_path: String,
+    stage: u8,
+    object_id: String,
+    session_epoch: String,
+) -> Result<ConflictStageContent, AppError> {
+    report_result(
+        "read_conflict_stage",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::read_conflict_stage(path, file_path, stage, object_id)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn read_conflict_side_diff(
+    path: String,
+    file_path: String,
+    side: ConflictSide,
+    base_object_id: Option<String>,
+    side_object_id: String,
+    session_epoch: String,
+) -> Result<FileDiff, AppError> {
+    report_result(
+        "read_conflict_side_diff",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::read_conflict_side_diff(
+                path,
+                file_path,
+                side,
+                base_object_id,
+                side_object_id,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn resolve_conflict_side(
+    path: String,
+    file_path: String,
+    choice: SideChoice,
+    expected: ExpectedStages,
+    state_token: String,
+    session_epoch: String,
+) -> Result<Option<ConflictSession>, AppError> {
+    report_result(
+        "resolve_conflict_side",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::resolve::resolve_conflict_side(
+                path,
+                file_path,
+                choice,
+                expected,
+                state_token,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn mark_conflict_resolved(
+    path: String,
+    file_path: String,
+    expected: ExpectedStages,
+    state_token: String,
+    allow_markers: bool,
+    executable: Option<bool>,
+    session_epoch: String,
+) -> Result<Option<ConflictSession>, AppError> {
+    report_result(
+        "mark_conflict_resolved",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::resolve::mark_conflict_resolved(
+                path,
+                file_path,
+                expected,
+                state_token,
+                allow_markers,
+                executable,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn reset_conflict_file(
+    path: String,
+    file_path: String,
+    state_token: String,
+    stages_only: bool,
+    session_epoch: String,
+) -> Result<Option<ConflictSession>, AppError> {
+    report_result(
+        "reset_conflict_file",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::resolve::reset_conflict_file(path, file_path, state_token, stages_only)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn open_conflict_file(
+    path: String,
+    file_path: String,
+    state_token: String,
+    session_epoch: String,
+) -> Result<(), AppError> {
+    report_result(
+        "open_conflict_file",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::open_conflict_file(path, file_path, state_token)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn check_conflict_working_file(
+    path: String,
+    file_path: String,
+    session_epoch: String,
+) -> Result<WorkingFileCheck, AppError> {
+    report_result(
+        "check_conflict_working_file",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::check_conflict_working_file(path, file_path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn plan_finish_merge(
+    path: String,
+    session_epoch: String,
+) -> Result<FinishMergePlan, AppError> {
+    report_result(
+        "plan_finish_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::merge::plan_finish_merge(path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn finish_merge(
+    path: String,
+    title: String,
+    description: Option<String>,
+    state_token: String,
+    run_hooks: bool,
+    session_epoch: String,
+) -> Result<FinishMergeResult, AppError> {
+    report_result(
+        "finish_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::merge::finish_merge(path, title, description, state_token, run_hooks)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn plan_abort_merge(
+    path: String,
+    session_epoch: String,
+) -> Result<AbortMergePlan, AppError> {
+    report_result(
+        "plan_abort_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::merge::plan_abort_merge(path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn abort_merge(
+    path: String,
+    state_token: String,
+    session_epoch: String,
+) -> Result<AbortMergeResult, AppError> {
+    report_result(
+        "abort_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            conflicts::merge::abort_merge(path, state_token)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
 pub(crate) fn git_diagnostics() -> GitDiagnostics {
     report_value("git_diagnostics", tooling::git_diagnostics())
 }
@@ -1239,6 +1462,105 @@ pub(crate) fn get_team_changes(
 }
 
 #[tauri::command(async)]
+pub(crate) fn list_integration_sources(
+    path: String,
+    session_epoch: String,
+) -> Result<IntegrationSources, AppError> {
+    report_result(
+        "list_integration_sources",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::list_integration_sources(path)
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn check_integration_source(
+    path: String,
+    session_epoch: String,
+    source: IntegrationSource,
+) -> Result<(), AppError> {
+    report_result(
+        "check_integration_source",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::check_integration_source(path, source)
+        })(),
+    )
+}
+
+/// Local only, like Get's plan: the source is read as this computer has it,
+/// a remote branch as of its last check.
+#[tauri::command(async)]
+pub(crate) fn plan_bring_in_changes(
+    path: String,
+    session_epoch: String,
+    source: IntegrationSource,
+) -> Result<BringInChangesPlan, AppError> {
+    report_result(
+        "plan_bring_in_changes",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::plan_bring_in_changes(path, session_epoch, source)
+        })(),
+    )
+}
+
+/// `run_hooks` follows the Settings switch, as Get's does.
+#[tauri::command(async)]
+pub(crate) fn bring_in_changes(
+    path: String,
+    session_epoch: String,
+    source: IntegrationSource,
+    state_token: String,
+    recovery_reference: String,
+    run_hooks: bool,
+    on_progress: tauri::ipc::Channel<GetTeamChangesPhase>,
+) -> Result<BringInChangesResult, AppError> {
+    report_result(
+        "bring_in_changes",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::bring_in_changes(
+                path,
+                session_epoch,
+                source,
+                state_token,
+                recovery_reference,
+                run_hooks,
+                |phase| {
+                    let _ = on_progress.send(phase);
+                },
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn start_overlapping_merge(
+    path: String,
+    session_epoch: String,
+    source: OverlappingMergeSource,
+    state_token: String,
+    recovery_reference: String,
+) -> Result<StartOverlappingMergeResult, AppError> {
+    report_result(
+        "start_overlapping_merge",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            sync::start_overlapping_merge(
+                path,
+                session_epoch,
+                source,
+                state_token,
+                recovery_reference,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
 pub(crate) fn list_unpublished_versions(
     path: String,
     session_epoch: String,
@@ -1347,6 +1669,30 @@ pub(crate) fn read_saved_version_file_diff(
         (|| {
             validate_session(&path, &session_epoch)?;
             history::read_saved_version_file_diff_cached(
+                &cache,
+                path,
+                snapshot_token,
+                commit,
+                file_path,
+            )
+        })(),
+    )
+}
+
+#[tauri::command(async)]
+pub(crate) fn read_saved_version_file_markdown(
+    cache: tauri::State<'_, history::HistoryReadCache>,
+    path: String,
+    snapshot_token: String,
+    commit: String,
+    file_path: String,
+    session_epoch: String,
+) -> Result<MarkdownPreview, AppError> {
+    report_result(
+        "read_saved_version_file_markdown",
+        (|| {
+            validate_session(&path, &session_epoch)?;
+            history::read_saved_version_file_markdown_cached(
                 &cache,
                 path,
                 snapshot_token,
@@ -1932,6 +2278,10 @@ mod contract_tests {
             AppErrorCode::DivergedHistories,
             AppErrorCode::StalePublishPlan,
             AppErrorCode::StaleGetTeamChangesPlan,
+            AppErrorCode::StaleBringInPlan,
+            AppErrorCode::ShallowHistory,
+            AppErrorCode::NoSharedHistory,
+            AppErrorCode::UnsupportedMergeSetup,
             AppErrorCode::InvalidRefName,
             AppErrorCode::AuthenticationFailed,
             AppErrorCode::SecureStorageUnavailable,
@@ -1967,6 +2317,17 @@ mod contract_tests {
             AppErrorCode::RecoveryUnavailable,
             AppErrorCode::RecoveryConflict,
             AppErrorCode::RecoveryFailed,
+            AppErrorCode::StaleConflictSession,
+            AppErrorCode::ConflictActionUnavailable,
+            AppErrorCode::ConflictMarkersRemain,
+            AppErrorCode::ConflictChoiceNeeded,
+            AppErrorCode::ConflictContentNotKept,
+            AppErrorCode::FileLocked,
+            AppErrorCode::ConflictCaseCollision,
+            AppErrorCode::FileRunsAsProgram,
+            AppErrorCode::MergeAbortRefused,
+            AppErrorCode::MergeStartRefused,
+            AppErrorCode::MergeOutcomeUncertain,
             AppErrorCode::IgnoreFileTooLarge,
             AppErrorCode::IgnoreFileNotText,
             AppErrorCode::StaleIgnoreFile,

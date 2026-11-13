@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import type { ChangesController } from "../changes";
 import type { HistoryController } from "../history";
 import type { BranchesController } from "../branches";
+import type { ConflictsController } from "../conflicts";
 import type { SyncController, SyncErrorMapper } from "../sync";
 import type { ProjectRuntime } from "../../runtime/project/runtime";
 import type { ProjectSession } from "../../runtime/project/sessions";
@@ -15,6 +16,7 @@ type ProjectCacheWarmingOptions = {
   changesController: ChangesController;
   historyController: HistoryController;
   branchesController: BranchesController;
+  conflictsController: ConflictsController;
   syncController: SyncController;
   mapSyncError: SyncErrorMapper;
 };
@@ -32,6 +34,7 @@ export function useProjectCacheWarming({
   changesController,
   historyController,
   branchesController,
+  conflictsController,
   syncController,
   mapSyncError,
 }: ProjectCacheWarmingOptions): void {
@@ -68,6 +71,32 @@ export function useProjectCacheWarming({
       mapSyncError,
     );
   }, [hasCompletedSessionRestore, mapSyncError, projectPath, runtime, session?.epoch, syncController]);
+
+  // A paused operation shows up in the status as overlapping files or as
+  // Git's operation markers (a merge whose files are all resolved has only
+  // the markers), so the session is read after each status snapshot that has
+  // either, and once more after one that no longer does (to see the session
+  // end). A project with neither costs no Git process.
+  const workingTree = session?.workingTree;
+  const isPaused = workingTree ? workingTree.counts.conflicted > 0 || workingTree.pausedOperation === true : null;
+  useEffect(() => {
+    if (!hasCompletedSessionRestore || !projectPath || !session?.epoch || isPaused === null) {
+      return undefined;
+    }
+    return conflictsController.scheduleWarm(
+      runtime,
+      { projectId: projectPath, sessionEpoch: session.epoch },
+      isPaused,
+    );
+  }, [
+    isPaused,
+    conflictsController,
+    hasCompletedSessionRestore,
+    projectPath,
+    runtime,
+    session?.epoch,
+    session?.statusGeneration,
+  ]);
 
   useEffect(() => {
     if (!hasCompletedSessionRestore || !projectPath || !session?.workingTree) {

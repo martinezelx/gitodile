@@ -110,7 +110,8 @@
    the body's colour, so it reads as depth behind the character rather than
    as text. Each column wraps to one glyph per line at 1ch wide. */
 .console-art__rain {
-  position: absolute; inset: 0 0 auto; height: calc(var(--console-art-rows) * 1em); overflow: hidden; pointer-events: none;
+  --console-art-fall: calc(var(--console-art-rows) * 1em);
+  position: absolute; inset: 0 0 auto; height: var(--console-art-fall); overflow: hidden; pointer-events: none;
   /* The last drawing row is the ground. Rain stops there, above the spare
      padding under the feet; only its top and sides dissolve into the scene. */
   --console-art-rain-edge: linear-gradient(to right, transparent, #000 14%, #000 86%, transparent), linear-gradient(to bottom, transparent, #000 12%);
@@ -126,7 +127,17 @@
 .console-art__drop-head { font-weight: inherit; color: color-mix(in srgb, var(--console-art-skin) 55%, var(--text-primary-color)); }
 @keyframes console-art-rain {
   from { transform: translateY(-100%); }
-  to { transform: translateY(calc(var(--console-art-rows) * 1em)); }
+  to { transform: translateY(var(--console-art-fall)); }
+}
+/* Behind the compact watermark the rain falls through the mascot's whole
+   column: from the overlay's top edge down to the same foot row, as wide as
+   the drawing. The overlay is the size container, so the strip follows the
+   pane's height with no measuring. */
+@supports (height: 1cqh) {
+  .console-watermark .console-art__rain {
+    --console-art-fall: calc(100cqh - 2em);
+    inset: auto 0 2em;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .console-art__rain, .console-art__eyes { display: none; }

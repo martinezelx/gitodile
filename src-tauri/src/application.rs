@@ -166,6 +166,18 @@ pub(crate) const EXECUTION_INVENTORY: &[ExecutionPolicy] = &[
     read("list_discard_recoveries"),
     ExecutionPolicy::repository_write("restore_discarded_changes", OperationClass::LocalMutation),
     ExecutionPolicy::repository_write("delete_discard_recovery", OperationClass::Destructive),
+    read("read_conflict_session"),
+    read("read_conflict_stage"),
+    read("read_conflict_side_diff"),
+    ExecutionPolicy::repository_write("resolve_conflict_side", OperationClass::LocalMutation),
+    ExecutionPolicy::repository_write("mark_conflict_resolved", OperationClass::LocalMutation),
+    ExecutionPolicy::repository_write("reset_conflict_file", OperationClass::Destructive),
+    ExecutionPolicy::repository_write("open_conflict_file", OperationClass::LocalMutation),
+    read("check_conflict_working_file"),
+    read("plan_finish_merge"),
+    ExecutionPolicy::repository_write("finish_merge", OperationClass::HistoryMutation),
+    read("plan_abort_merge"),
+    ExecutionPolicy::repository_write("abort_merge", OperationClass::Destructive),
     global_process("glab_diagnostics", OperationClass::ReadOnly, 15),
     global_process("install_glab", OperationClass::PlatformMutation, 900),
     global_process("update_glab", OperationClass::PlatformMutation, 900),
@@ -263,6 +275,11 @@ pub(crate) const EXECUTION_INVENTORY: &[ExecutionPolicy] = &[
     // Local since task 161: it reads the last-checked remote and never fetches.
     read("plan_get_team_changes"),
     ExecutionPolicy::repository_write("get_team_changes", OperationClass::HistoryMutation),
+    read("list_integration_sources"),
+    ExecutionPolicy::repository_write("check_integration_source", OperationClass::LocalMutation),
+    read("plan_bring_in_changes"),
+    ExecutionPolicy::repository_write("bring_in_changes", OperationClass::HistoryMutation),
+    ExecutionPolicy::repository_write("start_overlapping_merge", OperationClass::HistoryMutation),
     read("list_unpublished_versions"),
     read("list_incoming_versions"),
     read("read_commit_file_changes"),
@@ -270,6 +287,7 @@ pub(crate) const EXECUTION_INVENTORY: &[ExecutionPolicy] = &[
     read("read_history_page"),
     read("read_saved_version_detail"),
     read("read_saved_version_file_diff"),
+    read("read_saved_version_file_markdown"),
     ExecutionPolicy::repository_write("plan_publish", OperationClass::LocalMutation),
     ExecutionPolicy::repository_write("publish", OperationClass::RemoteMutation),
     read("get_branches"),
@@ -890,6 +908,18 @@ mod tests {
         "list_discard_recoveries",
         "restore_discarded_changes",
         "delete_discard_recovery",
+        "read_conflict_session",
+        "read_conflict_stage",
+        "read_conflict_side_diff",
+        "resolve_conflict_side",
+        "mark_conflict_resolved",
+        "reset_conflict_file",
+        "open_conflict_file",
+        "check_conflict_working_file",
+        "plan_finish_merge",
+        "finish_merge",
+        "plan_abort_merge",
+        "abort_merge",
         "glab_diagnostics",
         "install_glab",
         "update_glab",
@@ -968,6 +998,11 @@ mod tests {
         "stop_tracking_remote",
         "plan_get_team_changes",
         "get_team_changes",
+        "list_integration_sources",
+        "check_integration_source",
+        "plan_bring_in_changes",
+        "bring_in_changes",
+        "start_overlapping_merge",
         "list_unpublished_versions",
         "list_incoming_versions",
         "read_commit_file_changes",
@@ -975,6 +1010,7 @@ mod tests {
         "read_history_page",
         "read_saved_version_detail",
         "read_saved_version_file_diff",
+        "read_saved_version_file_markdown",
         "plan_publish",
         "publish",
         "get_branches",
@@ -1016,7 +1052,10 @@ mod tests {
             "save_version",
             "plan_publish",
             "check_team_changes",
+            "check_integration_source",
             "get_team_changes",
+            "bring_in_changes",
+            "start_overlapping_merge",
             "publish",
             "create_branch",
             "switch_branch",
@@ -1024,6 +1063,11 @@ mod tests {
             "clean_up_branches",
             "discard_changes",
             "restore_discarded_changes",
+            "resolve_conflict_side",
+            "mark_conflict_resolved",
+            "reset_conflict_file",
+            "finish_merge",
+            "abort_merge",
         ] {
             assert_eq!(
                 policy(command).concurrency,
@@ -1043,6 +1087,14 @@ mod tests {
         // The plan reads the last-checked remote; only the check fetches.
         assert_eq!(
             policy("plan_get_team_changes").concurrency,
+            ConcurrencyClass::RepositoryRead
+        );
+        assert_eq!(
+            policy("bring_in_changes").class,
+            OperationClass::HistoryMutation
+        );
+        assert_eq!(
+            policy("plan_bring_in_changes").concurrency,
             ConcurrencyClass::RepositoryRead
         );
         assert_eq!(

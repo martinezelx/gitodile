@@ -375,9 +375,9 @@ uncertain-outcome rules. Incomplete mutating affordances remain unavailable.
 - `docs/architecture/023-performance-baseline.md`
 - `docs/adr/0007-store-discard-recovery-in-worktree-git-metadata.md`
 - `docs/adr/0008-store-history-recovery-as-versioned-hidden-refs.md`
-- `work/done/016-manage-branches.md`
-- `work/done/054-make-changes-readable-copyable-and-safely-discardable.md`
-- `work/0.5.0/037-guided-conflict-resolution.md`
+- `work/done/0.1.0/016-manage-branches.md`
+- `work/done/0.1.0/054-make-changes-readable-copyable-and-safely-discardable.md`
+- `work/done/0.5.0/037-guided-conflict-resolution.md`
 - `src/features/changes/`
 - `src/features/repository/readCoordinator.ts`
 - `src/projectSessions.ts`

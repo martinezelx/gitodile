@@ -88,8 +88,8 @@ deliberately request a supported rerun, cancellation or manual execution.
 
 # Dependencies
 
-Complete [148-4](../done/148-4-gitlab-accounts.md) and
-[148-5](../done/148-5-provider-repository-browser.md). Execution follows
+Complete [148-4](../done/0.4.0/148-4-gitlab-accounts.md) and
+[148-5](../done/0.4.0/148-5-provider-repository-browser.md). Execution follows
 [148-6](148-6-pull-request-screen.md) in the agreed queue; reuse its resolved
 remote/project account contract, but keep CI ownership separate.
 

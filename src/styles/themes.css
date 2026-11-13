@@ -47,14 +47,14 @@
   --accent-primary: #1c1917;
   --accent-primary-contrast: #ffffff;
   --accent-primary-fill: #1c1917;
-  --status-success: #3f6a3b;
+  --status-success: #38624c;
   --status-warning: #7a5714;
   --status-danger: #a83a32;
   --status-danger-contrast: #ffffff;
   --status-renamed: #2a66a6;
-  --tone-local: #44701a;
-  --accent-heart: #b8326a;
-  --diff-added: #3f6a3b;
+  --tone-local: #45770e;
+  --accent-heart: #bd3073;
+  --diff-added: #38624c;
   --diff-removed: #a83a32;
   --syntax-comment: #78716c;
   --syntax-string: #57534e;
@@ -97,8 +97,8 @@
     --status-danger: #f08a80;
     --status-danger-contrast: #1c1917;
     --status-renamed: #7eb0f5;
-    --tone-local: #a8d26b;
-    --accent-heart: #f27aa8;
+    --tone-local: #bbd950;
+    --accent-heart: #f673b6;
     --diff-added: #93c48a;
     --diff-removed: #f08a80;
     --syntax-comment: #8f8984;
@@ -134,14 +134,14 @@
   --accent-primary: #1c1917;
   --accent-primary-contrast: #ffffff;
   --accent-primary-fill: #1c1917;
-  --status-success: #3f6a3b;
+  --status-success: #38624c;
   --status-warning: #7a5714;
   --status-danger: #a83a32;
   --status-danger-contrast: #ffffff;
   --status-renamed: #2a66a6;
-  --tone-local: #44701a;
-  --accent-heart: #b8326a;
-  --diff-added: #3f6a3b;
+  --tone-local: #45770e;
+  --accent-heart: #bd3073;
+  --diff-added: #38624c;
   --diff-removed: #a83a32;
   --syntax-comment: #78716c;
   --syntax-string: #57534e;
@@ -180,8 +180,8 @@
   --status-danger: #f08a80;
   --status-danger-contrast: #1c1917;
   --status-renamed: #7eb0f5;
-  --tone-local: #a8d26b;
-  --accent-heart: #f27aa8;
+  --tone-local: #bbd950;
+  --accent-heart: #f673b6;
   --diff-added: #93c48a;
   --diff-removed: #f08a80;
   --syntax-comment: #8f8984;
@@ -204,7 +204,9 @@
    borders; text/subtext0 for text; mauve for the accent; green/yellow/red/blue
    for status; syntax from the palette's own editor theme. Raised is a step
    between base and surface0 so a menu lifts off the panel. The comment is
-   overlay0 lifted until it clears 3:1 on a tinted diff line. */
+   overlay0 lifted until it clears 3:1 on a tinted diff line.
+   Glyph tones: saved-here is green darkened, the heart pink and renamed blue
+   lifted, so no two tones meet. */
 [data-theme="catppuccin-mocha"] {
   color-scheme: dark;
   --surface-app: #11111b;
@@ -226,9 +228,9 @@
   --status-warning: #f9e2af;
   --status-danger: #f38ba8;
   --status-danger-contrast: #1e1e2e;
-  --status-renamed: #89b4fa;
-  --tone-local: #a6e3a1;
-  --accent-heart: #f38ba8;
+  --status-renamed: #92beff;
+  --tone-local: #80bc7c;
+  --accent-heart: #f5c2e7;
   --diff-added: #a6e3a1;
   --diff-removed: #f38ba8;
   --syntax-comment: #6c74a9;
@@ -252,7 +254,9 @@
    much of the palette as it can. Latte's hues are pastel, and on a light
    well its green, yellow, peach and blue fall to 2-4:1: every status, diff and
    syntax colour here is the published hue darkened until it reads at 4.5:1
-   on the code well and on a tinted diff line. */
+   on the code well and on a tinted diff line.
+   Glyph tones: saved-here is green darkened and the heart pink, so no two
+   tones meet. */
 [data-theme="catppuccin-latte"] {
   color-scheme: light;
   --surface-app: #e6e9ef;
@@ -275,8 +279,8 @@
   --status-danger: #d00f38;
   --status-danger-contrast: #ffffff;
   --status-renamed: #125af5;
-  --tone-local: #33761e;
-  --accent-heart: #d20f39;
+  --tone-local: #005600;
+  --accent-heart: #de6bc0;
   --diff-added: #30701b;
   --diff-removed: #c00f30;
   --syntax-comment: #787b8f;
@@ -299,7 +303,9 @@
    cannot clear 4.5:1 on it as a raised surface, so the raised row is a half
    step darker than surface0 and subtext0 is lifted slightly; the control stays
    surface0, a visible step above the row it sits on, as in Mocha. Red and the
-   comment are lifted for the tinted diff lines. */
+   comment are lifted for the tinted diff lines.
+   Glyph tones: saved-here is teal, the heart pink, and yellow and renamed blue
+   lifted, so no two tones meet. */
 [data-theme="catppuccin-frappe"] {
   color-scheme: dark;
   --surface-app: #232634;
@@ -318,12 +324,12 @@
   --accent-primary-contrast: #303446;
   --accent-primary-fill: #ca9ee6;
   --status-success: #a6d189;
-  --status-warning: #e5c890;
+  --status-warning: #f2d59d;
   --status-danger: #ef8d8f;
   --status-danger-contrast: #303446;
-  --status-renamed: #8caaee;
-  --tone-local: #a6d189;
-  --accent-heart: #e78284;
+  --status-renamed: #a5c4ff;
+  --tone-local: #6eb5ab;
+  --accent-heart: #f4b8e4;
   --diff-added: #a6d189;
   --diff-removed: #ef8d8f;
   --syntax-comment: #7689b4;
@@ -347,7 +353,9 @@
    and secondary text, so secondary is a derived grey-blue a clear step below.
    Nord's red, purple, orange and frost blues are lifted until they read at
    4.5:1 on the lighter polar night panels; there is no canonical comment
-   colour, so it is a muted frost that clears 3:1 on a tinted diff line. */
+   colour, so it is a muted frost that clears 3:1 on a tinted diff line.
+   Glyph tones: saved-here is frost nord7 lifted and the heart a touch darker,
+   so no two tones meet. */
 [data-theme="nord"] {
   color-scheme: dark;
   --surface-app: #2e3440;
@@ -370,8 +378,8 @@
   --status-danger: #eca0a6;
   --status-danger-contrast: #2e3440;
   --status-renamed: #97b7e0;
-  --tone-local: #a3be8c;
-  --accent-heart: #d0848b;
+  --tone-local: #acdad9;
+  --accent-heart: #c97e85;
   --diff-added: #a3be8c;
   --diff-removed: #eca0a6;
   --syntax-comment: #7d90b1;
@@ -392,7 +400,9 @@
 /* Tokyo Night - enkia/tokyo-night-vscode-theme (MIT).
    bg_dark/base for surfaces, fg_dark for secondary text, blue for the accent;
    dark5 (#737aa2) for the comment. Raised is a step towards bg_highlight so a
-   menu lifts off the panel. */
+   menu lifts off the panel.
+   Glyph tones: saved-here is teal darkened, the heart magenta2 and renamed
+   blue darkened a touch, so no two tones meet. */
 [data-theme="tokyo-night"] {
   color-scheme: dark;
   --surface-app: #16161e;
@@ -414,9 +424,9 @@
   --status-warning: #e0af68;
   --status-danger: #f7768e;
   --status-danger-contrast: #1a1b26;
-  --status-renamed: #7aa2f7;
-  --tone-local: #9ece6a;
-  --accent-heart: #f7768e;
+  --status-renamed: #779ff4;
+  --tone-local: #009f81;
+  --accent-heart: #ff007c;
   --diff-added: #9ece6a;
   --diff-removed: #f7768e;
   --syntax-comment: #737aa2;
@@ -440,7 +450,9 @@
    yellow, cyan and green for syntax. Secondary text is a derived tint of
    foreground: the canonical comment colour does not clear 4.5:1. Dividers are
    a quiet step rather than the comment blue, which drew every divider as a
-   rule; red and the comment are lifted for the tinted diff lines. */
+   rule; red and the comment are lifted for the tinted diff lines.
+   Glyph tones: saved-here is green darkened and the heart pink, so no two
+   tones meet. */
 [data-theme="dracula"] {
   color-scheme: dark;
   --surface-app: #21222c;
@@ -463,8 +475,8 @@
   --status-danger: #ff7676;
   --status-danger-contrast: #282a36;
   --status-renamed: #8be9fd;
-  --tone-local: #50fa7b;
-  --accent-heart: #ff5555;
+  --tone-local: #00d154;
+  --accent-heart: #ff79c6;
   --diff-added: #50fa7b;
   --diff-removed: #ff7676;
   --syntax-comment: #6a7fbe;
@@ -490,7 +502,11 @@
    own base1/base0 pairing measures the same, so the two roles would read as
    one. The accent hues are dark by design and sit at 3-4:1 on base03; every
    accent, status and syntax colour here is the published hue lifted until it
-   reads at 4.5:1 (3:1 for the comment). */
+   reads at 4.5:1 (3:1 for the comment).
+   Glyph tones: saved-here is cyan lifted, the heart magenta and yellow lifted,
+   so no two tones meet. Cyan is also the remote's hue: the palette has no hue
+   left, so saved-here and the remote differ in lightness and their glyphs tell
+   them apart. */
 [data-theme="solarized-dark"] {
   color-scheme: dark;
   --surface-app: #002b36;
@@ -509,12 +525,12 @@
   --accent-primary-contrast: #002b36;
   --accent-primary-fill: #49a0d9;
   --status-success: #8da500;
-  --status-warning: #c19100;
+  --status-warning: #d1a126;
   --status-danger: #ff6562;
   --status-danger-contrast: #002b36;
   --status-renamed: #27aaa1;
-  --tone-local: #8da500;
-  --accent-heart: #e43734;
+  --tone-local: #5eccc2;
+  --accent-heart: #d73b86;
   --diff-added: #8fa800;
   --diff-removed: #ff6562;
   --syntax-comment: #588292;
@@ -536,7 +552,11 @@
    variant. Primary text is base02 and secondary base01, darkened a touch to
    clear 4.5:1 on base2 controls. The accent hues are darkened until they
    read at 4.5:1 on base3 and on a tinted diff line, and until base3 reads on
-   the blue of a primary button. */
+   the blue of a primary button.
+   Glyph tones: saved-here is cyan darkened, the heart magenta, yellow darkened
+   and renamed lifted a touch, so no two tones meet. Cyan is also the remote's
+   hue: the palette has no hue left, so saved-here and the remote differ in
+   lightness and their glyphs tell them apart. */
 [data-theme="solarized-light"] {
   color-scheme: light;
   --surface-app: #fdf6e3;
@@ -555,12 +575,12 @@
   --accent-primary-contrast: #fdf6e3;
   --accent-primary-fill: #2677aa;
   --status-success: #697700;
-  --status-warning: #8a6800;
+  --status-warning: #725100;
   --status-danger: #db2623;
   --status-danger-contrast: #fdf6e3;
-  --status-renamed: #177a72;
-  --tone-local: #697700;
-  --accent-heart: #dc322f;
+  --status-renamed: #1c7d75;
+  --tone-local: #005c55;
+  --accent-heart: #d33682;
   --diff-added: #616b00;
   --diff-removed: #c12623;
   --syntax-comment: #586e75;
@@ -583,7 +603,11 @@
    borders; fg1/fg3 for text; bright aqua for the accent, so it is neither the
    warning yellow nor the danger red; the bright hues for status and syntax,
    as in the palette's own editor theme. Red is lifted for the tinted diff
-   line. */
+   line.
+   Glyph tones: saved-here is blue lifted, the heart purple and yellow lifted a
+   touch, so no two tones meet. Blue is also the remote's hue: the palette has
+   no hue left, so saved-here and the remote differ in lightness and their
+   glyphs tell them apart. */
 [data-theme="gruvbox-dark"] {
   color-scheme: dark;
   --surface-app: #1d2021;
@@ -602,12 +626,12 @@
   --accent-primary-contrast: #282828;
   --accent-primary-fill: #8ec07c;
   --status-success: #b8bb26;
-  --status-warning: #fabd2f;
+  --status-warning: #fdc034;
   --status-danger: #ff645c;
   --status-danger-contrast: #282828;
   --status-renamed: #83a598;
-  --tone-local: #b8bb26;
-  --accent-heart: #fb4934;
+  --tone-local: #a5c8ba;
+  --accent-heart: #d3869b;
   --diff-added: #b8bb26;
   --diff-removed: #ff645c;
   --syntax-comment: #928374;
@@ -630,7 +654,9 @@
    borders; fg1/fg3 for text; faded aqua for the accent; the faded hues for
    status and syntax, as in the palette's own editor theme. Faded aqua,
    yellow, green and gray are darkened until they read at 4.5:1 (3:1 for the
-   comment) on the code well and a tinted diff line. */
+   comment) on the code well and a tinted diff line.
+   Glyph tones: saved-here is aqua darkened, the heart purple and yellow
+   darkened, so no two tones meet. */
 [data-theme="gruvbox-light"] {
   color-scheme: light;
   --surface-app: #f2e5bc;
@@ -649,12 +675,12 @@
   --accent-primary-contrast: #fbf1c7;
   --accent-primary-fill: #3d7153;
   --status-success: #6d680e;
-  --status-warning: #8b5d14;
+  --status-warning: #6d4100;
   --status-danger: #9d0006;
   --status-danger-contrast: #fbf1c7;
   --status-renamed: #076678;
-  --tone-local: #6d680e;
-  --accent-heart: #9d0006;
+  --tone-local: #135030;
+  --accent-heart: #8f3f71;
   --diff-added: #635e0e;
   --diff-removed: #9d0006;
   --syntax-comment: #807162;

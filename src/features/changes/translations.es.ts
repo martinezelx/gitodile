@@ -1,6 +1,12 @@
 import type { ChangesTranslations } from "./translations";
 
 export const es: ChangesTranslations = {
+  changesDiffBefore: "Antes",
+  changesDiffAfter: "Ahora",
+  changesDiffSaved: "Última versión guardada",
+  changesDiffWorkingCopy: "Copia de trabajo actual",
+  changesDiffEmptyBase: "Proyecto vacío",
+
   changesSummaryClean: "Todos los cambios están guardados.",
   changesEmptySavedTitle: "Todos los cambios están guardados",
   changesEmptyAheadDescription: (count) =>
@@ -74,6 +80,9 @@ export const es: ChangesTranslations = {
   changesDiffConflictUnavailable: "No se pudieron leer las marcas de conflicto de este archivo.",
   changesDiffConflictBinary: "Este archivo no es texto, así que no se puede mostrar su conflicto.",
   changesDiffConflictTooLarge: "Este conflicto es demasiado grande para mostrarlo aquí.",
+  changesConflictsNotice: (count) =>
+    count === 1 ? "1 archivo tiene cambios que se solapan" : `${count.toLocaleString("es")} archivos tienen cambios que se solapan`,
+  changesConflictsReview: "Revisar los cambios que se solapan",
   changesDiffAriaLabel: (path) => `Cambios de ${path}`,
   changesDiffHiddenLines: (count) => (count === 1 ? "1 línea sin cambios" : `${count} líneas sin cambios`),
   changesDiffShowHiddenLines: (count) =>
@@ -113,14 +122,18 @@ export const es: ChangesTranslations = {
   changesViewAccessible: "Texto accesible",
   changesMarkdownPreview: "Vista previa Markdown",
   changesMarkdownFallback: "Se muestran los cambios de texto. Puedes reintentar la vista previa Markdown desde Vista.",
-  changesMarkdownExcerpt: "Vista Markdown parcial · Solo se muestran fragmentos modificados y su contexto cercano, usando el diff de texto disponible. El formato y las referencias pueden estar incompletos porque se omite el resto del documento.",
-  changesMarkdownExcerptLimited: "Se omiten algunos cambios para limitar el tamaño de la vista previa. Consulta más detalle en el diff de texto o en tu editor.",
-  changesMarkdownExcerptPosition: (oldLine, newLine) => `… Línea anterior ${oldLine} · Línea actual ${newLine}`,
+  changesMarkdownExcerpt: "Vista parcial: solo los fragmentos cambiados.",
+  changesMarkdownExcerptLimited: "Se omiten algunos cambios.",
+  changesMarkdownExcerptDetail: "El formato y las referencias pueden estar incompletos porque se omite el resto del documento. Consulta más detalle en el diff de texto o en tu editor.",
+  changesMarkdownExcerptPosition: (line) => `Línea ${line}`,
   changesMarkdownUnified: "Cambios Markdown en un solo documento",
   changesMarkdownDeleted: "Este archivo se ha eliminado. Su contenido anterior se muestra debajo.",
   changesMarkdownUnchanged: "No hay cambios visibles entre estas versiones.",
   changesMarkdownComplex: "Este documento supera los límites de la comparación con formato.",
-  changesMarkdownCounts: (removed, added) => `− ${removed} ${removed === 1 ? "línea eliminada" : "líneas eliminadas"} · + ${added} ${added === 1 ? "línea añadida" : "líneas añadidas"}. Se resaltan los bloques afectados completos.`,
+  changesMarkdownCounts: (removed, added) => `−${removed} +${added} líneas`,
+  changesMarkdownBlocks: "Se resaltan los bloques afectados completos.",
+  changesMarkdownFold: (blocks) => `Mostrar ${blocks} bloques sin cambios`,
+  changesMarkdownShowAll: "Mostrar todo",
   changesMarkdownLoading: "Cargando documento…",
   changesMarkdownError: "No se pudo leer el documento. Puede que se haya movido, eliminado o que use una codificación de texto no compatible.",
   changesMarkdownEmpty: "Este documento está vacío.",

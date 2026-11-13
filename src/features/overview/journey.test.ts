@@ -78,6 +78,11 @@ describe("deriveJourney", () => {
     expect(journey.activeStep).toBe("changes");
     expect(journey.changes).toEqual({ state: "conflicts", total: 3, conflicted: 2 });
     expect(journey.save.state).toBe("blocked");
+
+    // Every file resolved, but the merge is still open: it is still the step.
+    const paused = deriveJourney({ ...base, workingTree: { ...tree({ changed: 2, total: 2 }), pausedOperation: true }, teamSync: sync() });
+    expect(paused.changes).toEqual({ state: "conflicts", total: 2, conflicted: 0 });
+    expect(paused.save.state).toBe("blocked");
   });
 
   it("moves on to publishing once everything is saved and something waits", () => {

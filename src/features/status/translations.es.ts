@@ -10,8 +10,8 @@ export const es: StatusTranslations = {
   statusConflictsTitle: "Algunos archivos necesitan tu atención",
   statusConflictsMessage: (conflicted) =>
     conflicted === 1
-      ? "1 archivo tiene cambios superpuestos que debes resolver antes de guardar."
-      : `${conflicted} archivos tienen cambios superpuestos que debes resolver antes de guardar.`,
+      ? "1 archivo tiene cambios que se solapan que debes resolver antes de guardar."
+      : `${conflicted} archivos tienen cambios que se solapan que debes resolver antes de guardar.`,
   statusCheckingTitle: "Buscando cambios…",
   statusCheckingMessage: "Revisando los archivos de tu proyecto.",
   statusCheckFailedTitle: "No se pudo comprobar si hay cambios",

@@ -75,7 +75,7 @@ not implied by the `1.0.0` merge and restore workflows.
 ### Design system
 
 - Finish the control-size scale on the four controls task
-  [106](done/106-control-size-scale.md) left off. `.pending-versions__publish-button`
+  [106](done/0.2.2/106-control-size-scale.md) left off. `.pending-versions__publish-button`
   (34px), `.overview-history__all` (36px) and `.branches-filter__clear`
   (36px) still carry heights of their own, and `.segmented-control__option`
   derives ~34.6px from padding rather than declaring a tier — its only height is

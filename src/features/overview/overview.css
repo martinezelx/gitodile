@@ -438,7 +438,7 @@
   width: 12px;
   height: 12px;
   place-self: center;
-  border: 2px solid color-mix(in srgb, var(--text-secondary-color) 52%, transparent);
+  border: 2px solid var(--node-ring);
   border-radius: var(--radius-round);
   background: var(--surface-panel);
   box-shadow: 0 0 0 3px var(--surface-panel);
@@ -677,7 +677,7 @@
   height: 12px;
   border-width: 2px;
   border-style: solid;
-  border-color: color-mix(in srgb, var(--text-secondary-color) 52%, transparent);
+  border-color: var(--node-ring);
   box-shadow: 0 0 0 3px var(--surface-panel);
 }
 .overview-now__body { min-width: 0; }
@@ -820,24 +820,51 @@
   font-family: var(--font-mono);
   font-size: var(--text-label);
 }
-/* The counts are ink; the thin bar is the one place the diff's colours show,
+/* The counts are ink; the capsule is the one place the diff's colours show,
    so the card does not open with a red number. */
 .overview-detail__added,
 .overview-detail__removed { color: var(--text-secondary-color); }
-/* The two colours meet in a short blend around the added share, rather than
-   at a hard edge. A share of 0 or 100% leaves one colour across the bar. */
+/* The diff's capsule laid on its side: the added share filled, the removed
+   share outlined. With both sides it is one joined capsule, as a removal runs
+   into its addition in Changes — no cap at the join, and over `--space-2`
+   either side the colour passes through the OKLCH midpoint while the
+   outline's inside fills to meet the addition. With only one side it is one
+   capsule, and the other is not drawn at all: forced colours' borders would
+   otherwise leave a stub of it. */
 .overview-detail__bar {
   --added-share: 100%;
-  --bar-blend: 14px;
   flex: 1;
-  height: 2px;
-  border-radius: var(--radius-pill);
-  background: linear-gradient(
-    to right,
-    var(--diff-added) calc(var(--added-share) - var(--bar-blend)),
-    var(--diff-removed) calc(var(--added-share) + var(--bar-blend))
-  );
-  opacity: .65;
+  display: flex;
+  height: var(--diff-bar-width);
+}
+.overview-detail__bar::before,
+.overview-detail__bar::after { content: ""; border-radius: var(--radius-pill); }
+.overview-detail__bar::before { flex: 0 0 var(--added-share); background: var(--diff-added); }
+.overview-detail__bar::after {
+  --bar-outline-mask:
+    linear-gradient(to bottom, #000 var(--diff-bar-outline), transparent var(--diff-bar-outline) calc(100% - var(--diff-bar-outline)), #000 calc(100% - var(--diff-bar-outline))),
+    linear-gradient(to left, #000 var(--diff-bar-outline), transparent var(--diff-bar-outline)),
+    linear-gradient(to right, #000 var(--diff-bar-outline), transparent var(--diff-bar-outline));
+  flex: 1 1 0;
+  background: var(--diff-removed);
+  -webkit-mask: var(--bar-outline-mask);
+  mask: var(--bar-outline-mask);
+}
+.overview-detail__bar--added::after,
+.overview-detail__bar--removed::before { display: none; }
+.overview-detail__bar--joined::before {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+  background: linear-gradient(to right, var(--diff-added) calc(100% - var(--space-2)), var(--diff-bar-middle));
+}
+.overview-detail__bar--joined::after {
+  --bar-outline-mask:
+    linear-gradient(to bottom, #000 var(--diff-bar-outline), transparent var(--diff-bar-outline) calc(100% - var(--diff-bar-outline)), #000 calc(100% - var(--diff-bar-outline))),
+    linear-gradient(to left, #000 var(--diff-bar-outline), transparent var(--diff-bar-outline)),
+    linear-gradient(to left, transparent calc(100% - var(--space-2)), #000);
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  background: linear-gradient(to right, var(--diff-bar-middle), var(--diff-removed) var(--space-2));
 }
 .overview-detail__files { display: grid; gap: 1px; margin: 0; padding: 0; list-style: none; }
 .overview-detail__file {
@@ -1112,4 +1139,12 @@ button.overview-detail__file:focus-visible { outline: 2px solid var(--focus-ring
     background: linear-gradient(90deg, CanvasText 50%, Canvas 50%);
   }
   .overview-history__item--published .overview-history__node { background: CanvasText; }
+  /* The line totals' capsule with native borders, as the diff draws its own. */
+  .overview-detail__bar::before,
+  .overview-detail__bar::after {
+    background: none; -webkit-mask: none; mask: none; box-sizing: border-box;
+    border: var(--diff-bar-outline) solid CanvasText;
+  }
+  .overview-detail__bar::before { border-width: calc(var(--diff-bar-width) / 2); }
+  .overview-detail__bar--joined::after { border-inline-start-width: 0; }
 }

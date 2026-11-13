@@ -74,3 +74,42 @@ export type NativeDraftPreparation = Readonly<{
 export function isDevelopmentBuild(state: UpdateState): boolean {
   return state.kind === "unavailable" && state.error.code === "not_configured";
 }
+
+/** A release with a next step the reader takes: one to download, one to
+ * install, or one an unfinished edit is holding back. These, and only these,
+ * mark the More actions button and the Settings rail; a running transfer has
+ * nothing to ask for and a settled check has nothing to offer. */
+export function updateNeedsAttention(state: UpdateState): boolean {
+  return state.kind === "available" || state.kind === "ready" || state.kind === "blocked";
+}
+
+/** The version whose download just finished out of sight, or null. Only a
+ * transfer that settles on "ready" while Settings is closed counts: one the
+ * reader watched needs no receipt, and a "ready" read at launch or after a
+ * closed Settings finished nothing new. */
+export function finishedDownloadOutOfSight(
+  previous: UpdateState["kind"],
+  next: UpdateState,
+  isWatching: boolean,
+): string | null {
+  if (next.kind !== "ready" || isWatching) return null;
+  return previous === "downloading" || previous === "verifying" ? next.candidate.version : null;
+}
+
+/** Whether a way into Settings › Updates that says "check" may start one.
+ * Only a settled state with nothing offered checks: a fresh check replaces the
+ * candidate, so from "Ready to install" it would throw away the download the
+ * reader came to install, and during a transfer it would do nothing at all. */
+export function checksOnOpen(state: UpdateState): boolean {
+  switch (state.kind) {
+    case "idle":
+    case "current":
+    case "cancelled":
+    case "failed":
+      return true;
+    case "unavailable":
+      return !isDevelopmentBuild(state);
+    default:
+      return false;
+  }
+}

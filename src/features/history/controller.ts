@@ -586,6 +586,11 @@ export function createHistoryController(port: HistoryPort) {
         run: () => refreshInternal(query, false),
       });
     },
+    readFileMarkdown(query: HistoryQuery, commit: string, filePath: string) {
+      const snapshotToken = entries.get(keyOf(query))?.state.snapshot?.snapshotToken;
+      if (!snapshotToken) return Promise.reject(new Error("no history snapshot is loaded"));
+      return port.readFileMarkdown({ ...query, snapshotToken, commit, filePath });
+    },
     readImagePreview(
       query: HistoryQuery,
       commit: string,

@@ -173,6 +173,7 @@ export interface HistoryTranslations {
   historyNoChangedFiles: string;
   historyDiffLoading: string;
   historyDiffError: string;
+  historyMarkdownNotice: string;
   historySelectFilePrompt: string;
   historyVersionDate: (absolute: string) => string;
 }

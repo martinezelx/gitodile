@@ -76,6 +76,10 @@ import {
 import { createStatusController, statusPort, type StatusErrorMapper } from "../features/status";
 import {
   createSyncController,
+  createBringInController,
+  bringInPort,
+  BringInChangesDialog,
+  type IntegrationSource,
   EMPTY_TEAM_SYNC_STATE,
   GetTeamChangesDialog,
   selectTeamSyncState,
@@ -114,8 +118,19 @@ import {
   type BranchCreateContext,
 } from "../features/branches";
 import { createHistoryController, historyPort } from "../features/history";
-import { appUpdatesPort, createAppUpdatesController, useAppUpdatesController, type UpdateState } from "../features/app-updates";
-import { useConsoleConfirmChanges } from "../features/console";
+import { conflictsPort, createConflictsController, useConflictsState } from "../features/conflicts";
+import {
+  appUpdateTranslations,
+  appUpdatesPort,
+  checksOnOpen,
+  finishedDownloadOutOfSight,
+  createAppUpdatesController,
+  updateMenuLabel,
+  updateNeedsAttention,
+  useAppUpdatesController,
+  type UpdateState,
+} from "../features/app-updates";
+import { createConsoleSessionStore, useConsoleConfirmChanges } from "../features/console";
 import { TooltipHost } from "../shared/ui/tooltip";
 import { LoadingBar } from "../shared/ui/loadingBar";
 import { AppOverlays } from "./AppOverlays";
@@ -197,6 +212,7 @@ import { useProjectTechnologies } from "./projectTechnologies";
 import { consoleProjectStatus } from "./consoleProjectStatus";
 import {
   ChangesPanel,
+  ConflictsScreen,
   ConsoleScreen,
   HistoryScreen,
   HomeScreen,
@@ -265,11 +281,12 @@ function ViewLoadingFallback(): React.JSX.Element {
 }
 
 export function App(): React.JSX.Element {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [accountController] = useState(() => import.meta.env.DEV ? createMockAccountController() : null);
   const isAccountModalOpen = useAccountModal(accountController);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
-  const [isChangelogOpen, setIsChangelogOpen] = useState(false);
+  /* Only a restart on the wrong version opens this; every other update state
+     lives in Settings › Updates (task 221). */
   const [isAppUpdateOpen, setIsAppUpdateOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   /* Declared beside the Settings flag because `hasBlockingDialog` below reads
@@ -375,6 +392,8 @@ export function App(): React.JSX.Element {
   const [projectRuntime] = useState(() => createProjectRuntime(initialProjectSessionsState));
   const [branchesController] = useState(() => createBranchesController(branchesPort));
   const [historyController] = useState(() => createHistoryController(historyPort));
+  const [bringInController] = useState(() => createBringInController(bringInPort));
+  const [conflictsController] = useState(() => createConflictsController(conflictsPort));
   const [repositoryController] = useState(() => createRepositoryController(repositoryPort));
   const [cloneController] = useState(() => createCloneController(clonePort));
   const [initializeProjectController] = useState(() =>
@@ -384,6 +403,7 @@ export function App(): React.JSX.Element {
     createSaveVersionController(saveVersionPort),
   );
   const [statusController] = useState(() => createStatusController(statusPort));
+  const [consoleSessions] = useState(createConsoleSessionStore);
   const [changesController] = useState(() => createChangesController(changesPort));
   // Overview's cache: the files the unpublished versions carry, the newest
   // discard that can still be restored, and where the project lives. Filled
@@ -416,7 +436,7 @@ export function App(): React.JSX.Element {
         id: "status",
         refreshOn: "worktree-change",
         blocking: true,
-        refresh: (query) => statusController.refresh(projectRuntime, query, mapStatusErrorRef.current),
+        refresh: (query) => statusController.invalidate(projectRuntime, query, mapStatusErrorRef.current),
         supersede: (query) => statusController.supersede(query),
       },
       {
@@ -506,6 +526,15 @@ export function App(): React.JSX.Element {
     [activeSession?.epoch, activeSession?.id],
   );
   const activeBranches = useBranchesState(branchesController, activeBranchesQuery);
+  const activeConflicts = useConflictsState(conflictsController, activeBranchesQuery);
+  /** The paused operation, when one was read: Overview, Changes and the
+   * palette offer the overlapping-changes screen from the same cached read. */
+  const conflictSession = activeConflicts.session ?? null;
+  const activeOperationPhase = activeSession?.operation?.phase;
+  /** A save, publish, get or branch change of this project still running:
+   * the overlapping-changes screen holds its actions until it settles. */
+  const isActiveOperationRunning =
+    activeOperationPhase !== undefined && activeOperationPhase !== "error" && activeOperationPhase !== "success";
   const project = activeSession?.project ?? null;
   const [favouriteBranches, toggleFavouriteBranch] =
     useStoredFavouriteBranches(project?.commonGitDir ?? null);
@@ -567,6 +596,16 @@ export function App(): React.JSX.Element {
       dispatchSessions({ type: "setWorkbenchTab", id: sessionsState.activeId, tab });
     }
     navigateToView("workbench");
+  };
+
+  /** Every entry to the overlapping-changes screen is a reader's press, so it
+   * may read the session again: that is an explicit refresh, never one caused
+   * by the screen becoming visible. */
+  const openConflicts = (): void => {
+    if (activeSession) {
+      void conflictsController.refresh({ projectId: activeSession.id, sessionEpoch: activeSession.epoch });
+    }
+    navigateToView("conflicts");
   };
 
   const goBack = (): void => {
@@ -634,6 +673,8 @@ export function App(): React.JSX.Element {
      opens only once that dialog has closed and its operation has finished, or
      the mutation guard would still see the sync running and refuse. */
   const [saveAfterSyncSessionId, setSaveAfterSyncSessionId] = useState<string | null>(null);
+  const [bringInDialog, setBringInDialog] = useState<{ sessionId: string; source: IntegrationSource | null } | null>(null);
+  const bringInSession = bringInDialog ? sessionsState.byId[bringInDialog.sessionId] ?? null : null;
   const [getTeamDialogSessionId, setGetTeamDialogSessionId] = useState<string | null>(null);
   /* Whether Get project changes was asked for on its own or to publish
      afterwards (the remote moved on first). */
@@ -693,8 +734,10 @@ export function App(): React.JSX.Element {
     publishDialogSessionId !== null ||
     saveDialogSessionId !== null ||
     getTeamDialogSessionId !== null ||
+    bringInDialog !== null ||
     activeSession?.operation?.kind === "branch" ||
-    activeSession?.operation?.kind === "discard";
+    activeSession?.operation?.kind === "discard" ||
+    activeSession?.operation?.kind === "resolve";
   const showErrorDialog = (title: string, message: string): void => {
     setOpenErrorTitle(title);
     setOpenError(message);
@@ -897,6 +940,8 @@ export function App(): React.JSX.Element {
      create-project identity link — says so by passing it, so remembering the
      last visit only made the plain open unpredictable. */
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("general");
+  /* Set by a "What's new" so Settings › Updates opens at that group. */
+  const [settingsRevealWhatsNew, setSettingsRevealWhatsNew] = useState(false);
   const gitlabAuth = useGitLabAuth(gitlabAuthPort, isSettingsOpen && settingsSection === "accounts");
   const githubAuth = useGitHubAuth(githubAuthPort, isSettingsOpen && settingsSection === "accounts");
   /* Home's "+" asks for another account, so Accounts opens with its provider
@@ -907,6 +952,7 @@ export function App(): React.JSX.Element {
    * it; everyone else gets General. */
   const openSettings = (section: SettingsSection = "general"): void => {
     setSettingsSection(section);
+    setSettingsRevealWhatsNew(false);
     setIsSettingsOpen(true);
   };
   /* The per-project panel. Opening it for a project that is not the active one
@@ -981,6 +1027,18 @@ export function App(): React.JSX.Element {
     onBackgroundCheckSettled: (state) => backgroundUpdateResultRef.current(state),
   }));
   const appUpdates = useAppUpdatesController(appUpdatesController, automaticAppUpdates);
+  /** The one way into the app's update: Settings › Updates. A "check" entry
+   * checks only from a settled state with nothing offered, so the menu never
+   * throws away a download waiting to be installed. */
+  const openAppUpdates = ({ check = false, whatsNew = false }: { check?: boolean; whatsNew?: boolean } = {}): void => {
+    openSettings("updates");
+    setSettingsRevealWhatsNew(whatsNew);
+    if (check && checksOnOpen(appUpdatesController.getSnapshot().state)) void appUpdatesController.check();
+  };
+  const appUpdateMenuLabel = updateMenuLabel(appUpdates.state, language);
+  const appUpdateAttention = updateNeedsAttention(appUpdates.state) && "candidate" in appUpdates.state
+    ? appUpdateTranslations(language).attention(appUpdates.state.candidate.version)
+    : null;
   const activeWatcherRegistration = activeSession ? watcherRegistrations[activeSession.id] : undefined;
   const activeWatcherState: "starting" | "watching" | "off" | "unavailable" =
     !watchProjects
@@ -1015,6 +1073,20 @@ export function App(): React.JSX.Element {
       details: { kind: "appUpdateAvailable", version: state.candidate.version },
     });
   };
+  /* A download that finishes while Settings is closed finished out of sight:
+     the update's notification moves on to the next step. One the user watched
+     in Settings needs no receipt. */
+  const previousAppUpdateKind = useRef(appUpdates.state.kind);
+  useEffect(() => {
+    const version = finishedDownloadOutOfSight(previousAppUpdateKind.current, appUpdates.state, isSettingsOpen);
+    previousAppUpdateKind.current = appUpdates.state.kind;
+    if (version === null) return;
+    notificationCenter.notify({
+      projectId: null,
+      projectName: null,
+      details: { kind: "appUpdateAvailable", version, ready: true },
+    });
+  }, [appUpdates.state, isSettingsOpen, notificationCenter]);
   /* Travels with every save and publish rather than being read by Rust: it is
      a choice about what this app does with someone's project, not a fact about
      the project, and the command that acts on it is the one that must carry
@@ -1235,8 +1307,7 @@ export function App(): React.JSX.Element {
   // index, and the working tree — every one of task 016's "Operation
   // coordination and refresh" invalidation targets that already exist in
   // this app. Re-reading the repository facts (branch/head state) through
-  // the same `"open"` action `handleOpenProject` uses below re-hydrates the
-  // active session in place (same `id`, since the path never changes), and
+  // `refreshProject` updates this session without selecting it, and
   // `checkWorkingTree` covers both the working-tree status and the pending-
   // versions list save/publish depend on. Clearing the Changes selection
   // stops a diff/file that may not exist on the new branch from staying
@@ -1252,7 +1323,9 @@ export function App(): React.JSX.Element {
   const handleMutationSucceeded = (path: string): Promise<void> =>
     repositoryReads.refreshAfterMutation(projectRuntime, sessionsState, path);
 
-  const startBranchOperation = (path: string): boolean => {
+  /* Branch changes and resolving an overlapping file take the project's
+     mutation slot the same way: refused while another project's runs. */
+  const startLocalOperation = (path: string, kind: "branch" | "resolve" | "sync"): boolean => {
     const session = sessionsState.byId[path];
     if (!session) {
       return false;
@@ -1265,8 +1338,13 @@ export function App(): React.JSX.Element {
       );
       return false;
     }
-    dispatchSessions({ type: "startOperation", id: path, kind: "branch" });
+    dispatchSessions({ type: "startOperation", id: path, kind });
     return true;
+  };
+  const startBranchOperation = (path: string): boolean => startLocalOperation(path, "branch");
+  const openBringIn = (name?: string): void => {
+    if (!activeSession || !startLocalOperation(activeSession.id, "sync")) return;
+    setBringInDialog({ sessionId: activeSession.id, source: name ? { kind: "localBranch", name } : null });
   };
 
   const finishSessionOperation = (path: string): void => {
@@ -1301,7 +1379,7 @@ export function App(): React.JSX.Element {
     if (id !== sessionsState.activeId) dispatchSessions({ type: "activate", id });
     syncViewToSession(target.lastView);
     setProjectAnnouncement(t.projectSwitcherActiveAnnouncement(target.project.name));
-    void checkWorkingTree(target.project.path);
+    void repositoryReads.refreshProjectAndWorktree(projectRuntime, projectRuntime.getSnapshot(), target.id);
   };
 
   /** The one open path. `preselectedPath` skips the folder picker for a folder
@@ -1431,7 +1509,8 @@ export function App(): React.JSX.Element {
       for (const info of restored) {
         void checkWorkingTree(info.path, info.sessionEpoch);
       }
-      setView(restored.length > 0 ? "overview" : "home");
+      const snapshot = projectRuntime.getSnapshot();
+      setView(snapshot.activeId ? snapshot.byId[snapshot.activeId].lastView : "home");
       if (skipped > 0) {
         setSkippedRestoreCount(skipped);
       }
@@ -1688,7 +1767,7 @@ export function App(): React.JSX.Element {
   useEffect(
     () =>
       scheduleIdleTask(() => {
-        prefetchScreenChunks();
+        void prefetchScreenChunks();
         void loadPublishDialog();
         void loadDiscardChangesDialog();
       }),
@@ -1867,6 +1946,7 @@ export function App(): React.JSX.Element {
     changesController,
     historyController,
     branchesController,
+    conflictsController,
     syncController,
     mapSyncError,
   });
@@ -1905,12 +1985,15 @@ export function App(): React.JSX.Element {
     // Explicitly evict feature-owned state for this session incarnation.
     // Their generations reject late responses from the closed epoch.
     changesController.close(id, closingSession.epoch);
+    consoleSessions.close(id, closingSession.epoch);
     statusController.close({ projectId: id, sessionEpoch: closingSession.epoch });
     syncController.close(projectRuntime, { projectId: id, sessionEpoch: closingSession.epoch });
     repositoryReads.close(id, closingSession.epoch);
     delete watchedSessionsRef.current[id];
     branchesController.close({ projectId: id, sessionEpoch: closingSession.epoch });
     historyController.close({ projectId: id, sessionEpoch: closingSession.epoch });
+    conflictsController.close({ projectId: id, sessionEpoch: closingSession.epoch });
+    bringInController.close({ projectId: id, sessionEpoch: closingSession.epoch });
     workDetailController.forget({ projectId: id, sessionEpoch: closingSession.epoch });
     dispatchSessions({ type: "close", id });
     // Closing the active project goes to Home with no project active, the
@@ -1962,7 +2045,6 @@ export function App(): React.JSX.Element {
   const hasOpenDialog =
     hasBlockingDialog ||
     isAboutOpen ||
-    isChangelogOpen ||
     isAppUpdateOpen ||
     isShortcutsOpen ||
     isCloseConfirmOpen ||
@@ -2109,6 +2191,17 @@ export function App(): React.JSX.Element {
     ...(project && !hasBlockingDialog
       ? [{ id: "close-project", label: t.commandCloseActiveProject, action: requestCloseActiveProject }]
       : []),
+    ...(project?.headState === "branch" && !hasBlockingDialog ? [{
+      id: "bring-in-changes", label: t.bringInTitle, action: () => openBringIn(),
+    }] : []),
+    // Offered only while something is paused: a conflict is not a place.
+    ...(project && conflictSession
+      ? [{
+          id: "go-conflicts",
+          label: conflictSession.operation.supported ? t.commandContinueConflicts : t.commandReviewPausedOperation,
+          action: openConflicts,
+        }]
+      : []),
     ...(project && activeSession && !hasBlockingDialog
       ? [
           {
@@ -2170,15 +2263,8 @@ export function App(): React.JSX.Element {
           },
         ]
       : []),
-    { id: "changelog", label: t.changelogTitle, action: () => setIsChangelogOpen(true) },
-    {
-      id: "check-app-updates",
-      label: t.commandCheckAppUpdates,
-      action: () => {
-        setIsAppUpdateOpen(true);
-        void appUpdatesController.check();
-      },
-    },
+    { id: "changelog", label: t.changelogTitle, action: () => openAppUpdates({ whatsNew: true }) },
+    { id: "check-app-updates", label: appUpdateMenuLabel, action: () => openAppUpdates({ check: true }) },
     { id: "about", label: t.aboutGitOdile, action: () => setIsAboutOpen(true) },
   ];
 
@@ -2439,7 +2525,7 @@ export function App(): React.JSX.Element {
   const appMenuSections = planAppMenu(
     {
       about: t.aboutGitOdile,
-      checkUpdates: t.commandCheckAppUpdates,
+      checkUpdates: appUpdateMenuLabel,
       settings: t.appMenuSettings,
       home: t.navHome,
       openProject: t.titlebarOpenProject,
@@ -2496,10 +2582,7 @@ export function App(): React.JSX.Element {
     accountController?.closePopover(true);
     switch (command) {
       case "about": setIsAboutOpen(true); return;
-      case "check-updates":
-        setIsAppUpdateOpen(true);
-        void appUpdatesController.check();
-        return;
+      case "check-updates": openAppUpdates({ check: true }); return;
       case "settings": openSettings(); return;
       case "home": navigateToView("home"); return;
       case "open-project": void handleOpenProject(); return;
@@ -2514,7 +2597,7 @@ export function App(): React.JSX.Element {
       case "go-forward": goForward(); return;
       case "reload-window": window.location.reload(); return;
       case "keyboard-shortcuts": setIsShortcutsOpen(true); return;
-      case "whats-new": setIsChangelogOpen(true); return;
+      case "whats-new": openAppUpdates({ whatsNew: true }); return;
       case "report-issue": void issueReport.report(); return;
     }
   };
@@ -2552,11 +2635,9 @@ export function App(): React.JSX.Element {
               <AccountControl controller={accountController} compact menuClassName="titlebar-menu__item" onOpen={onOpen} fallbackRef={fallbackRef} /> : undefined}
             onOpenHome={() => navigateToView("home")}
             onOpenAbout={() => setIsAboutOpen(true)}
-            onOpenChangelog={() => setIsChangelogOpen(true)}
-            onCheckAppUpdates={() => {
-              setIsAppUpdateOpen(true);
-              void appUpdatesController.check();
-            }}
+            appUpdateLabel={appUpdateMenuLabel}
+            appUpdateAttention={appUpdateAttention}
+            onCheckAppUpdates={() => openAppUpdates({ check: true })}
             onOpenProject={() => void handleOpenProject()}
             onCreateProject={() => setInitializeDialogRequest({ mode: "new-folder" })}
             onCloneProject={() => setIsCloneOpen(true)}
@@ -2730,9 +2811,9 @@ export function App(): React.JSX.Element {
           onReviewTeamChanges={reviewTeamChangesFromNotification}
           onReviewAppUpdate={() => {
             if (hasBlockingDialog) return false;
-            // The dialog uses the current updater snapshot, never the stored
+            // Settings shows the current updater snapshot, never the stored
             // notice's candidate/version. Opening it does not check or install.
-            setIsAppUpdateOpen(true);
+            openAppUpdates();
             return true;
           }}
           onOpenProjectOverview={openOverviewFromNotification}
@@ -2774,7 +2855,7 @@ export function App(): React.JSX.Element {
       </header>
 
       <main
-        className={`app-shell${view === "workbench" || view === "branches" || view === "console" ? " app-shell--internal-scroll" : ""}${view === "overview" ? " app-shell--overview" : ""}${view === "console" || view === "home" ? "" : " app-shell--sheet"}`}
+        className={`app-shell${view === "workbench" || view === "branches" || view === "conflicts" || view === "console" ? " app-shell--internal-scroll" : ""}${view === "overview" ? " app-shell--overview" : ""}${view === "console" || view === "home" ? "" : " app-shell--sheet"}`}
       >
         {/* Read by `usePortalFlyout`: every menu the rail opens flies out from
             this panel's edge rather than from the button inside it. */}
@@ -2849,7 +2930,7 @@ export function App(): React.JSX.Element {
 
         <section
           {...autoHideScrollbarProps<HTMLElement>()}
-          className={`workspace auto-hide-scrollbar${view === "workbench" ? " workspace--workbench" : ""}${view === "branches" ? " workspace--branches" : ""}${view === "console" ? " workspace--console" : ""}`}
+          className={`workspace auto-hide-scrollbar${view === "workbench" ? " workspace--workbench" : ""}${view === "branches" ? " workspace--branches" : ""}${view === "conflicts" ? " workspace--conflicts" : ""}${view === "console" ? " workspace--console" : ""}`}
         >
           <div className="compact-nav-row">
             <div className="compact-history-controls" aria-label={t.titlebarHistoryControls}>
@@ -2981,6 +3062,7 @@ export function App(): React.JSX.Element {
                   onCheckLocalChanges={() => {
                     if (projectPath) void checkWorkingTree(projectPath);
                   }}
+                  onOpenConflicts={openConflicts}
                   onReviewChanges={(path) => {
                     if (path && sessionsState.activeId) {
                       dispatchSessions({
@@ -3086,6 +3168,7 @@ export function App(): React.JSX.Element {
                               onCheckRemote={() => checkTeamChanges({ refreshWorkingTree: true })}
                               isCheckingRemote={teamSync.isCheckingRemote}
                               onOpenHistory={() => openWorkbench("history")}
+                              onOpenConflicts={openConflicts}
                               headState={project.headState}
                               selectedPath={activeSession?.changesSelection.selectedPath ?? null}
                               onSelectedPathChange={(selectedPath) =>
@@ -3150,7 +3233,8 @@ export function App(): React.JSX.Element {
                             startSessionOperation("save");
                             openWorkbench("changes");
                           }}
-                          onOpenChanges={() => openWorkbench("changes")}
+                          onOpenConflicts={openConflicts}
+                          onBringIn={openBringIn}
                           selfEmail={gitIdentity.identity.email || null}
                           onOpenHistory={(name, commit) => {
                             setHistoryScopeBranchIntent(name);
@@ -3170,6 +3254,8 @@ export function App(): React.JSX.Element {
                     console: (
                       <Suspense fallback={<ViewLoadingFallback />}>
                         <ConsoleScreen
+                          sessionStore={consoleSessions}
+                          historySource={historyController}
                           projectPath={project.path}
                           projectName={project.name}
                           branch={project.branch}
@@ -3192,6 +3278,26 @@ export function App(): React.JSX.Element {
                             onQueryChange: handlePaletteQueryChange,
                             onKeyDown: handlePaletteKeyDown,
                           }}
+                        />
+                      </Suspense>
+                    ),
+                    conflicts: (
+                      <Suspense fallback={<ViewLoadingFallback />}>
+                        <ConflictsScreen
+                          controller={conflictsController}
+                          projectPath={project.path}
+                          sessionEpoch={activeSession?.epoch ?? ""}
+                          watcherState={activeWatcherState}
+                          onOpenSettings={() => openSettings("general")}
+                          onBack={goBack}
+                          onGoToOverview={() => navigateToView("overview")}
+                          isProjectBusy={isActiveOperationRunning}
+                          runHooks={runGitHooks}
+                          onPublish={() => openPublishDialog()}
+                          onOperationStart={() => startLocalOperation(project.path, "resolve")}
+                          onOperationFinish={() => finishSessionOperation(project.path)}
+                          onOperationPhaseChange={(phase) => setBranchOperationPhase(project.path, phase)}
+                          onChanged={() => handleMutationSucceeded(project.path)}
                         />
                       </Suspense>
                     ),
@@ -3218,6 +3324,7 @@ export function App(): React.JSX.Element {
           favouriteBranches={favouriteBranches}
           onToggleFavouriteBranch={toggleFavouriteBranch}
           teamSync={teamSync}
+          onBringIn={openBringIn}
           onSwitchBranch={(target) => {
             if (projectPath && startBranchOperation(projectPath)) {
               setBranchSwitchTarget(target);
@@ -3364,10 +3471,52 @@ export function App(): React.JSX.Element {
         </Suspense>
       )}
 
+      {bringInDialog && bringInSession && (
+        <BringInChangesDialog
+          key={`${bringInSession.id}:${bringInSession.epoch}`}
+          controller={bringInController}
+          projectPath={bringInSession.project.path}
+          sessionEpoch={bringInSession.epoch}
+          source={bringInDialog.source}
+          runHooks={runGitHooks}
+          onClose={() => {
+            finishSessionOperation(bringInSession.id);
+            setBringInDialog(null);
+          }}
+          onPhaseChange={(phase) => dispatchSessions({ type: "setOperationPhase", id: bringInSession.id, phase })}
+          onApplied={async () => {
+            dispatchSessions({ type: "setChangesSelection", id: bringInSession.id, selection: EMPTY_CHANGES_SELECTION });
+            await repositoryReads.refreshAfterMutation(projectRuntime, projectRuntime.getSnapshot(), bringInSession.project.path);
+          }}
+          onPaused={async (session) => {
+            await conflictsController.acceptSession({ projectId: bringInSession.id, sessionEpoch: bringInSession.epoch }, session);
+            await repositoryReads.refreshAfterMutation(projectRuntime, projectRuntime.getSnapshot(), bringInSession.project.path);
+            navigateToView("conflicts");
+          }}
+          onSaveVersion={() => {
+            finishSessionOperation(bringInSession.id);
+            setBringInDialog(null);
+            setSaveAfterSyncSessionId(bringInSession.id);
+          }}
+          onOpenConflicts={() => {
+            finishSessionOperation(bringInSession.id);
+            setBringInDialog(null);
+            openConflicts();
+          }}
+          onRevealFile={(path) => { void changesController.revealFile(bringInSession.project.path, bringInSession.epoch, path).catch(() => undefined); }}
+        />
+      )}
+
       {getTeamDialogSession && (
         <GetTeamChangesDialog
           isOpen
           controller={syncController}
+          overlapPort={bringInPort}
+          onPaused={async (session) => {
+            await conflictsController.acceptSession({ projectId: getTeamDialogSession.id, sessionEpoch: getTeamDialogSession.epoch }, session);
+            await repositoryReads.refreshAfterMutation(projectRuntime, projectRuntime.getSnapshot(), getTeamDialogSession.project.path);
+            navigateToView("conflicts");
+          }}
           projectPath={getTeamDialogSession.project.path}
           sessionEpoch={getTeamDialogSession.epoch}
           intent={getTeamIntent}
@@ -3421,6 +3570,11 @@ export function App(): React.JSX.Element {
               .revealFile(getTeamDialogSession.project.path, getTeamDialogSession.epoch, filePath)
               .catch(() => undefined);
           }}
+          onOpenConflicts={getTeamDialogSession.id === activeSession?.id ? () => {
+            finishSessionOperation(getTeamDialogSession.id);
+            setGetTeamDialogSessionId(null);
+            openConflicts();
+          } : undefined}
           onPublishAfter={async () => {
             const query = {
               projectId: getTeamDialogSession.project.path,
@@ -3577,7 +3731,12 @@ export function App(): React.JSX.Element {
           projectAvatarStyle,
           setProjectAvatarStyle,
           section: settingsSection,
-          setSection: setSettingsSection,
+          // Leaving a section drops the What's new landing, so coming back to
+          // Updates opens at its top.
+          setSection: (section: SettingsSection) => {
+            setSettingsRevealWhatsNew(false);
+            setSettingsSection(section);
+          },
           gitTooling,
           ghTooling,
           githubAuth, gitlabAuth, glabTooling,
@@ -3595,6 +3754,7 @@ export function App(): React.JSX.Element {
           setAutomaticAppUpdates,
           appUpdates,
           appUpdatesController,
+          revealWhatsNew: settingsRevealWhatsNew,
           confirmDiscard,
           setConfirmDiscard,
           notificationsEnabled,
@@ -3620,8 +3780,11 @@ export function App(): React.JSX.Element {
           lineEndings,
         }}
         about={{ isOpen: isAboutOpen, setOpen: setIsAboutOpen }}
-        changelog={{ isOpen: isChangelogOpen, setOpen: setIsChangelogOpen }}
-        appUpdate={{ isOpen: isAppUpdateOpen, setOpen: setIsAppUpdateOpen }}
+        appUpdate={{
+          isOpen: isAppUpdateOpen,
+          setOpen: setIsAppUpdateOpen,
+          openUpdates: openAppUpdates,
+        }}
         shortcuts={{ isOpen: isShortcutsOpen, setOpen: setIsShortcutsOpen }}
         closeConfirmation={{
           isOpen: isCloseConfirmOpen,

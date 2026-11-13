@@ -68,6 +68,7 @@ fn rust_module_boundaries_keep_composition_and_domains_separate() {
         "application",
         "app_updates",
         "changes",
+        "conflicts",
         "credentials",
         "desktop",
         "diagnostics",
@@ -123,6 +124,7 @@ fn rust_module_boundaries_keep_composition_and_domains_separate() {
         ("save_version", "save_version.rs"),
         ("publish", "publish.rs"),
         ("recovery", "recovery/mod.rs"),
+        ("conflicts", "conflicts/mod.rs"),
     ] {
         let mut imports = Vec::new();
         for file in module_files(&source_dir, entry) {

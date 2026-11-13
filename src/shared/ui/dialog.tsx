@@ -91,14 +91,16 @@ export function Dialog({
         aria-describedby={descriptionId}
         tabIndex={-1}
       >
-        <header className="app-dialog__head">
+        {/* A modal's heading is local to its named dialog, not a second
+            application-wide banner when the overlay sits outside main. */}
+        <div className="app-dialog__head">
           <span className={`app-dialog__glyph app-dialog__glyph--${tone}`} aria-hidden="true">{icon}</span>
           <div className="app-dialog__titles">
             <h2 id={titleId} ref={titleRef} tabIndex={titleRef ? -1 : undefined}>{title}</h2>
             {subtitle && <p className="app-dialog__subtitle">{subtitle}</p>}
           </div>
           {canClose && <DialogCloseButton label={closeLabel} onClick={() => onClose?.()} />}
-        </header>
+        </div>
         {children}
       </div>
     </div>

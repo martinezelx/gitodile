@@ -5,16 +5,17 @@
 //! shared by the explicit team check and Publish; it never chooses an inbound
 //! target for a branch without an upstream.
 //!
-//! [`get_team_changes`] is a submodule rather than more of this file. It is the
-//! one history-changing workflow in the domain and its safety checks are
+//! [`integrate`] is a submodule rather than more of this file. It holds the
+//! history-changing workflows of the domain (Get project changes and Bring in
+//! changes, one analysis and one execution) and its safety checks are
 //! helpers no other part of sync should be able to call. The read model here
 //! reaches it through one door, [`forecast_incoming`], so every status read of
 //! a branch with versions waiting can say what getting them would do; splitting
 //! it keeps everything else private and leaves this file as the read model.
 
-mod get_team_changes;
+mod integrate;
 
-pub(crate) use get_team_changes::*;
+pub(crate) use integrate::*;
 
 use crate::application;
 use crate::diagnostics;
@@ -436,11 +437,12 @@ pub(crate) fn parse_project_remotes(output: &str) -> Vec<ProjectRemote> {
 /// rather than guessed from the remote list, which would be wrong the moment a
 /// project has two.
 fn current_upstream_remote(path: &str) -> Option<String> {
-    let head = run_git(path, &["symbolic-ref", "--quiet", "--short", "HEAD"]).ok()?;
+    let head = run_git(path, &["symbolic-ref", "--quiet", "HEAD"]).ok()?;
     if !head.status.success() {
         return None;
     }
-    let branch = git_stdout(&head);
+    let reference = git_stdout(&head);
+    let branch = reference.strip_prefix("refs/heads/")?;
     if branch.is_empty() {
         return None;
     }

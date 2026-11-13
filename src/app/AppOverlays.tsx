@@ -42,11 +42,10 @@ import {
 import { useModalFocus } from "../shared/ui/modalFocus";
 import { PRODUCT_NAME_PARTS, modifierKeyLabels } from "./branding";
 import { APP_CHANGELOG, CURRENT_APP_RELEASE } from "./appRelease";
-import { ChangelogDialog, type AppUpdateStatusLine } from "./ChangelogDialog";
 import { IssueReportDialog } from "./IssueReportDialog";
 import type { IssueReportState } from "./useIssueReport";
 import type { AppUpdatesController, AppUpdatesSnapshot, StartupUpdateConfirmation, UpdateState } from "../features/app-updates";
-import { AppUpdateDialog, AppUpdateSettingsControl, appUpdateTranslations, useStartupUpdateReceipt } from "../features/app-updates";
+import { AppUpdateRestartDialog, AppUpdateSettingsControl, appUpdateTranslations, updateNeedsAttention, useStartupUpdateReceipt } from "../features/app-updates";
 import { describePlatform, formatDiagnostics, readWebviewVersion, useSystemInfo } from "./systemInfo";
 import { describeStack, describeStackHost } from "./stack";
 import { OperatingSystemMark, StackMark } from "./vendorMarks";
@@ -59,6 +58,9 @@ const NO_STARTUP_CONFIRMATION: StartupUpdateConfirmation = { kind: "none" };
 function toolAvailable(tooling: GitToolingState): boolean | null {
   return tooling.diagnostics === null ? null : tooling.diagnostics.state === "available";
 }
+
+/** What the release model can say about updates in one short line. */
+export type AppUpdateStatusLine = { tone: "ok" | "attention" | "busy" | "muted"; label: string };
 
 /** The one line About can honestly say about updates: what the release model
  * knows and a person can act on. Every state names itself, so the line is never
@@ -157,6 +159,8 @@ export type AppOverlaysProps = {
     setAutomaticAppUpdates?: BooleanSetter;
     appUpdates?: AppUpdatesSnapshot;
     appUpdatesController?: AppUpdatesController;
+    /** Opened from a "What's new": Updates lands on that group. */
+    revealWhatsNew?: boolean;
   };
   /** The per-project panel. `project` is null exactly when no project is open,
    * which is also when nothing can open this dialog: every read behind it is
@@ -182,8 +186,13 @@ export type AppOverlaysProps = {
     onChooseIcon?: (choice: ProjectIconChoice) => void;
   };
   about: { isOpen: boolean; setOpen: BooleanSetter };
-  changelog: { isOpen: boolean; setOpen: BooleanSetter };
-  appUpdate?: { isOpen: boolean; setOpen: BooleanSetter };
+  /** The restart dialog's flag, and the shell's one way into Settings ›
+   * Updates, which every other update surface leads to. */
+  appUpdate?: {
+    isOpen: boolean;
+    setOpen: BooleanSetter;
+    openUpdates: (options?: { check?: boolean; whatsNew?: boolean }) => void;
+  };
   shortcuts: { isOpen: boolean; setOpen: BooleanSetter };
   closeConfirmation: {
     isOpen: boolean;
@@ -210,7 +219,6 @@ export function AppOverlays({
   settings,
   projectSettings,
   about,
-  changelog,
   appUpdate,
   shortcuts,
   closeConfirmation,
@@ -221,19 +229,21 @@ export function AppOverlays({
   const systemInfo = useSystemInfo();
   const [didCopyDiagnostics, setDidCopyDiagnostics] = useState(false);
   /* The rail badges Updates only while there is something the reader can act
-     on — a release to download or one ready to install — and names it. */
+     on — a release to download, install or retry — and names it. */
   const appUpdateState = settings.appUpdates?.state;
   const updateAttention =
-    appUpdateState?.kind === "available" || appUpdateState?.kind === "ready"
+    appUpdateState && updateNeedsAttention(appUpdateState) && "candidate" in appUpdateState
       ? appUpdateTranslations(language).available(appUpdateState.candidate.version)
       : null;
   const aboutUpdate = aboutUpdateStatus(appUpdateState, appUpdateTranslations(language), t.aboutUpToDate, t.aboutUpdateUnavailable);
   /* The first launch after an install reports how it went: a toast leading to
-     What's new when it worked, the update dialog when it did not. Raised here
-     because this is inside the toast provider and owns both destinations. */
-  const setChangelogOpen = changelog.setOpen;
+     What's new when it worked, the restart dialog when it did not. Raised here
+     because this is inside the toast provider and owns both destinations. The
+     shell rebuilds `openUpdates` every render, so it is read through a ref. */
+  const openUpdatesRef = useRef(appUpdate?.openUpdates);
+  openUpdatesRef.current = appUpdate?.openUpdates;
   const setAppUpdateOpen = appUpdate?.setOpen;
-  const openWhatsNew = useCallback(() => setChangelogOpen(true), [setChangelogOpen]);
+  const openWhatsNew = useCallback(() => openUpdatesRef.current?.({ whatsNew: true }), []);
   const openAppUpdate = useCallback(() => setAppUpdateOpen?.(true), [setAppUpdateOpen]);
   useStartupUpdateReceipt({
     confirmation: settings.appUpdates?.startupConfirmation ?? NO_STARTUP_CONFIRMATION,
@@ -482,7 +492,7 @@ export function AppOverlays({
                   name={`${PRODUCT_NAME_PARTS.lead}${PRODUCT_NAME_PARTS.tail}`}
                   enabled={settings.automaticAppUpdates ?? false}
                   setEnabled={settings.setAutomaticAppUpdates}
-                  onOpenDialog={appUpdate ? () => appUpdate.setOpen(true) : undefined}
+                  revealWhatsNew={settings.revealWhatsNew ?? false}
                   releases={APP_CHANGELOG}
                 />
               ) : null}
@@ -592,7 +602,7 @@ export function AppOverlays({
               <button
                 className="about-dialog__update-link"
                 type="button"
-                onClick={() => { about.setOpen(false); changelog.setOpen(true); }}
+                onClick={() => { about.setOpen(false); appUpdate?.openUpdates({ whatsNew: true }); }}
               >
                 {t.changelogTitle}
               </button>
@@ -700,22 +710,15 @@ export function AppOverlays({
         </div>
       )}
 
-      <ChangelogDialog
-        isOpen={changelog.isOpen}
-        setOpen={changelog.setOpen}
-        onCheckForUpdates={appUpdate && settings.appUpdatesController ? () => {
-          changelog.setOpen(false);
-          appUpdate.setOpen(true);
-          void settings.appUpdatesController?.check();
-        } : undefined}
-        onOpenUpdates={appUpdate && settings.appUpdatesController ? () => {
-          changelog.setOpen(false);
-          appUpdate.setOpen(true);
-        } : undefined}
-        updateStatus={aboutUpdate}
-      />
       {appUpdate && settings.appUpdates && settings.appUpdatesController && (
-        <AppUpdateDialog isOpen={appUpdate.isOpen} setOpen={appUpdate.setOpen} snapshot={settings.appUpdates} controller={settings.appUpdatesController} installed={CURRENT_APP_RELEASE} />
+        <AppUpdateRestartDialog
+          isOpen={appUpdate.isOpen}
+          setOpen={appUpdate.setOpen}
+          confirmation={settings.appUpdates.startupConfirmation}
+          controller={settings.appUpdatesController}
+          installed={CURRENT_APP_RELEASE}
+          onCheckAgain={() => appUpdate.openUpdates({ check: true })}
+        />
       )}
 
       {shortcuts.isOpen && (

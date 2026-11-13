@@ -26,6 +26,9 @@
   display: grid; align-content: start; gap: var(--space-3); min-width: 0; padding: var(--space-4);
   border: 1px solid var(--border-subtle); border-radius: var(--radius-surface); background: var(--surface-panel);
 }
+/* A specimen's content never sets the card's width: a long code line in the
+   Markdown sample scrolls inside its block, as it does in Changes. */
+.gallery__specimen > * { min-width: 0; }
 .gallery__specimen > h3 { margin: 0; color: var(--text-secondary-color); font-size: var(--text-caption); font-weight: var(--weight-strong); letter-spacing: var(--tracking-caps); text-transform: uppercase; }
 .gallery__row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
 .gallery__caption { color: var(--text-secondary-color); font-size: var(--text-caption); }
@@ -49,3 +52,6 @@
    the strip itself sits beside the 64px rail inside the sheet's 16px frame. */
 .gallery__window { container-type: inline-size; }
 .gallery__statusbar { --sheet-frame: 0px; display: grid; margin: var(--space-2) var(--space-4) 0 calc(64px + var(--space-4)); border: 1px solid var(--border-subtle); border-radius: var(--radius-surface); background: var(--surface-panel); }
+
+/* A bounded viewport exercises the real virtualized text diff. */
+.gallery__diff { display: flex; flex-direction: column; height: 360px; min-width: 0; background: var(--surface-code); }

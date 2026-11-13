@@ -15,7 +15,7 @@ completed:
 
 # Origin
 
-Split out of epic [037](../0.5.0/037-guided-conflict-resolution.md) on
+Split out of epic [037](../done/0.5.0/037-guided-conflict-resolution.md) on
 2026-10-27, when `1.0.0` was scoped to GitHub Desktop-level conflict
 resolution. This epic keeps the original ambition: interaction comparable to
 the three-way merge tools in IntelliJ IDEA and VS Code, native to GitOdile. Its

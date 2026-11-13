@@ -260,7 +260,7 @@ where
     run_with_env_and_input(cwd, args, &[], Some(input), policy, cancellation)
 }
 
-fn run_with_env_and_input<I, S>(
+pub(crate) fn run_with_env_and_input<I, S>(
     cwd: Option<&Path>,
     args: I,
     envs: &[(&str, &str)],
@@ -277,7 +277,35 @@ where
         process.arg("-C").arg(cwd);
     }
     process.args(args).envs(envs.iter().copied());
-    run_bounded(process, input, policy, cancellation).map_err(|failure| match failure {
+    run_bounded(process, input, None, policy, cancellation).map_err(git_failure)
+}
+
+/// Runs Git with its standard output written straight into `stdout` rather
+/// than held in memory, for content whose size is not ours to bound: a side
+/// of an overlapping file comes through Git's filters, and an LFS smudge can
+/// turn a small pointer into a large file. The policy's timeout and
+/// cancellation still apply; standard error stays capped.
+pub(crate) fn run_to_file<I, S>(
+    cwd: Option<&Path>,
+    args: I,
+    stdout: std::fs::File,
+    policy: ExecutionPolicy,
+    cancellation: Option<&CancellationToken>,
+) -> Result<BoundedOutput, AppError>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<OsStr>,
+{
+    let mut process = command();
+    if let Some(cwd) = cwd {
+        process.arg("-C").arg(cwd);
+    }
+    process.args(args);
+    run_bounded(process, None, Some(stdout), policy, cancellation).map_err(git_failure)
+}
+
+fn git_failure(failure: ProgramFailure) -> AppError {
+    match failure {
         ProgramFailure::Start(error) => start_error(error),
         ProgramFailure::Output => {
             AppError::new(AppErrorCode::GitUnusable, "Git's output couldn't be read.")
@@ -302,7 +330,7 @@ where
             AppErrorCode::GitCommandFailed,
             "Git couldn't finish the operation.",
         ),
-    })
+    }
 }
 
 /// Why a bounded program did not produce an exit status. Each caller names
@@ -336,6 +364,7 @@ pub(crate) fn run_program(
     run_bounded(
         process,
         None,
+        None,
         ExecutionPolicy {
             prompt: PromptPolicy::Disabled,
             ..policy
@@ -347,6 +376,7 @@ pub(crate) fn run_program(
 fn run_bounded(
     mut process: Command,
     input: Option<&[u8]>,
+    stdout_file: Option<std::fs::File>,
     policy: ExecutionPolicy,
     cancellation: Option<&CancellationToken>,
 ) -> Result<BoundedOutput, ProgramFailure> {
@@ -366,20 +396,24 @@ fn run_bounded(
                 PromptPolicy::PreserveGitBehavior => Stdio::inherit(),
             }
         })
-        .stdout(Stdio::piped())
+        .stdout(stdout_file.map_or_else(Stdio::piped, Stdio::from))
         .stderr(Stdio::piped());
 
     let mut child = process.spawn().map_err(ProgramFailure::Start)?;
-    let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+    let Some(stderr) = child.stderr.take() else {
         terminate(&mut child);
         return Err(ProgramFailure::Output);
     };
     // Drain output before writing even a bounded input batch. Some machine
     // protocols answer one record at a time, so filling stdout while the
     // parent is still filling stdin must not deadlock on a small OS pipe.
+    // Output sent to a file has no pipe to drain.
     let readers = [
-        start_reader(stdout, policy.stdout_cap),
-        start_reader(stderr, policy.stderr_cap),
+        child
+            .stdout
+            .take()
+            .map(|stdout| start_reader(stdout, policy.stdout_cap)),
+        Some(start_reader(stderr, policy.stderr_cap)),
     ];
     if let Some(input) = input {
         let Some(mut stdin) = child.stdin.take() else {
@@ -409,8 +443,12 @@ fn run_bounded(
     };
 
     let [stdout_reader, stderr_reader] = readers;
-    let (stdout, stdout_truncated) = stdout_reader.join().unwrap_or_default();
-    let (stderr, stderr_truncated) = stderr_reader.join().unwrap_or_default();
+    let (stdout, stdout_truncated) = stdout_reader
+        .and_then(|reader| reader.join().ok())
+        .unwrap_or_default();
+    let (stderr, stderr_truncated) = stderr_reader
+        .and_then(|reader| reader.join().ok())
+        .unwrap_or_default();
     Ok(BoundedOutput {
         status,
         stdout,
@@ -420,14 +458,17 @@ fn run_bounded(
     })
 }
 
+/// A run's stdout and stderr readers; stdout has none when it goes to a file.
+type OutputReaders = [Option<thread::JoinHandle<(Vec<u8>, bool)>>; 2];
+
 /// Ends a run that will not report an exit status, and its output readers.
 fn stop(
     child: &mut Child,
-    readers: [thread::JoinHandle<(Vec<u8>, bool)>; 2],
+    readers: OutputReaders,
     failure: ProgramFailure,
 ) -> Result<BoundedOutput, ProgramFailure> {
     terminate(child);
-    for reader in readers {
+    for reader in readers.into_iter().flatten() {
         let _ = reader.join();
     }
     Err(failure)

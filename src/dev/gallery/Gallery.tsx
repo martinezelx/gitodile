@@ -11,8 +11,38 @@ import {
 import { ToggleSwitch } from "../../shared/ui/toggleSwitch";
 import { StatusBarSpecimen } from "./StatusBarSpecimen";
 
+import { DiffResultView } from "../../features/changes/DiffResultView";
+import type { FileDiff } from "../../features/changes/domain";
+import { en } from "../../i18n/en";
+
+const DIFF_SPECIMEN: FileDiff = {
+  kind: "text", path: "example.ts", originalPath: null, change: "changed", truncated: false,
+  hunks: [{ header: "@@ -1,5 +1,6 @@", oldStart: 1, oldLines: 5, newStart: 1, newLines: 6, lines: [
+    { kind: "context", content: "export function saveVersion() {", oldLineNumber: 1, newLineNumber: 1 },
+    { kind: "deletion", content: '\tconst offset = -1; // Keep a recovery point before replacing unsaved work, including when this explanation wraps across several display lines.  ', oldLineNumber: 2, newLineNumber: null },
+    { kind: "deletion", content: "", oldLineNumber: 3, newLineNumber: null },
+    { kind: "addition", content: "  const offset = +1;", oldLineNumber: null, newLineNumber: 2 },
+    { kind: "addition", content: "", oldLineNumber: null, newLineNumber: 3 },
+    { kind: "addition", content: '  const message = "Save the versions on this branch, keeping unsaved work available and asking before publishing anything to the shared project.";', oldLineNumber: null, newLineNumber: 4 },
+    { kind: "context", content: "  return offset;", oldLineNumber: 4, newLineNumber: 5 },
+    { kind: "deletion", content: "}", oldLineNumber: 5, newLineNumber: null },
+    { kind: "addition", content: "};", oldLineNumber: null, newLineNumber: 6 },
+  ] }],
+};
+
+function DiffMarks(): React.JSX.Element {
+  const [target, setTarget] = useState({ index: 0, token: 0 });
+  return <Section id="diffs" title="Diff marks" lead="The real Changes and History renderer beside its Markdown equivalent.">
+    <div className="gallery__row"><button className="secondary-button" type="button" onClick={() => setTarget(previous => ({ index: 0, token: previous.token + 1 }))}>Jump to change</button></div>
+    <Specimen title="Unified text"><div className="gallery__diff"><DiffResultView diff={DIFF_SPECIMEN} hunkTarget={target} viewMode="unified" t={en} /></div></Specimen>
+    <Specimen title="Split text"><div className="gallery__diff"><DiffResultView diff={DIFF_SPECIMEN} hunkTarget={target} viewMode="split" t={en} /></div></Specimen>
+    <Specimen title="Rendered Markdown"><div className="markdown-preview__document"><p className="markdown-preview__removed">The old explanation.</p><p className="markdown-preview__added">The new explanation, joined to the old one by the same capsule and tint.</p></div></Specimen>
+  </Section>;
+}
+
 const SECTIONS = [
   ["tokens", "Tokens"],
+  ["diffs", "Diff marks"],
   ["controls", "Controls"],
   ["strip", "Status bar"],
   ["lists", "Rows and menus"],
@@ -294,6 +324,10 @@ function Dialogs(): React.JSX.Element {
             { icon: <GitBranch />, text: "Its versions stay in the project's history." },
             { icon: <ShieldCheck />, text: "A copy is kept, so you can undo it.", safe: true },
           ]} />
+          <details className="app-dialog__details">
+            <summary>Technical details</summary>
+            <pre>Reference: refs/heads/feature/login</pre>
+          </details>
           <div className="dialog-actions">
             <button type="button" className="secondary-button">Cancel</button>
             <button type="button" className="danger-button"><Trash2 aria-hidden="true" />Delete branch</button>
@@ -354,6 +388,7 @@ export function Gallery(): React.JSX.Element {
             {THEME_IDS.map((id) => <option key={id} value={id}>{id}</option>)}
           </select>
         </header>
+        <DiffMarks />
         <Tokens />
         <Controls />
         <Strip />

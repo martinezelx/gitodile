@@ -1,4 +1,22 @@
 export interface SyncTranslations {
+  bringInTitle: string;
+  bringInDirection: (source: string, branch: string) => string;
+  bringInSuccess: string;
+  bringInContained: string;
+  bringInMerge: (count: number) => string;
+  bringInReading: string;
+  bringInOverlaps: string;
+  bringInEmptyMerge: string;
+  bringInFastForward: (count: number) => string;
+  bringInSafety: string;
+  bringInBlockedGuidance: string;
+  bringInGuidance: { history: string; setup: string; locked: string; choose: string; unborn: string };
+  bringInSaveFirst: string;
+  bringInStale: string;
+  bringInChecking: string;
+  bringInTruncated: string;
+  bringInPick: string;
+  bringInResolve: string;
   syncTitle: string;
   syncNotCheckedTitle: string;
   syncNotCheckedMessage: string;
@@ -89,6 +107,7 @@ export interface SyncTranslations {
   getTeamOperationTitle: string;
   getTeamOperationBody: string;
   getTeamShowInFolder: string;
+  getTeamReviewConflicts: string;
   getTeamSaveVersion: string;
   getTeamBlockedTitle: string;
   getTeamSuccessToast: (count: number) => string;

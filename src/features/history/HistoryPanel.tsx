@@ -10,7 +10,7 @@ import { useLanguage, type Translations } from "../../i18n";
 import { getFileTypeIcon } from "../../shared/file-icons";
 import { formatDate, formatNumber, type LocaleFormats } from "../../shared/i18n";
 import { AutomaticUpdatesNotice, AuthorAvatar, autoHideScrollbarProps, ContextMenuSurface, contextMenuAnchorFrom, DateField, FilterCapsule, FilterCapsules, FilterChips, FilterGroup, FilterPanel, FilterSwitch, LoadingBar, LoadingPlaceholder, LocalOnlyIcon, onDocumentPress, SearchBox, TextPlaceholder, StateGlyph, StateGlyphs, TimelineChip, toDate, useRowArrival, type StateGlyphTone, type ContextMenuAnchor, type FilterChip } from "../../shared/ui";
-import { ChangesContextMenu, DiffFind, DiffResultView, DiffStepNav, DiffViewSelector, FileTreeFolderButton, FileViewToggle, flatFileRows, flattenFileTree, isGroupedFileRow, PictureDiffControls, treeIndentStyle, useCollapsedFolders, useFileListView, usePictureDiff, type FileTreeRow, type ChangesContextMenuState, type DiffViewMode, type FileDiff, type ImagePreviewLoader } from "../changes";
+import { ChangesContextMenu, DiffFind, DiffResultView, DiffStepNav, DiffViewSelector, FileTreeFolderButton, FileViewToggle, flatFileRows, flattenFileTree, isGroupedFileRow, MarkdownPreviewView, PictureDiffControls, treeIndentStyle, useCollapsedFolders, useFileListView, useMarkdownDiff, usePictureDiff, type FileTreeRow, type ChangesContextMenuState, type DiffViewMode, type FileDiff, type ImagePreviewLoader, type MarkdownPreview } from "../changes";
 import { CHANGE_CATEGORY_ICONS, splitPath, type ChangeCategory } from "../status";
 import { MAX_HISTORY_ROWS, type HistoryController } from "./controller";
 import type { HistoryDecoration, HistoryFileChange, HistoryState, PublicationState, SavedVersionDetail, SavedVersionSummary } from "./domain";
@@ -274,8 +274,14 @@ function TimelinePlaceholder({ label }: { label: string }): React.JSX.Element {
   );
 }
 
-/** A version's detail while it is read: the line under the title, then its
- * changed files. The title itself is real whenever the version is known. */
+/** The version strip before any version is known: its subject's place, at
+ * the strip's own height and type size, so the subject lands where it waited. */
+function StripPlaceholder(): React.JSX.Element {
+  return <header className="history-detail__strip" aria-hidden="true"><h2 className="history-detail__strip-title"><TextPlaceholder width="52%" /></h2></header>;
+}
+
+/** A version's detail while it is read: the line under the strip, then its
+ * changed files. The strip itself is real whenever the version is known. */
 function DetailPlaceholder({ label }: { label?: string }): React.JSX.Element {
   return (
     <LoadingPlaceholder label={label} className="history-detail__placeholder">
@@ -787,8 +793,10 @@ function ChangedFiles({ rows, inFolders, selectedPath, formats, onSelect, onTogg
 const NO_COLLAPSED_FOLDERS: ReadonlySet<string> = new Set();
 const filePath = (file: HistoryFileChange): string => file.path;
 
-function HistoryDetailStrip({ detail, formats, currentBranch, selfEmail, actions, detailsOpen, onToggleDetails }: {
-  detail: SavedVersionDetail;
+function HistoryDetailStrip({ version, formats, currentBranch, selfEmail, actions, detailsOpen, onToggleDetails }: {
+  /** The timeline's summary is enough: the strip reads nothing the detail adds,
+   * so it is drawn whole while the detail is still being read. */
+  version: SavedVersionSummary;
   formats: LocaleFormats;
   /** `HEAD`'s own branch, so a branch action can say where the project already is. */
   currentBranch: string | null;
@@ -799,7 +807,6 @@ function HistoryDetailStrip({ detail, formats, currentBranch, selfEmail, actions
   onToggleDetails: () => void;
 }): React.JSX.Element {
   const { t } = useLanguage();
-  const version = detail.version;
   const title = versionTitle(version, t);
   const isSelf = isSelfAuthor(version.author, selfEmail);
   // When, as the timeline row says it: relative, the exact date on hover.
@@ -1511,8 +1518,8 @@ function HistoryFilterPanel({ filters, scope, branches, authorSuggestions, pathS
   </FilterPanel>;
 }
 
-function HistoryDetail({ state, formats, selfEmail, actions, onSelectFile, onRetryDetail, onRetryDiff, onBack, readImagePreview, sourceKey }: {
-  state: HistoryState; formats: LocaleFormats; selfEmail: string | null; actions: HistoryBranchActions; onSelectFile: (path: string) => void; onRetryDetail: () => void; onRetryDiff: () => void; onBack: () => void; readImagePreview: ImagePreviewLoader; sourceKey: string;
+function HistoryDetail({ state, formats, selfEmail, actions, onSelectFile, onRetryDetail, onRetryDiff, onBack, readImagePreview, readFileMarkdown, sourceKey }: {
+  state: HistoryState; formats: LocaleFormats; selfEmail: string | null; actions: HistoryBranchActions; onSelectFile: (path: string) => void; onRetryDetail: () => void; onRetryDiff: () => void; onBack: () => void; readImagePreview: ImagePreviewLoader; readFileMarkdown: (filePath: string) => Promise<MarkdownPreview>; sourceKey: string;
 }): React.JSX.Element {
   const { t } = useLanguage();
   const [detailsOpen, setDetailsOpen] = useState(false);
@@ -1529,6 +1536,8 @@ function HistoryDetail({ state, formats, selfEmail, actions, onSelectFile, onRet
   useEffect(() => { setFileSearch(""); setDiffSearch(""); setIsFindOpen(false); setDetailsOpen(false); setContextMenu(null); }, [state.selectedCommit]);
   useEffect(() => setHunkTarget({ index: 0, token: 0 }), [state.selectedFilePath]);
   const picture = usePictureDiff(state.fileDiff.diff, sourceKey, readImagePreview);
+  const markdown = useMarkdownDiff(state.fileDiff.diff, sourceKey, readFileMarkdown, t);
+  const effectiveViewMode = markdown.textView ?? viewMode;
   // The reading-mode picker lays out branches; a drawing has none.
   const showsReadingMode = picture === null || (picture.isSvg && !picture.showsDrawing);
   // Hooks stay above the early returns below: a version is first drawn loading,
@@ -1542,7 +1551,10 @@ function HistoryDetail({ state, formats, selfEmail, actions, onSelectFile, onRet
     if (state.selectedFilePath) revealFile(state.selectedFilePath);
   }, [revealFile, state.selectedFilePath]);
 
-  if (state.detail.isLoading) return <section className="history-detail history-detail--loading" aria-labelledby={selectedVersion ? "history-detail-title" : undefined} aria-busy="true">{selectedVersion && <div className="history-detail__loading-title"><h2 id="history-detail-title">{versionTitle(selectedVersion, t)}</h2></div>}<DetailPlaceholder label={t.historyDetailLoading} /></section>;
+  const strip = (version: SavedVersionSummary): React.JSX.Element => <HistoryDetailStrip version={version} formats={formats} currentBranch={state.snapshot?.branch ?? null} selfEmail={selfEmail} actions={actions} detailsOpen={detailsOpen} onToggleDetails={() => setDetailsOpen((open) => !open)} />;
+  // The strip the loaded detail opens with, already at its size, so the read
+  // only fills in what is under it.
+  if (state.detail.isLoading) return <section className="history-detail history-detail--loading" aria-labelledby={selectedVersion ? "history-detail-title" : undefined} aria-busy="true"><div className="history-detail__card">{selectedVersion ? strip(selectedVersion) : <StripPlaceholder />}<DetailPlaceholder label={t.historyDetailLoading} /></div></section>;
   if (state.detail.error) return <section className="history-detail history-detail--state" role="alert"><CircleAlert /><h2>{t.historyDetailError}</h2><button className="secondary-button" type="button" onClick={onRetryDetail}>{t.historyRetry}</button></section>;
   const detail = state.detail.detail;
   if (!detail) return <section className="history-detail history-detail--state"><p>{t.historySelectFilePrompt}</p></section>;
@@ -1622,15 +1634,7 @@ function HistoryDetail({ state, formats, selfEmail, actions, onSelectFile, onRet
         and the diff that is always the working surface — the way Changes reads.
         The back button stays outside the card; it leaves rather than acts. */}
     <div className="history-detail__card">
-      <HistoryDetailStrip
-        detail={detail}
-        formats={formats}
-        currentBranch={state.snapshot?.branch ?? null}
-        selfEmail={selfEmail}
-        actions={actions}
-        detailsOpen={detailsOpen}
-        onToggleDetails={() => setDetailsOpen((open) => !open)}
-      />
+      {strip(detail.version)}
       {detailsOpen && <HistoryDetails detail={detail} formats={formats} comparison={comparison} fileCount={fileCount} />}
       <div className="history-workspace history-workspace--diff" role="region" aria-label={t.historyFilesAriaLabel}>
         {/* One toolbar across the whole card, the file search having stepped
@@ -1650,16 +1654,17 @@ function HistoryDetail({ state, formats, selfEmail, actions, onSelectFile, onRet
               at the end of its strip. */}
           <div className="history-diff-toolbar__controls">
             {visibleFiles.length > 0 && <DiffStepNav kind="file" position={fileIndex + 1} total={visibleFiles.length} onPrevious={() => selectFileAt(fileIndex - 1)} onNext={() => selectFileAt(fileIndex + 1)} t={t} />}
-            {hunkCount > 0 && viewMode !== "accessible" && <DiffStepNav kind="hunk" position={hunkTarget.index + 1} total={hunkCount} onPrevious={() => goToHunk(hunkTarget.index - 1)} onNext={() => goToHunk(hunkTarget.index + 1)} t={t} />}
-            {findControl}
+            {hunkCount > 0 && effectiveViewMode !== "accessible" && !markdown.shows && <DiffStepNav kind="hunk" position={hunkTarget.index + 1} total={hunkCount} onPrevious={() => goToHunk(hunkTarget.index - 1)} onNext={() => goToHunk(hunkTarget.index + 1)} t={t} />}
+            {markdown.shows && markdown.count > 0 && <DiffStepNav kind="hunk" position={markdown.index + 1} total={markdown.count} allowUnselectedNext onPrevious={() => markdown.stepTo(markdown.index - 1)} onNext={() => markdown.stepTo(markdown.index + 1)} t={t} />}
+            {!markdown.shows && findControl}
             {picture?.hasControls && <PictureDiffControls picture={picture} t={t} />}
-            {showsReadingMode && <DiffViewSelector value={viewMode} onChange={setViewMode} t={t} />}
+            {showsReadingMode && <DiffViewSelector value={effectiveViewMode} onChange={(mode) => { if (markdown.available) markdown.chooseTextView(mode); else setViewMode(mode); }} markdown={markdown.available ? { selected: markdown.shows, onSelect: markdown.chooseMarkdown } : undefined} t={t} />}
           </div>
         </header>
         <div className="history-diff-grid">
           <aside className="history-files-pane">{fileSearchControl}{fileList}</aside>
           <div className="history-diff-pane">
-            <div className="history-detail__diff" onContextMenu={openCodeContextMenu}>{state.fileDiff.isLoading && <div className="history-diff-state" aria-busy="true"><LoadingBar label={t.historyDiffLoading} /><p>{t.historyDiffLoading}</p></div>}{state.fileDiff.error !== null && <div className="history-diff-state" role="alert"><p>{t.historyDiffError}</p><button className="secondary-button" type="button" onClick={onRetryDiff}>{t.historyRetry}</button></div>}{state.fileDiff.diff && <DiffResultView diff={state.fileDiff.diff} viewMode={viewMode} hunkTarget={hunkTarget} searchQuery={diffSearch} picture={picture} t={t} />}{!state.fileDiff.isLoading && !state.fileDiff.error && !state.fileDiff.diff && detail.files.length > 0 && <p className="history-diff-state">{t.historySelectFilePrompt}</p>}</div>
+            <div className="history-detail__diff" onContextMenu={openCodeContextMenu}>{state.fileDiff.isLoading && <div className="history-diff-state" aria-busy="true"><LoadingBar label={t.historyDiffLoading} /><p>{t.historyDiffLoading}</p></div>}{state.fileDiff.error !== null && <div className="history-diff-state" role="alert"><p>{t.historyDiffError}</p><button className="secondary-button" type="button" onClick={onRetryDiff}>{t.historyRetry}</button></div>}{markdown.failure && <p className="changes-diff__status" role="status">{markdown.failure} {t.changesMarkdownFallback}</p>}{state.fileDiff.diff && (markdown.shows ? <MarkdownPreviewView state={markdown.state} retry={markdown.retry} t={t} notice={t.historyMarkdownNotice} comparison={markdown.comparison} excerpt={markdown.excerpt} changeTarget={markdown.target} /> : <DiffResultView diff={state.fileDiff.diff} comparison={{ before: detail.comparisonIsEmptyTree ? t.changesDiffEmptyBase : detail.comparisonBase.slice(0, 8), after: detail.version.shortCommit }} viewMode={effectiveViewMode} hunkTarget={hunkTarget} searchQuery={diffSearch} picture={picture} t={t} />)}{!state.fileDiff.isLoading && !state.fileDiff.error && !state.fileDiff.diff && detail.files.length > 0 && <p className="history-diff-state">{t.historySelectFilePrompt}</p>}</div>
           </div>
         </div>
       </div>
@@ -1751,6 +1756,12 @@ export function HistoryPanel({ tabs, controller, query, state, watcherState, act
         : controller.readImagePreview(query, selectedCommit, filePath, originalPath),
     [controller, query, selectedCommit],
   );
+  const readFileMarkdown = useCallback(
+    (filePath: string) => selectedCommit === null
+      ? Promise.reject(new Error("no saved version is selected"))
+      : controller.readFileMarkdown(query, selectedCommit, filePath),
+    [controller, query, selectedCommit],
+  );
   const saveScrollOffset = useCallback((offset: number) => controller.setScrollOffset(query, offset), [controller, query]);
   const applyFilters = useCallback((filters: HistoryFilters) => { void controller.setFilters(query, filters); }, [controller, query]);
   const applyScope = useCallback((scope: HistoryScope) => { void controller.setScope(query, scope); }, [controller, query]);
@@ -1806,8 +1817,7 @@ export function HistoryPanel({ tabs, controller, query, state, watcherState, act
     timeline: <TimelinePlaceholder label={t.historyLoading} />,
     detail: (
       <section className="history-detail history-detail--loading">
-        <div className="history-detail__loading-title"><h2><TextPlaceholder width="52%" /></h2></div>
-        <DetailPlaceholder />
+        <div className="history-detail__card"><StripPlaceholder /><DetailPlaceholder /></div>
       </section>
     ),
   });
@@ -1858,6 +1868,6 @@ export function HistoryPanel({ tabs, controller, query, state, watcherState, act
     isBusy: state.isLoading,
     isNarrowDetail: showNarrowDetail,
     timeline: <HistoryTimeline key={showNarrowDetail ? "detail-open" : "timeline-open"} versions={visibleVersions} selectedCommit={state.selectedCommit} publishedTo={state.snapshot?.upstream ? `${state.snapshot.upstream.remote}/${state.snapshot.upstream.destinationBranch}` : null} remoteGone={upstreamGoneBranch !== null && (state.scope.kind === "branch" ? state.scope.name : state.snapshot?.branch) === upstreamGoneBranch} scrollOffset={state.scrollOffset} isLoading={state.isLoading} hasMore={state.snapshot?.hasMore ?? false} isLoadingMore={state.isLoadingMore} hasMoreError={state.moreError !== null} clientTruncated={state.clientTruncated} formats={formats} currentBranch={state.snapshot?.branch ?? null} selfEmail={selfEmail} search={search} filters={state.filters} scope={state.scope} authorSuggestions={authorSuggestions} pathSuggestions={pathSuggestions} canFilterPublication={canFilterPublication} actions={actions} onSearch={setSearch} onFilters={applyFilters} onScope={applyScope} onSelect={selectVersion} onLoadMore={loadMore} onScrollOffset={saveScrollOffset} onOpenDetail={openNarrowDetail} />,
-    detail: <HistoryDetail state={state} formats={formats} selfEmail={selfEmail} actions={actions} onSelectFile={selectFile} onRetryDetail={retryDetail} onRetryDiff={retryDiff} onBack={closeNarrowDetail} readImagePreview={readImagePreview} sourceKey={`${query.projectId}\0${query.sessionEpoch}\0${selectedCommit ?? ""}`} />,
+    detail: <HistoryDetail state={state} formats={formats} selfEmail={selfEmail} actions={actions} onSelectFile={selectFile} onRetryDetail={retryDetail} onRetryDiff={retryDiff} onBack={closeNarrowDetail} readImagePreview={readImagePreview} readFileMarkdown={readFileMarkdown} sourceKey={`${query.projectId}\0${query.sessionEpoch}\0${selectedCommit ?? ""}`} />,
   });
 }

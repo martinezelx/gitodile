@@ -122,6 +122,11 @@ describe("recording notifications", () => {
     expect(newer).toHaveLength(1);
     expect(unreadNotificationCount(newer)).toBe(1);
     expect(notificationAction(newer[0]!)).toBe("reviewAppUpdate");
+
+    // A finished download is new news about the same version: one entry, unread.
+    const ready = recordNotification(markNotificationsRead(newer), request({ kind: "appUpdateAvailable", version: "0.3.1", ready: true }, null));
+    expect(ready).toHaveLength(1);
+    expect(unreadNotificationCount(ready)).toBe(1);
   });
 
   it("does not collapse two publishes: they are two events", () => {

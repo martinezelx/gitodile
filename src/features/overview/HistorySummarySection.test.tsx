@@ -61,6 +61,7 @@ function port(readPage: HistoryPort["readPage"]): HistoryPort {
       countsAreMinimum: false,
     })),
     readFileDiff: vi.fn(),
+    readFileMarkdown: vi.fn(),
     readImagePreview: vi.fn(),
   };
 }

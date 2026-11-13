@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Bug, CircleFadingArrowUp, CloudDownload, Ellipsis, FolderOpen, FolderPlus, FolderX, House, Info, Keyboard, RotateCw, Settings, Sparkles } from "lucide-react";
+import { Bug, CircleArrowUp, CircleFadingArrowUp, CloudDownload, Ellipsis, FolderOpen, FolderPlus, FolderX, House, Info, Keyboard, RotateCw, Settings } from "lucide-react";
 import { useLanguage } from "../i18n";
 import { onDocumentPress } from "../shared/ui";
 import { IS_MAC, modifierKeyLabels } from "./branding";
@@ -7,8 +7,9 @@ import { IS_MAC, modifierKeyLabels } from "./branding";
 export function TitlebarMenu({
   onOpenHome,
   onOpenAbout,
-  onOpenChangelog,
   onCheckAppUpdates = () => undefined,
+  appUpdateLabel,
+  appUpdateAttention = null,
   onOpenProject,
   onCreateProject,
   onCloneProject,
@@ -24,8 +25,12 @@ export function TitlebarMenu({
 }: {
   onOpenHome: () => void;
   onOpenAbout: () => void;
-  onOpenChangelog: () => void;
+  /** Opens Settings › Updates, checking only from a settled state. */
   onCheckAppUpdates?: () => void;
+  /** The entry's label: the update's next step, or "Check for updates". */
+  appUpdateLabel?: string;
+  /** Names a release that waits for the reader; it marks the trigger. */
+  appUpdateAttention?: string | null;
   onOpenProject: () => void;
   onCreateProject: () => void;
   onCloneProject: () => void;
@@ -114,7 +119,7 @@ export function TitlebarMenu({
         ref={triggerRef}
         className="titlebar-icon-button"
         type="button"
-        aria-label={t.titlebarMoreActions}
+        aria-label={appUpdateAttention ? `${t.titlebarMoreActions}, ${appUpdateAttention}` : t.titlebarMoreActions}
         aria-haspopup="menu"
         aria-expanded={isOpen}
         onClick={() => (isOpen ? closeMenu(true) : openMenu())}
@@ -126,6 +131,9 @@ export function TitlebarMenu({
         }}
       >
         <Ellipsis aria-hidden="true" />
+        {/* The app's one ambient update mark: the bell's dot, on the menu that
+            holds the next step, for as long as that step waits. */}
+        {appUpdateAttention && <span className="titlebar-menu__dot" aria-hidden="true" />}
       </button>
       {isOpen && (
         <div
@@ -180,13 +188,12 @@ export function TitlebarMenu({
           </button>
           {renderAccountControl?.(() => closeMenu(true), triggerRef)}
           <div className="app-menu__divider" role="separator" />
-          <button className="titlebar-menu__item" type="button" role="menuitem" tabIndex={-1} onClick={() => runMenuAction(onOpenChangelog)}>
-            <Sparkles aria-hidden="true" />
-            <span>{t.changelogTitle}</span>
-          </button>
-          <button className="titlebar-menu__item" type="button" role="menuitem" tabIndex={-1} onClick={() => runMenuAction(onCheckAppUpdates)}>
-            <CircleFadingArrowUp aria-hidden="true" />
-            <span>{t.commandCheckAppUpdates}</span>
+          <button
+            className={`titlebar-menu__item${appUpdateAttention ? " titlebar-menu__item--attention" : ""}`}
+            type="button" role="menuitem" tabIndex={-1} onClick={() => runMenuAction(onCheckAppUpdates)}
+          >
+            {appUpdateAttention ? <CircleArrowUp aria-hidden="true" /> : <CircleFadingArrowUp aria-hidden="true" />}
+            <span>{appUpdateLabel ?? t.commandCheckAppUpdates}</span>
           </button>
           <button className="titlebar-menu__item" type="button" role="menuitem" tabIndex={-1} onClick={() => runMenuAction(onOpenAbout)}>
             <Info aria-hidden="true" />

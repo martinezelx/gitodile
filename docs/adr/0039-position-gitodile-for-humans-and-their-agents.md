@@ -62,6 +62,11 @@ thematic subfolders with one global queue that was hard to read by release.
    Blocked is a task status, not a folder. `work/done/` stays flat.
    `scripts/check-docs.mjs` enforces the layout.
 
+   The completed-work portion of point 7 was amended on 2026-10-31 by
+   [ADR 0043](0043-archive-completed-work-by-delivery-version.md): completed
+   records now use one folder per delivery version under `work/done/`, with
+   a documented migration of older records. Pending-folder/queue rules stay.
+
 ## Consequences
 
 - The value proposition no longer depends on executing Git commands for the

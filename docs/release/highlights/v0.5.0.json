@@ -1,0 +1,30 @@
+{
+  "version": "0.5.0",
+  "date": "2026-10-28",
+  "highlights": [
+    {
+      "id": "overlappingChanges",
+      "icon": "shield-check",
+      "en": "When work overlaps, the merge pauses safely and Overlapping changes shows what each branch changed in every file: keep one side or edit it in your own app, then finish or abandon the merge.",
+      "es": "Cuando el trabajo se solapa, la fusión se detiene de forma segura y Cambios que se solapan muestra qué cambió cada rama en cada archivo: conserva un lado o edítalo en tu propia app, y termina o abandona la fusión."
+    },
+    {
+      "id": "bringInChanges",
+      "icon": "git-branch",
+      "en": "Bring another local or remote branch into yours, or get project changes when both sides have new versions, with a preview and a recovery point before anything changes.",
+      "es": "Trae otra rama local o remota a la tuya, o trae cambios del proyecto cuando ambos lados tienen versiones nuevas, con una vista previa y un punto de recuperación antes de cambiar nada."
+    },
+    {
+      "id": "diffCapsules",
+      "icon": "list-checks",
+      "en": "Diffs mark each change as one capsule, filled for additions and outlined for removals, show the exact words that changed, and the Markdown preview now opens in History too.",
+      "es": "Los diffs marcan cada cambio como una cápsula, rellena si se añade y con contorno si se quita, muestran las palabras exactas que cambiaron, y la vista previa de Markdown ya se abre también en Historial."
+    },
+    {
+      "id": "updatesInSettings",
+      "icon": "circle-fading-arrow-up",
+      "en": "Updates have one home in Settings, a dot on More actions says when a new version is waiting, and reporting an issue copies your report and opens the GitHub form in one step.",
+      "es": "Las actualizaciones tienen un solo sitio en Ajustes, un punto en Más acciones avisa cuando hay una versión nueva, y reportar un problema copia tu informe y abre el formulario de GitHub en un paso."
+    }
+  ]
+}

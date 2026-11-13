@@ -1,32 +1,14 @@
-/* The application updater: the dialog, and the rows it composes into the
-   Updates section of Settings. The dialog wears the shared action-dialog shell
-   (`.app-dialog`, DESIGN.md § Dialogs), so the surface, close button and
-   heading are shared; what is defined here is only the updater's own
-   vocabulary. */
+/* The application updater: the Updates section of Settings, its one home,
+   and the restart dialog, the one update moment that interrupts. The dialog
+   wears the shared action-dialog shell (`.app-dialog`, DESIGN.md § Dialogs),
+   so the surface, close button and heading are shared; what is defined here
+   is only the updater's own vocabulary. */
 
 
 /* The state block: the startup receipt when there is one, then the status
    line. Stacked, each line hugging its own text. */
 .app-update-dialog__state { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-2); }
 
-/* The offered release as a card: the changelog's identity row (version,
-   date), then its notes as bounded plain text with their own
-   scroll so a long note never grows the dialog past the viewport. */
-.app-update-candidate {
-  display: grid; gap: var(--space-2);
-  padding: var(--space-4);
-  border: 1px solid var(--border-subtle); border-radius: var(--radius-surface);
-  background: var(--surface-card);
-}
-.app-update-candidate__identity { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
-.app-update-candidate__identity h3 { margin: 0; font-size: var(--text-subtitle); font-weight: var(--weight-title); letter-spacing: var(--tracking-tight); }
-.app-update-candidate__date { margin-left: auto; color: var(--text-secondary-color); font-size: var(--text-label); }
-.app-update-candidate__notes-label {
-  margin: var(--space-2) 0 0;
-  color: var(--text-secondary-color); font-size: var(--text-micro); font-weight: var(--weight-title);
-  letter-spacing: var(--tracking-caps); text-transform: uppercase;
-}
-.app-update-candidate .release-highlights { margin: 0; }
 .app-update-notes {
   margin: 0; max-height: 11rem; overflow: auto;
   color: var(--text-primary-color); line-height: var(--leading-normal);
@@ -53,6 +35,15 @@
 
 .app-update-actions { flex-wrap: wrap; }
 
+/* In the Settings row, the progress takes the body's width under the name, so
+   the bar is as long as the line it reports on. */
+.tool-row__detail > .app-update-progress-group { flex: 1; min-width: 0; }
+.app-update-hint { margin: 0; }
+/* When "up to date" was last true, under the name: the row's quiet fact. */
+.app-update-checked { color: var(--text-secondary-color); font-size: var(--text-label); line-height: var(--leading-snug); }
+/* Focused when a "What's new" opens the section here; the scroll is the cue. */
+.app-whats-new:focus { outline: none; }
+
 @media (prefers-reduced-motion: reduce) {
   .app-update-progress > span { transition: none; }
   .app-update-progress--indeterminate > span { width: 100%; animation: none; opacity: .55; }
@@ -68,11 +59,10 @@
 .app-update-dialog__installed { display: inline-flex; align-items: center; gap: var(--space-1); }
 
 /* ---------------------------------------------------------------------------
- * The integrated What's new, in the Updates section of Settings. It carries
- * the changelog's vocabulary — a release card, then one compact line per
- * earlier version — inside a settings group, so the section answers "what
- * changed?" in place. The highlights list itself is the shared
- * `.release-highlights` primitive.
+ * What's new, in the Updates section of Settings: the app's one changelog.
+ * A release card, then one compact line per earlier version, inside a
+ * settings group, so the section answers "what changed?" in place. The
+ * highlights list itself is the shared `.release-highlights` primitive.
  * ------------------------------------------------------------------------- */
 .whatsnew-release {
   display: grid; gap: var(--space-4); padding: var(--space-4) var(--space-4) var(--space-4);

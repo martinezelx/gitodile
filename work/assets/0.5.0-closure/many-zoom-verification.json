@@ -1,0 +1,19 @@
+{
+  "before": {
+    "width": 590,
+    "height": 380,
+    "ratio": 2.5,
+    "viewport": 148,
+    "rows": 12,
+    "descendants": 205
+  },
+  "after": {
+    "width": 590,
+    "height": 380,
+    "ratio": 2.5,
+    "viewport": 148,
+    "rows": 11,
+    "last": true,
+    "descendants": 204
+  }
+}

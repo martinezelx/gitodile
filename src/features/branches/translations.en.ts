@@ -229,7 +229,7 @@ export const en: BranchesTranslations = {
   deleteBranchBlockedDefaultLead: "This is the project's main branch, where shared work lives, so GitOdile keeps it.",
   deleteBranchBlockedOperationLead:
     (name) => `Finish or cancel it in your Git tool, then come back to delete “${name}”.`,
-  deleteBranchOpenChangesAction: "See the files in conflict",
+  deleteBranchOpenConflictsAction: "Review overlapping changes",
   deleteBranchSwitchAction: "Switch to this branch",
   deleteBranchSafeLead: (branch) => `Its work is already on “${branch}”, so nothing is lost.`,
   deleteBranchCopiedLead: (base, squashed) =>

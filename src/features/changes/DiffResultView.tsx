@@ -8,6 +8,8 @@ import type { DiffHunk, DiffLine, FileDiff } from "./domain";
 import { PictureDiffBody, type PictureDiff } from "./pictureDiff";
 import { DIFF_CODE_FONT_STACKS, useDiffPreferences } from "./diffPreferences";
 import { applyIgnoreWhitespace } from "./ignoreWhitespace";
+import { buildDiffDetails, type DiffRange } from "./diffDetails";
+import { decorateDiffLine } from "./DiffLineContent";
 
 type HighlightLine = (line: string) => React.ReactNode;
 
@@ -81,8 +83,7 @@ function EmptyDiffNote({
 /* Memoized, as is `DiffSplitCell`: the virtualizer re-renders the body on every
    scroll step, and each row's props are stable, so without it every visible
    line was tokenized again per frame (task 209). */
-const DiffLineRow = React.memo(function DiffLineRow({ line, highlight, t }: { line: DiffLine; highlight: HighlightLine | null; t: Translations }): React.JSX.Element {
-  const sign = line.kind === "addition" ? "+" : line.kind === "deletion" ? "-" : " ";
+const DiffLineRow = React.memo(function DiffLineRow({ line, highlight, ranges, edges, t }: { line: DiffLine; highlight: HighlightLine | null; ranges?: readonly DiffRange[]; edges: string; t: Translations }): React.JSX.Element {
   const label =
     line.kind === "addition" ? t.changesLineAddedLabel : line.kind === "deletion" ? t.changesLineRemovedLabel : null;
   // One column, not two: a context line's old and new numbers are often the
@@ -92,13 +93,11 @@ const DiffLineRow = React.memo(function DiffLineRow({ line, highlight, t }: { li
   const lineNumber = line.newLineNumber ?? line.oldLineNumber;
 
   return (
-    <div className={`diff-line diff-line--${line.kind}`}>
+    <div className={`diff-line diff-line--${line.kind}${edges}`}>
       <span className="diff-line__number">{lineNumber ?? ""}</span>
-      <span className="diff-line__sign" aria-hidden="true">
-        {sign}
-      </span>
+      <span className="diff-line__marker" aria-hidden="true" />
       {label && <span className="visually-hidden">{label}</span>}
-      <span className="diff-line__content">{highlight ? highlight(line.content) : line.content}</span>
+      <span className="diff-line__content">{decorateDiffLine(highlight ? highlight(line.content) : line.content, ranges)}</span>
     </div>
   );
 });
@@ -192,6 +191,30 @@ export function flattenDiffRows(hunks: DiffHunk[], expansions: GapExpansions = {
  * be marked per-row instead. */
 export function isFirstRowOfHunk(rows: { hunkIndex: number }[], index: number): boolean {
   return index === 0 || rows[index - 1].hunkIndex !== rows[index].hunkIndex;
+}
+
+type DiffRunEdge = "run-start" | "run-end" | "joined-before" | "joined-after";
+
+/** Where a row's gutter capsule opens and closes. A run is a contiguous
+ * stretch of one change kind in one column of one hunk; unified view has one
+ * column and split view two. In unified view a removal directly followed by
+ * its addition joins it instead, so one capsule flows across the boundary. */
+export function diffRunEdges(rows: readonly (DiffRow | SplitRow)[], index: number, column: 0 | 1 = 0): DiffRunEdge[] {
+  const kindAt = (at: number): DiffLine["kind"] | null => {
+    const row = rows[at];
+    if (!row || row.hunkIndex !== rows[index].hunkIndex) return null;
+    const line = row.kind === "line" ? row.line : row.kind === "pair" ? (column === 0 ? row.left : row.right) : null;
+    return line && line.kind !== "context" ? line.kind : null;
+  };
+  const kind = kindAt(index);
+  if (!kind) return [];
+  const unified = rows[index].kind === "line";
+  const previous = kindAt(index - 1);
+  const next = kindAt(index + 1);
+  const edges: DiffRunEdge[] = [];
+  if (previous !== kind) edges.push(unified && kind === "addition" && previous === "deletion" ? "joined-after" : "run-start");
+  if (next !== kind) edges.push(unified && kind === "deletion" && next === "addition" ? "joined-before" : "run-end");
+  return edges;
 }
 
 type VisualDiffViewMode = "unified" | "split";
@@ -344,7 +367,7 @@ const FALLBACK_MARKER_ROW_HEIGHT = 40;
  * leaving a stale number behind a stale comment. */
 const FALLBACK_LINE_HEIGHT = 12 * 1.6;
 /** Everything in `.diff-line` that isn't the content column: the 48px number
- * gutter and 16px sign column from its `grid-template-columns`, plus its own
+ * gutter and 16px marker column from its `grid-template-columns`, plus its own
  * 16px `padding-right`. Kept in sync with that rule in styles.css. */
 const DIFF_CONTENT_GUTTER = 80;
 
@@ -434,7 +457,7 @@ function codePointColumns(symbol: string): number {
 }
 
 /** Everything in a `.diff-split-row` that isn't one of its two content
- * columns: two 40px number gutters, two 14px sign columns, the divider
+ * columns: two 40px number gutters, two 14px marker columns, the divider
  * between the halves, and the row's own right padding. Kept in sync with
  * `.diff-split-row`'s `grid-template-columns` in styles.css. */
 const DIFF_SPLIT_CONTENT_GUTTER = 125;
@@ -549,12 +572,16 @@ export function measureDiffRowHeight(element: HTMLElement): number {
  * which is the actual source of "it's a bit laggy to open" — not the Git
  * read, which the caching/prefetch/batching above already made fast. */
 const DiffSplitCell = React.memo(function DiffSplitCell({
+  ranges,
   line,
   side,
   highlight,
+  edges,
   t,
 }: {
+  ranges?: readonly DiffRange[];
   line: DiffLine | null;
+  edges: string;
   side: "old" | "new";
   highlight: HighlightLine | null;
   t: Translations;
@@ -575,12 +602,10 @@ const DiffSplitCell = React.memo(function DiffSplitCell({
   return (
     <>
       <span className="diff-line__number">{lineNumber ?? ""}</span>
-      <span className={`diff-split-cell diff-split-cell--${line.kind}`}>
-        <span className="diff-line__sign" aria-hidden="true">
-          {line.kind === "addition" ? "+" : line.kind === "deletion" ? "-" : " "}
-        </span>
+      <span className={`diff-split-cell diff-split-cell--${line.kind}${edges}`}>
+        <span className="diff-line__marker" aria-hidden="true" />
         {label && <span className="visually-hidden">{label}</span>}
-        <span className="diff-line__content">{highlight ? highlight(line.content) : line.content}</span>
+        <span className="diff-line__content">{decorateDiffLine(highlight ? highlight(line.content) : line.content, ranges)}</span>
       </span>
     </>
   );
@@ -637,8 +662,10 @@ function DiffHunkList({
   viewMode,
   hunkTarget,
   searchQuery,
+  comparison,
   t,
 }: {
+  comparison: { before: string; after: string };
   hunks: DiffHunk[];
   /** Both needed to fetch a gap's lines: they are not in the diff at all.
    * A `null` project path means this diff isn't expandable — see
@@ -708,6 +735,7 @@ function DiffHunkList({
       .finally(() => setExpandingHunk(null));
   };
 
+  const details = useMemo(() => buildDiffDetails(hunks), [hunks]);
   const rows = useMemo(
     () => (viewMode === "split" ? buildSplitRows(hunks, expansions) : flattenDiffRows(hunks, expansions)),
     [hunks, viewMode, expansions],
@@ -895,6 +923,17 @@ function DiffHunkList({
     virtualizer.scrollToIndex(rowIndex, { align: "start" });
   }, [hunkTarget.token, viewMode]);
 
+  // The change the arrows stand on, until they move or the diff does: a hunk's
+  // index means another change once the file is read again. Opening a file
+  // stands on nothing, though its first change is the one counted.
+  const [currentHunk, setCurrentHunk] = useState<number | null>(null);
+  const previousNavigation = useRef({ filePath, token: hunkTarget.token });
+  useEffect(() => {
+    const previous = previousNavigation.current;
+    previousNavigation.current = { filePath, token: hunkTarget.token };
+    setCurrentHunk(previous.filePath !== filePath || previous.token === hunkTarget.token || hunkTarget.token === 0 ? null : hunkTarget.index);
+  }, [filePath, hunkTarget.token, hunks]);
+
   useEffect(() => {
     if (!normalizedSearch) return;
     const matchIndex = rows.findIndex((row) => {
@@ -909,6 +948,11 @@ function DiffHunkList({
   }, [normalizedSearch, rows, virtualizer]);
 
   return (
+    <>
+    {viewMode === "split" && <div className="diff-comparison-headings">
+      <div><strong>{t.changesDiffBefore}</strong><span>{comparison.before}</span></div>
+      <div><strong>{t.changesDiffAfter}</strong><span>{comparison.after}</span></div>
+    </div>}
     <pre
       {...autoHideScrollbarProps<HTMLPreElement>()}
       className={`diff-code auto-hide-scrollbar${wrapLines ? "" : " diff-code--nowrap"}`}
@@ -949,13 +993,17 @@ function DiffHunkList({
           // margin with the border's `padding-top`, pushing the chip down
           // and off-center on every hunk after the first.
           const isHunkStart = row.kind !== "marker" && row.hunkIndex > 0 && isFirstRowOfHunk(rows, virtualRow.index);
+          const current = row.hunkIndex === currentHunk && (row.kind === "line" ? row.line.kind !== "context" : row.kind === "pair" &&
+            (row.left?.kind === "deletion" || row.right?.kind === "addition"));
+          const edgeClasses = (block: string, column: 0 | 1): string =>
+            diffRunEdges(rows, virtualRow.index, column).map((edge) => ` ${block}--${edge}`).join("");
           return (
             <div
               key={virtualRow.key}
               data-index={virtualRow.index}
               data-row-kind={row.kind === "marker" ? "marker" : undefined}
               ref={measureRow}
-              className={isHunkStart ? "diff-row diff-row--hunk-start" : "diff-row"}
+              className={`diff-row${isHunkStart ? " diff-row--hunk-start" : ""}${current ? " diff-row--current" : ""}`}
               style={{ position: "absolute", top: 0, left: 0, transform: `translateY(${virtualRow.start}px)` }}
             >
               {row.kind === "marker" ? (
@@ -972,11 +1020,11 @@ function DiffHunkList({
                   t={t}
                 />
               ) : row.kind === "line" ? (
-                <DiffLineRow line={row.line} highlight={renderHighlight} t={t} />
+                <DiffLineRow line={row.line} ranges={details.get(row.line)} highlight={renderHighlight} edges={edgeClasses("diff-line", 0)} t={t} />
               ) : (
                 <div className="diff-split-row">
-                  <DiffSplitCell line={row.left} side="old" highlight={renderHighlight} t={t} />
-                  <DiffSplitCell line={row.right} side="new" highlight={renderHighlight} t={t} />
+                  <DiffSplitCell line={row.left} ranges={row.left ? details.get(row.left) : undefined} side="old" highlight={renderHighlight} edges={edgeClasses("diff-split-cell", 0)} t={t} />
+                  <DiffSplitCell line={row.right} ranges={row.right ? details.get(row.right) : undefined} side="new" highlight={renderHighlight} edges={edgeClasses("diff-split-cell", 1)} t={t} />
                 </div>
               )}
             </div>
@@ -984,6 +1032,7 @@ function DiffHunkList({
         })}
       </code>
     </pre>
+    </>
   );
 }
 
@@ -996,9 +1045,12 @@ export function DiffResultView({
   viewMode = "unified",
   hunkTarget = { index: 0, token: 0 },
   searchQuery = "",
+  comparison,
   t,
 }: {
   diff: FileDiff;
+  /** Truthful side context supplied by the surface that owns the comparison. */
+  comparison?: { before: string; after: string };
   /** Enables expanding the unchanged gaps between hunks, which reads the
    * file from the working tree. Omitted by callers showing a *saved*
    * commit's diff (see `pendingVersions`), where the file on disk may no
@@ -1052,6 +1104,7 @@ export function DiffResultView({
           ) : (
             <DiffHunkList
               hunks={hunks}
+              comparison={comparison ?? { before: t.changesDiffSaved, after: t.changesDiffWorkingCopy }}
               projectPath={projectPath}
               sessionEpoch={sessionEpoch}
               readFileLines={readFileLines}
@@ -1140,6 +1193,7 @@ export function DiffResultView({
               ) : (
                 <DiffHunkList
                   hunks={hunks}
+                  comparison={comparison ?? { before: t.changesDiffSaved, after: t.changesDiffWorkingCopy }}
                   projectPath={projectPath}
                   sessionEpoch={sessionEpoch}
                   readFileLines={readFileLines}

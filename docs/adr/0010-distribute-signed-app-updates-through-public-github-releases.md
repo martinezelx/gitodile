@@ -138,7 +138,7 @@ Inspection on 2026-09-03 found:
 The user accepted this direction on 2026-09-03, with exactly two channels and
 short-lived version branches merged into `main`. This records the agreed
 design, not a claim that update infrastructure exists. Implementation belongs to
-[epic 065-9](../../work/done/065-9-signed-application-updates.md).
+[epic 065-9](../../work/done/0.3.0/065-9-signed-application-updates.md).
 
 ## Decision
 
@@ -336,7 +336,16 @@ Start with manual checking plus a startup-check preference, on by default
 and no identifier, never downloads on its own, and is disclosed beside the
 switch — off by default meant almost nobody learned a fix had shipped). When
 enabled, check after startup has settled and at most once per 24 hours while
-the app runs; never on screen visibility or repository activation. A check that
+the app runs; never on screen visibility or repository activation. (Amended in
+0.5.0, task 221: the 24 hours are measured on the wall clock from the last
+check of any kind, by an hourly tick that makes no request, rather than as a
+timer's running time; a retryable failure tries again on the next tick
+rather than a day later. A 24-hour timer only fired in a session that ran for a
+whole day, and could miss the days a sleeping laptop spent with the app
+open. The switch is "Check for updates automatically"; its description says
+when and that nothing from the projects is sent, and the GitHub contact is
+disclosed by the same row's "Download manually from GitHub" link rather than
+the description, where "GitHub" read as the user's own account.) A check that
 finds a release records a notification; one that does not records nothing. Deduplicate manual/automatic requests, use bounded
 timeouts, and avoid retry storms. Never download or install automatically.
 Disclose contact with GitHub, which necessarily sees ordinary request metadata

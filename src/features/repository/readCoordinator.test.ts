@@ -50,6 +50,7 @@ function recordingSubscriber(
 
 function coordinatorWith(log: string[]) {
   const runtime = createProjectRuntime();
+  runtime.dispatch({ type: "open", project: project() });
   const repository = createRepositoryController({
     openFolder: vi.fn(),
     open: vi.fn(async () => {
@@ -64,6 +65,78 @@ function coordinatorWith(log: string[]) {
 }
 
 describe("repository read coordinator", () => {
+  it.each(["worktree", "head_or_refs", "shared_repository"] as const)("refreshes an inactive project's %s event without selecting it", async (kind) => {
+    const runtime = createProjectRuntime();
+    runtime.dispatch({ type: "open", project: project() });
+    runtime.dispatch({ type: "open", project: { ...project(), name: "other", path: "/other", sessionEpoch: "other-epoch" } });
+    runtime.dispatch({ type: "navigate", id: "/other", view: "workbench" });
+    const active = runtime.getSnapshot().byId["/other"];
+    const refresh = vi.fn();
+    const repository = createRepositoryController({
+      openFolder: vi.fn(),
+      open: vi.fn(async () => ({ ...project(), branch: "updated" })),
+    });
+    const coordinator = createRepositoryReadCoordinator(repository, [{
+      id: "status", refreshOn: "worktree-change", blocking: true, refresh, supersede: vi.fn(),
+    }]);
+
+    coordinator.handleInvalidation(runtime, runtime.getSnapshot(), {
+      projectId: "/repo", sessionEpoch: EPOCH, sequence: 1, kind,
+    });
+    await flush();
+
+    expect(refresh).toHaveBeenCalledWith({ projectId: "/repo", sessionEpoch: EPOCH });
+    expect(runtime.getSnapshot().activeId).toBe("/other");
+    expect(runtime.getSnapshot().byId["/other"]).toBe(active);
+    expect(runtime.getSnapshot().byId["/repo"].project.branch).toBe(kind === "worktree" ? "main" : "updated");
+    runtime.dispose();
+  });
+
+  it.each(["refreshAll", "refreshProjectAndWorktree"] as const)("%s preserves a project selected while its identity read was pending", async (method) => {
+    const runtime = createProjectRuntime();
+    runtime.dispatch({ type: "open", project: project() });
+    let finish!: (value: RepositoryInfo) => void;
+    const repository = createRepositoryController({
+      openFolder: vi.fn(),
+      open: vi.fn(() => new Promise<RepositoryInfo>((resolve) => { finish = resolve; })),
+    });
+    const coordinator = createRepositoryReadCoordinator(repository, []);
+
+    const refreshing = coordinator[method](runtime, runtime.getSnapshot(), "/repo");
+    runtime.dispatch({ type: "open", project: { ...project(), path: "/other", sessionEpoch: "other-epoch" } });
+    const active = runtime.getSnapshot().byId["/other"];
+    finish({ ...project(), branch: "updated" });
+    await refreshing;
+
+    expect(runtime.getSnapshot().activeId).toBe("/other");
+    expect(runtime.getSnapshot().byId["/other"]).toBe(active);
+    expect(runtime.getSnapshot().byId["/repo"].project.branch).toBe("updated");
+    runtime.dispose();
+  });
+
+  it.each(["refreshAll", "refreshProjectAndWorktree"] as const)("%s does not restart feature reads after its project closes and reopens", async (method) => {
+    const runtime = createProjectRuntime();
+    runtime.dispatch({ type: "open", project: project() });
+    let finish!: (value: RepositoryInfo) => void;
+    const repository = createRepositoryController({
+      openFolder: vi.fn(),
+      open: vi.fn(() => new Promise<RepositoryInfo>((resolve) => { finish = resolve; })),
+    });
+    const refresh = vi.fn();
+    const coordinator = createRepositoryReadCoordinator(repository, [{
+      id: "status", refreshOn: "worktree-change", blocking: true, refresh, supersede: vi.fn(),
+    }]);
+    const refreshing = coordinator[method](runtime, runtime.getSnapshot(), "/repo");
+    runtime.dispatch({ type: "close", id: "/repo" });
+    coordinator.close("/repo", EPOCH);
+    runtime.dispatch({ type: "open", project: { ...project(), sessionEpoch: "new-epoch" } });
+    finish({ ...project(), branch: "outdated" });
+    await refreshing;
+    expect(refresh).not.toHaveBeenCalled();
+    expect(runtime.getSnapshot().byId["/repo"].project.branch).toBe("main");
+    runtime.dispose();
+  });
+
   it("dispatches repository identity before any subscriber refreshes", async () => {
     const log: string[] = [];
     const { coordinator, runtime, awaited } = coordinatorWith(log);
@@ -82,9 +155,9 @@ describe("repository read coordinator", () => {
     awaited.settle();
     await refreshing;
 
-    expect(dispatched).toEqual(["open"]);
-    expect(log.indexOf("dispatch:open")).toBeLessThan(log.indexOf("refresh:status"));
-    expect(log.indexOf("dispatch:open")).toBeLessThan(log.indexOf("refresh:branches"));
+    expect(dispatched).toEqual(["refreshProject"]);
+    expect(log.indexOf("dispatch:refreshProject")).toBeLessThan(log.indexOf("refresh:status"));
+    expect(log.indexOf("dispatch:refreshProject")).toBeLessThan(log.indexOf("refresh:branches"));
   });
 
   it("starts background reads first and resolves without waiting for them", async () => {

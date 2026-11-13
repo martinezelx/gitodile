@@ -178,7 +178,7 @@ export function deriveNextStep(
     case "behind":
     case "diverged": {
       if (forecast?.outcome === "overlap") {
-        return step("overlap", "blocked", null, ["explainIncoming"], false, null,
+        return step("overlap", "blocked", "explainIncoming", [], false, null,
           { kind: "overlap" });
       }
       if (forecast?.outcome === "blocked") {

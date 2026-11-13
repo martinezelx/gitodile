@@ -78,3 +78,10 @@
   .get-team-version-list,
   .get-team-overlaps li { border: 1px solid CanvasText; }
 }
+
+/* Virtualized source and evidence rows use the existing menu row material. */
+.bring-in-list { max-height: calc(var(--space-6) * 10); overflow: auto; }
+.bring-in-list__rows { position: relative; padding: 0; margin: 0; list-style: none; }
+.bring-in-list__row { position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: center; min-width: 0; }
+.bring-in-list__row > * { width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bring-in-list__row > span { color: var(--text-secondary-color); font-size: var(--text-label); }

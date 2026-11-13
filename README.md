@@ -76,7 +76,7 @@ one workflow at a time; the full recovery center is still on the roadmap.
 | **Start a project** | Open an existing project, clone a remote, or safely create a local project without replacing existing files. |
 | **Understand changes** | Inspect live file status, syntax-colored diffs, and Markdown previews with added and removed blocks. |
 | **Save your work** | Save all or selected files as a version, with a preview and index protection. Git hooks run by default; commit signing follows your Git configuration. |
-| **Collaborate** | Check for project changes, combine non-overlapping updates, and publish through confirmed plans with recovery points. |
+| **Collaborate** | Check for project changes, bring branches together, resolve overlapping changes file by file, and publish through confirmed plans with recovery points. |
 | **Manage branches** | Create, switch, rename, and clean up finished branches with safety checks and recovery references. |
 | **Explore history** | Browse one branch or all branches, inspect saved versions, and see what is local or published. |
 | **Recover discarded work** | Undo a discard or browse stored recovery copies and see which ones can still be restored. |
@@ -119,6 +119,9 @@ stay available for reinstalling; a withdrawn update may leave the update feed,
 but it is never silently replaced.
 
 ## Versions
+
+Current development version: **0.5.0**.
+This candidate has not been tagged or published yet.
 
 Recent published releases are listed below. Each tag opens its full release notes
 and downloads.

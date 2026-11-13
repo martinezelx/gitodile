@@ -52,6 +52,27 @@ describe("projectSessionsReducer", () => {
     expect(state.byId["/a"].project.branch).toBe("feature");
   });
 
+  it("refreshes facts without changing the active project, its view or the session order", () => {
+    let state = projectSessionsReducer(initialProjectSessionsState, { type: "open", project: makeProject("/a") });
+    state = projectSessionsReducer(state, { type: "open", project: makeProject("/b") });
+    state = projectSessionsReducer(state, { type: "navigate", id: "/b", view: "conflicts" });
+    const active = state.byId["/b"];
+    const next = projectSessionsReducer(state, { type: "refreshProject", project: makeProject("/a", { branch: "feature" }) });
+    expect(next.activeId).toBe("/b");
+    expect(next.order).toBe(state.order);
+    expect(next.byId["/b"]).toBe(active);
+    expect(next.byId["/a"].project.branch).toBe("feature");
+    const home = projectSessionsReducer(state, { type: "close", id: "/b" });
+    expect(projectSessionsReducer(home, { type: "refreshProject", project: makeProject("/a") }).activeId).toBeNull();
+  });
+
+  it.each(["closed", "reopened"] as const)("ignores a late identity refresh after a project was %s", (kind) => {
+    let state = projectSessionsReducer(initialProjectSessionsState, { type: "open", project: makeProject("/a") });
+    state = projectSessionsReducer(state, { type: "close", id: "/a" });
+    if (kind === "reopened") state = projectSessionsReducer(state, { type: "open", project: makeProject("/a", { sessionEpoch: "new" }) });
+    expect(projectSessionsReducer(state, { type: "refreshProject", project: makeProject("/a", { branch: "stale" }) })).toBe(state);
+  });
+
   it("restores every project and the stored active one in a single transition", () => {
     const state = projectSessionsReducer(initialProjectSessionsState, {
       type: "restore",
@@ -62,14 +83,17 @@ describe("projectSessionsReducer", () => {
     expect(state.activeId).toBe("/b");
   });
 
-  it("falls back to the last restored project when the stored active one was skipped", () => {
+  it.each([
+    { stored: "/b", expected: "/c" },
+    { stored: null, expected: null },
+  ])("restores selection $stored as $expected without inventing an explicit choice", ({ stored, expected }) => {
     const state = projectSessionsReducer(initialProjectSessionsState, {
       type: "restore",
       projects: [makeProject("/a"), makeProject("/c")],
-      activeId: "/b",
+      activeId: stored,
     });
     expect(state.order).toEqual(["/a", "/c"]);
-    expect(state.activeId).toBe("/c");
+    expect(state.activeId).toBe(expected);
   });
 
   it("keeps a project the user opened while restore was still revalidating", () => {

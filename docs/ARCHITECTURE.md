@@ -206,6 +206,18 @@ project; the epoch identifies one open incarnation. Responses and watcher
 events must match both so work started before close cannot populate a reopened
 project.
 
+Repository identity refreshes use `refreshProject`, which updates only an
+existing session with the same epoch. They never change the active project or
+reopen a closed one. `open` is reserved for an explicit project-opening action.
+
+Activating an already-open project also refreshes its branch/HEAD identity and
+working-tree facts, so watching being disabled or unavailable cannot leave the
+branch label from its previous visit. Startup restore preserves an explicitly
+stored null active project and returns to Home while the other projects stay open.
+Status invalidations received during a read coalesce into a trailing read; the
+older snapshot is not published as fresh, and mutation supersession or close
+cancels that follow-up.
+
 Runtime instances are passed explicitly. There is no ambient current-project
 store. Selectors are narrow and preserve identity when their selected value is
 unchanged.
@@ -253,12 +265,18 @@ never persisted unless the user explicitly saves the reviewed report.
 snapshot and `issueReportContract.json`. Only the versions travel in the
 address: a full session encodes to some twelve thousand characters, which GitHub
 answers with 414 rather than a form, so the activity reaches the issue through
-the clipboard or the attached file instead. `useIssueReport.ts` owns the
-review/copy/save/launch flow through `issueReportAdapter.ts`. The titlebar
-receives an action, and one eager dialog moves through preparing, review,
-opening and browser-failure states. Dismissed attempts cannot restore stale
-errors or clipboard state. Opening the form is an explicit external action;
-the saved text file must be attached manually. The live tracker/form contract
+the clipboard or the attached file instead. The address may also carry the
+reader's optional title, behind the form's `[Bug]: ` prefix, and, when the
+activity is included, a last line in the prefilled field asking for the paste.
+`useIssueReport.ts` owns the review/copy/save/launch flow through
+`issueReportAdapter.ts`. The titlebar receives an action, and one eager dialog
+moves through preparing, review, opening, finish and browser-failure states.
+Leaving the activity out changes the shown, copied and saved text itself. The
+primary action copies that text before opening the form, and a failed copy
+still opens it; the finish step then says what is left (the paste) and offers
+the copy again. Dismissed attempts cannot restore stale errors or clipboard
+state. Opening the form is an explicit external action; the saved text file
+must be attached manually. The live tracker/form contract
 is checked separately from the offline gate by `pnpm run check:feedback`,
 including private vulnerability reporting enablement.
 
@@ -314,15 +332,20 @@ src-tauri/src/
   status.rs
   changes.rs
   history.rs              # bounded read-only saved-version timeline/details
-  recovery/               # two recovery owners that share only a clock
+  conflicts/              # paused-operation sessions
+    mod.rs                # read-only sessions, stage reads and side diffs
+    resolve.rs            # keep a side, mark resolved, reset one file
+  recovery/               # three recovery owners that share a clock and owner ID
     mod.rs
     discard.rs            # working-tree discard snapshots and safe restore
     history.rs            # pre-rewrite branch tips as hidden refs
+    conflict.rs           # a paused operation's stages and content, before a change
   save_version.rs
   publish.rs
   sync/                   # remotes, upstreams, fetch and relation knowledge
     mod.rs                # remote config and the team-sync read model
-    get_team_changes.rs   # the one destructive workflow, with its safety checks
+    integrate.rs          # Get project changes and Bring in changes: one
+                          #   analysis, one execution, their safety checks
   branches.rs        # product domains
   test_support.rs         # shared hermetic Git-repository test fixtures
   tests/<domain>_tests.rs # cross-module integration tests grouped by owner
@@ -340,7 +363,7 @@ separate owners, not when it grows long. The bar is a cohesive unit whose
 helpers stop being visible to its neighbours: `recovery` split because working-
 tree discard and history recovery shared nothing but a clock (and had begun
 prefixing helpers `history_*` to avoid colliding in one namespace); `sync` split
-because the `get team changes` workflow's eighteen safety helpers were reachable
+because the integration workflow's eighteen safety helpers were reachable
 from the read model that has no business calling them. `architecture.rs` fails
 the build if one submodule imports a sibling — whatever they share belongs in
 `mod.rs`.
@@ -510,8 +533,12 @@ login, and an unsupported provider come back as structured reasons, not errors.
 
 Shortcut names, and the command lines a shortcut may store with the tier Rust
 gave them, are an app-wide frontend preference; a stored line is planned again
-on every run and is not run when its plan needs a wider tier. The transcript is
-held only by the project screen and is evicted with its session epoch.
+on every run and is not run when its plan needs a wider tier. App owns an explicit
+console session store. Each project epoch retains its transcript (40 entries),
+command recall (40 lines), draft and pending/running command state in memory
+across screen eviction and project switches. Hidden screens detach their store
+subscription; already requested results settle in their originating session.
+Closing a project evicts its console state and invalidates late callbacks.
 
 Every command that acts on an already-open repository requires `sessionEpoch`,
 reads and mutations alike, and a missing epoch fails with `stale_session`
@@ -535,6 +562,9 @@ type RepositoryInvalidation = {
 ```
 
 Events are trailing-debounced for 300 ms with a two-second starvation ceiling.
+Sequence numbers come from the watcher registry lifetime, so off/on,
+registration replacement and updater suspension never reset the renderer's
+per-session ordering. Registration generations still reject detached callbacks.
 Raw changed paths and repository content never cross IPC. Shared ref/config
 changes fan out once to every related open worktree; objects, logs, hooks,
 modules, and lock-file churn are filtered. Explicit refresh remains available
@@ -543,8 +573,9 @@ if an OS watcher cannot be established.
 ### Read-only saved-version history
 
 `history.rs` owns the current-`HEAD` saved-version timeline. It is a read-only
-domain service behind three narrow commands: `read_history_page`,
-`read_saved_version_detail`, and `read_saved_version_file_diff`. The first
+domain service behind four narrow commands: `read_history_page`,
+`read_saved_version_detail`, `read_saved_version_file_diff`, and
+`read_saved_version_file_markdown`. The first
 returns a bounded `HistoryPage`; the detail commands require both its snapshot
 token and a still-reachable commit. All commands require the active project
 session epoch and run under the repository read coordinator. They never fetch,
@@ -640,10 +671,19 @@ collision blocks. A prepared change to an incoming path blocks. An unsaved,
 unstaged edit to a regular file the remote edits in place is combined line by
 line with `merge-tree --merge-base=HEAD`, using a temporary index that holds
 the file's working content; any other unsaved overlap, or a saved one, is an
-overlap and is refused by name. Separate unsaved changes are carried; the plan
+overlap and is refused by the clean execution. Saved overlaps can explicitly
+start the paused-merge path below. Separate unsaved changes are carried; the plan
 and the execution also prove that with a dry-run two-tree update run against a
 copy of the index, so the question never takes `index.lock` beside other
 reads. The read model relies on the path comparison alone.
+
+Saved-overlap forecasts still classify local work using the provisional
+merge tree's changed paths, rename endpoints and unmerged paths, the same
+footprint initiation checks. Prepared work blocks a paused merge even away
+from that footprint; affected unsaved work is a mixed overlap requiring Save,
+and untracked/ignored collisions block before Resolve is offered.
+The bounded overlap evidence lists unsaved overlaps first so truncation cannot
+hide a Save-first requirement from either dialog.
 
 The plan reads the remote as of the last check under a shared read permit and
 never fetches; the dialog checks the remote in the background only when this
@@ -661,14 +701,19 @@ from the predicted tree with the previous tip and the reviewed remote commit
 as parents, after the project's `pre-merge-commit`, `prepare-commit-msg` and
 `commit-msg` hooks run through `git hook run` against a temporary index of the
 merge result (skipped only when hooks are turned off in Settings), and with
-`commit.gpgSign` honoured. A hook, identity or signing failure changes nothing.
+`commit.gpgSign` honoured. GitOdile applies no file/history update on a hook,
+identity or signing failure. After hooks/signing succeed, execution revalidates
+tracked index/worktree evidence, HEAD, exact branch/source refs, operation
+markers and untracked/ignored collisions before recovery or file/history writes.
+A changed project is stale; unrelated untracked hook output may stay. Combined
+unsaved content captured before a hook edited it is never written over that edit.
 It then creates and verifies recovery (with a snapshot of combined unsaved
 content), hands combined files back to their saved content, runs the narrow
 two-tree update `git read-tree -u -m <old> <new>` and the compare-and-swap
 branch move `git update-ref refs/heads/<branch> <new> <old>`, writes combined
 content back through Git's filters, and verifies HEAD, the carried
 porcelain-v2 records and bytes, the combined files, the recovery refs and the
-relation to the remote. It never calls `pull`, `merge`, rebase, reset, stash,
+relation to the remote. The clean execution never calls `pull`, `merge`, rebase, reset, stash,
 force or conflict resolution. A failure after recovery is conservatively
 returned as an uncertain local result with the observed `HEAD`, the recovery
 refs and inspection instructions. The authoritative success snapshot is
@@ -676,6 +721,58 @@ committed before exactly one coordinated local refresh; coalesced watcher
 invalidations never issue a fetch. When Publish meets a remote that moved on,
 the same dialog gets, combines and then plans and publishes in one
 confirmation.
+
+Bring in changes (`plan_bring_in_changes` / `bring_in_changes`, task
+065-4-1) runs the same analysis and execution with another local or
+remote-tracking branch as the source, resolved to one exact commit and read
+as this computer has it, never fetched. Its plan answers already contained,
+fast-forward, merge or an empty merge (a merge version that changes no
+file); its token also binds the source's ref and commit. A merge needs a
+shared saved version, so unrelated histories and a shallow copy that lacks
+it block by name, as does a sparse checkout. Its clean execution still refuses overlaps by name; an explicit
+`start_overlapping_merge` starts the paused-merge path below. See the 2026-10-29
+amendment to ADR 0030.
+
+Get uses the same sparse-checkout and shared-history guards before analysis
+in both planning and execution. A shallow copy is blocked only when it lacks
+the common ancestor, not merely because it is shallow. Repository discovery
+and current-upstream selection use full symbolic HEAD refs and strip only
+`refs/heads/`, so a same-named tag cannot change the branch/configuration key.
+
+The eager `sync/BringInChangesDialog` owns the branch picker and review, with
+its own typed `BringInPort` and adapter. `list_integration_sources` reads local
+and mapped remote-tracking refs, excludes symbolic refs, the current local
+branch and negative refspecs, refuses lossy names, and bounds its answer at
+5,000 sources; its lists use the existing virtualizer. A check is remembered
+per project epoch and exact source for one minute by `bringInController`.
+`check_integration_source` is an explicit local mutation under the common
+repository write permit: it fetches only the selected remote branch through
+its configured mapping, preserving the force flag and exclusions, without
+pruning or substituting the current upstream. A failed check never enables
+confirmation of cached knowledge. An old/unknown check runs behind the local
+preview and re-plans before confirmation; a stale execution re-plans without
+retrying. A verified pause is installed in the conflicts controller before
+opening its screen. Uncertain results retain the mutation slot until Close
+and never initiate resolution, abort, retry or publish. A failed adoption or
+refresh after a verified native update/pause also retains that evidence with
+Close only, rather than offering another execution. App only wires the
+entry callbacks, mutation slot, coordinated refresh and resolver handoff.
+
+Get project changes also uses `BringInPort.startOverlap` with `{kind: "upstream"}`,
+but passes its own Get plan token and `get-team-changes` recovery reference.
+Its eager dialog offers this choice for saved overlaps of a diverged upstream;
+Overview opens that review. Unsaved/prepared overlaps retain Save/discard
+guidance. The upstream check must finish before starting a pause; a failed
+check or deleted upstream blocks it. Replans ignore superseded/closed answers;
+starting a mutation invalidates pending previews, and upstream prop changes
+cannot replace an executing or uncertain outcome.
+Clean Get also keeps its native recovery/unsaved-copy evidence if the
+post-update refresh fails, even with a stale error; it cannot replan, retry
+the integration or enter publishing from that failure.
+App adopts the returned session before the coordinated refresh and navigation
+to the existing resolver. This path never enters the clean Get/publish chain,
+even for Get and publish. A native uncertain result, or an unconfirmed handoff
+after a verified pause, offers only Close and preserves evidence.
 
 History-mutation recovery follows
 [ADR 0008](adr/0008-store-history-recovery-as-versioned-hidden-refs.md): the
@@ -701,6 +798,8 @@ against the single delete's rules, and against being finished
 it goes, and one that no longer qualifies is skipped and reported while the
 rest continue
 ([ADR 0034](adr/0034-one-recovery-point-per-branch-in-a-clean-up.md)).
+Bringing in a branch keeps its records under
+`refs/gitodile/recovery/v1/bring-in-changes/`, with its own limit of 20.
 `recovery::HistoryRecoveryOperation` names the operations and their limits;
 the protocol is one. See [ADR 0035](adr/0035-use-branches-as-the-product-vocabulary.md)
 for the accepted break with older delete/clean-up namespaces.
@@ -722,6 +821,136 @@ record that would write exactly what an existing one holds replaces it, so
 discarding the same work twice leaves one entry rather than two. The 2026-09-06
 amendment to ADR 0007 carries the reasoning, the verification that replaces the
 whole-tree comparison in that mode, and the retention rule.
+
+### Conflict sessions
+
+`start_overlapping_merge` in `sync/integrate.rs` owns initiation for either a
+branch (Bring's existing token and recovery operation) or the configured
+upstream (Get's token and operation), without fetching. It is a history
+mutation under the common-directory write permit. It rejects staged work,
+unsaved work on affected paths, untracked/ignored collisions, paused operations,
+index locks and branch mergeOptions. It publishes a versioned start record
+through `recovery/conflict.rs`, verifies history recovery, then runs
+`git -c rerere.enabled=false merge --no-ff --no-commit --no-autostash -m
+<title> <commit>`. Merge-tree's provisional tree and exact stages are retained
+internally and bound in the existing tokens. A verified pause requires matching
+HEAD, sole MERGE_HEAD and complete unmerged stages, unchanged carried bytes,
+stage-0 entries matching the provisional tree, and a complete conflict
+snapshot taken under the same permit (also captured for an unexpected pause). A proven
+unchanged refusal is `merge_start_refused`; any other failure is
+`merge_outcome_uncertain`, preserving all evidence and Git's state.
+
+Start records live in `<git-dir>/gitodile/conflicts/v1/starts/`, independently
+of snapshots. A matching owner and pair of heads establish GitOdile origin
+even after a restart before snapshot capture. The unique start ID distinguishes
+repeated pauses of the same heads, and start evidence participates in the
+session token. Live/interrupted starts protect their history recovery refs
+across linked worktrees. Ended records follow the conflict owner's retention;
+unknown or uncertain evidence is kept. Explicit ended records cannot
+attribute a later external merge to GitOdile. Ignored caches outside the
+merge footprint are not scanned or charged to the capture budget. See ADR 0041 §10 for the format,
+publication, capture bounds, exact-abort verification and retention protocol.
+
+A paused operation is read by `conflicts.rs`
+([ADR 0041](adr/0041-conflict-sessions-and-their-recovery.md)). The index
+(`git ls-files -u -z`, bounded at 5,000 paths and 16 MiB) and Git's operation
+markers in the worktree's own Git directory are the only truth; conflict
+markers in files decide nothing. `read_conflict_session` reports the
+operation (merge, rebase, cherry-pick, revert, `am`, or unmerged entries with
+no marker), its step, both sides named by real refs rather than `ours`/`theirs`, each file's
+shape, facets, state and allowed whole-file actions, and a state token. Only a
+merge with one merge head is supported; every other operation is explained
+with its files and the exact Git commands, and has no action.
+`read_conflict_stage` reads one stage lazily, capped at the diff limit, after
+checking that the requested object is still that path's stage.
+`read_conflict_side_diff` answers "what did this side change" for one regular
+file: it checks both object IDs against the path's stages (once the file is
+marked resolved, the stages its snapshot records and pins), runs a blob-to-blob
+`git diff` (or builds an all-added hunk when there is no base) and returns the
+Changes tab's typed `FileDiff`. All three are read-only and run under a shared
+read permit; `git_operation_in_progress` asks the same marker detection, so a
+refusal and the resolver never disagree.
+
+`conflicts/resolve.rs` owns the three per-file mutations of ADR 0041 §8,
+separate actions that never imply one another or finish the merge:
+`resolve_conflict_side` (keep the current or incoming side, or delete the
+path, in the working tree only; a submodule's side in the index),
+`mark_conflict_resolved` (the exact kept stage through
+`update-index --index-info`, otherwise `git add` or `git rm --cached` with
+literal pathspecs; markers left in a text file refuse unless confirmed) and
+`reset_conflict_file` (the snapshot's stages, proved on a copy of the index
+first, and its working bytes). Each runs under the write lock, revalidates the
+state token, the path's stages and the action's permission, creates the
+snapshot when there is none, records what it replaces in the journal first,
+verifies its result and returns the fresh session. A side's content comes
+through `cat-file --filters` straight into a temporary file beside its
+target (`git_command::run_git_to_file`, so an LFS file is never held in
+memory) and is renamed over it; a Windows file held open by another program
+fails as `file_locked` with nothing changed, whether it refuses the rename or,
+opened without sharing, the journal's copy before it.
+
+`conflicts/mod.rs` also holds what neither mutates nor belongs to one action:
+the exact-path check every write and open goes through
+(`exact_working_path`: inside the project, spelled on disk as Git spells it,
+no folder a link), the marker scan, and the case-collision facet.
+`open_conflict_file` opens one file in the system's default application
+through `desktop::open_in_default_application`, after
+`desktop::ensure_opens_as_document` has refused any type the platform would
+run instead (per-platform lists plus `PATHEXT` on Windows and the executable
+bit elsewhere) and after the session's snapshot exists; it is a
+`repository_write` command for that snapshot alone and never changes the
+index or the file. `check_conflict_working_file` is a read that says whether
+markers remain, or why it cannot tell.
+
+The frontend owner is `src/features/conflicts/`: a lazy screen registered
+with no rail or fixed palette entry, reached from Overview, Changes, the
+palette and the refusing dialogs. Its controller caches one session read per
+project incarnation and the side diffs by the objects they compare. The
+session is read after a status snapshot that lists overlapping files or whose
+`pausedOperation` says Git's markers hold an operation open (a merge whose
+files are all resolved has only the markers; the flag is read from the marker
+files, with no Git process), once more after one that has neither, and on
+every entry press; a project with
+no overlap costs no Git process, and visibility never reads. The three
+mutations go through the controller's `mutate`, which makes the session Rust
+answers with the cached one and supersedes any read started before it; the
+screen takes the project's mutation slot (`resolve`) for each, and a success
+runs the one coordinated refresh after a mutation. A reset whose snapshot
+could not keep the working content is refused as `conflict_content_not_kept`,
+which is how the screen knows to offer the overlap alone. Opening a file in
+its application takes no mutation slot and no refresh: the edit comes back
+through the watcher, and when a session read shows the file
+`editedOutside` the controller asks for one marker check per state token.
+
+Before a session's first change, `recovery::create_conflict_snapshot` writes
+`<git-dir>/gitodile/conflicts/v1/<session-id>/` under the write lock, after
+revalidating the token before and after capture: a versioned manifest of every
+unmerged stage and each path's working content, published by a rename, with
+the stage blobs pinned by a tree under
+`refs/gitodile/recovery/v1/conflict/<owner>/<session-id>`. The first snapshot
+is the original and is never replaced; missing evidence is recorded as
+`unreadable` or `omitted`. Its `journal/` keeps what each resolution action
+replaced that the snapshot does not hold, pinned by a sibling
+`<session-id>-journal` ref, and what each action left on disk. The session
+read folds the snapshot and the journal back in, which is how a file becomes
+`markedResolved`, `editedOutside` or `stale`, and how it knows which side was
+`kept`.
+
+`conflicts/merge.rs` owns ending the session (ADR 0041 §9): `plan_finish_merge`
+and `finish_merge` conclude the paused merge with `git commit` (hooks unless
+they are off in Settings, signing as Git is set), and `plan_abort_merge` and
+`abort_merge` run `git merge --abort` after the journal has kept what it
+replaces and the rest of the index is pinned as an `-abandoned` tree. Each
+plan carries a token execution proves again; each outcome is judged from what
+Git left (`HEAD`, its parents, `MERGE_HEAD`, unmerged entries, the index
+against `HEAD`), not from its exit status, and an outcome that is neither done
+nor unchanged is `merge_outcome_uncertain` with nothing repaired. The screen's
+header offers both in the project's mutation slot; a success publishes "nothing
+paused" as the cached session, runs the one coordinated refresh and returns to
+the screen the reader came from, and Finish's result offers Publish without
+taking it. The watcher
+also invalidates on `rebase-merge/` and `rebase-apply/`; GitOdile's own
+`gitodile/` folder never invalidates.
 
 Never silently resolve conflicts, discard untracked files, bypass hooks or
 signing, force-push, run `reset --hard`, clean files, or delete a branch without
@@ -760,11 +989,15 @@ The WebView reaches only six GitOdile commands described by the IPC
 contract; no updater/process guest permission or JavaScript updater package
 is exposed.
 
-`features/app-updates` owns the renderer controller and eager update dialog.
-The controller reads and mirrors the process-wide native snapshot, coalesces
-every shell entry point, and polls only while a native check, download, or
-verification is active; it never infers a second lifecycle or retains payload
-bytes. Changelog mounting remains local-only. General Settings stores the
+`features/app-updates` owns the renderer controller, the Settings › Updates
+control that is the update's one surface, and the eager restart dialog shown
+only for a wrong-version restart (ADR 0044). The shell routes every entry point
+to that section; an entry that checks does so only from a settled state with
+nothing offered. The controller reads and mirrors the process-wide native
+snapshot, coalesces every shell entry point, and polls only while a native
+check, download, or verification is active; it never infers a second lifecycle
+or retains payload bytes. What's new lives in the same section and remains
+local-only. General Settings stores the
 off-by-default consent switch, while the controller owns the settled-startup
 timer and its fixed once-per-24-hours in-process cadence. That timer is an
 install participant, so preparation suspends it with the other background

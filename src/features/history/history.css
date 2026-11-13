@@ -520,7 +520,7 @@
   left: 13px;
   width: 10px;
   height: 10px;
-  border: 1.5px solid color-mix(in srgb, var(--text-secondary-color) 52%, transparent);
+  border: 1.5px solid var(--node-ring);
   border-radius: var(--radius-round);
   background: var(--surface-panel);
   box-shadow: 0 0 0 2px var(--surface-panel);
@@ -630,8 +630,6 @@
 .history-detail--state { align-items: center; justify-content: center; padding: 28px; color: var(--text-secondary-color); text-align: center; }
 .history-detail--state > svg { width: var(--icon-tile); height: var(--icon-tile); margin-bottom: var(--space-3); color: var(--status-danger); }
 .history-detail--state h2, .history-detail--state p { margin: 0 0 var(--space-3); }
-.history-detail__loading-title { padding: 20px var(--space-5); border-bottom: 1px solid var(--border-subtle); }
-.history-detail__loading-title h2 { margin: 0; }
 /* The detail's first read: the meta line, then the changed files, where the
    loaded detail puts them. */
 .history-detail__placeholder { flex: 1; display: grid; align-content: start; gap: var(--space-3); padding: 20px var(--space-5); }
@@ -812,7 +810,7 @@
 /* The text diff scrolls inside `.diff-code`; a picture has no such inner
    viewport, so it gets one here. Without it this pane's `overflow: hidden`
    clips a tall picture and its captions with no way to reach them. */
-.history-detail__diff .image-diff { flex: 1; min-height: 0; overflow: auto; }
+.history-detail__diff :is(.image-diff, .markdown-preview) { flex: 1; min-height: 0; overflow: auto; }
 .history-diff-state { flex: 1; display: grid; place-items: center; align-content: center; gap: var(--space-3); padding: 20px; color: var(--text-secondary-color); text-align: center; }
 .history-diff-state p { margin: 0; }
 .diff-search-match { border-radius: 2px; background: color-mix(in srgb, var(--status-warning) 55%, transparent); color: inherit; }

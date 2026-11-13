@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { setInstallDraftBlocker } from "../../runtime/drafts";
 import type { UpdateAction, UpdateState } from "./domain";
-import { AUTOMATIC_CHECK_CADENCE_MS, MANUAL_CHECK_MINIMUM_MS, createAppUpdatesController } from "./controller";
+import { AUTOMATIC_CHECK_CADENCE_MS, AUTOMATIC_CHECK_TICK_MS, MANUAL_CHECK_MINIMUM_MS, createAppUpdatesController } from "./controller";
 import type { AppUpdatesPort } from "./port";
 
 function action(state: UpdateState, operationId: string | null = null): UpdateAction {
@@ -45,7 +45,7 @@ describe("application update controller", () => {
     controller.dispose();
   });
 
-  it("does not schedule background network work until consent, then checks at most every 24 hours", async () => {
+  it("does not schedule background network work until consent, then checks at most once a day", async () => {
     vi.useFakeTimers();
     const port = createPort();
     const controller = createAppUpdatesController(port, { startupSettleMs: 1_000 });
@@ -66,6 +66,59 @@ describe("application update controller", () => {
     controller.dispose();
   });
 
+  it("counts the day on the wall clock, so time asleep counts and a manual check resets it", async () => {
+    vi.useFakeTimers();
+    const port = createPort();
+    const controller = createAppUpdatesController(port, {
+      automaticEnabled: true, startupSettleMs: 1_000, manualCheckMinimumMs: 0,
+    });
+    await controller.initialize();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(port.check).toHaveBeenCalledTimes(1);
+
+    // The machine sleeps for three days: the clock moves, no timer fires.
+    vi.setSystemTime(Date.now() + 3 * AUTOMATIC_CHECK_CADENCE_MS);
+    await vi.advanceTimersByTimeAsync(AUTOMATIC_CHECK_TICK_MS);
+    expect(port.check).toHaveBeenCalledTimes(2);
+
+    vi.setSystemTime(Date.now() + AUTOMATIC_CHECK_CADENCE_MS - AUTOMATIC_CHECK_TICK_MS);
+    await controller.check();
+    expect(port.check).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(AUTOMATIC_CHECK_TICK_MS);
+    expect(port.check).toHaveBeenCalledTimes(3);
+    controller.dispose();
+  });
+
+  it("retries a failed automatic check on the next hourly tick, not a day later", async () => {
+    vi.useFakeTimers();
+    const check = vi.fn(async () => action({ kind: "failed", error: { code: "offline", stage: "check", retryable: true } }));
+    const port = createPort({ check });
+    const controller = createAppUpdatesController(port, { automaticEnabled: true, startupSettleMs: 1_000 });
+    await controller.initialize();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(check).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(AUTOMATIC_CHECK_TICK_MS);
+    expect(check).toHaveBeenCalledTimes(2);
+    controller.dispose();
+  });
+
+  it.each(["ready", "blocked"] as const)("never checks automatically over a %s download", async (kind) => {
+    vi.useFakeTimers();
+    const candidate = {
+      candidateId: "c1", version: "0.3.0", target: "windows-x86_64" as const,
+      publishedAt: null, notes: "", highlights: [], expectedBytes: null,
+    };
+    const state = kind === "ready"
+      ? { kind, candidate }
+      : { kind, candidate, error: { code: "install_blocked", stage: "install", retryable: true } };
+    const port = createPort({ readState: vi.fn(async () => state as never) });
+    const controller = createAppUpdatesController(port, { automaticEnabled: true, startupSettleMs: 1_000 });
+    await controller.initialize();
+    await vi.advanceTimersByTimeAsync(3 * AUTOMATIC_CHECK_CADENCE_MS);
+    expect(port.check).not.toHaveBeenCalled();
+    controller.dispose();
+  });
+
   it("reports what a background check settled on, and nothing about manual checks", async () => {
     vi.useFakeTimers();
     const candidate = {
@@ -78,14 +131,14 @@ describe("application update controller", () => {
       automaticEnabled: true, startupSettleMs: 1_000, onBackgroundCheckSettled, manualCheckMinimumMs: 0,
     });
     await controller.initialize();
-    await controller.check();
-    expect(port.check).toHaveBeenLastCalledWith("manual");
-    expect(onBackgroundCheckSettled).not.toHaveBeenCalled();
-
     await vi.advanceTimersByTimeAsync(1_000);
     expect(port.check).toHaveBeenLastCalledWith("background");
     expect(onBackgroundCheckSettled).toHaveBeenCalledOnce();
     expect(onBackgroundCheckSettled).toHaveBeenCalledWith(expect.objectContaining({ kind: "available" }));
+
+    await controller.check();
+    expect(port.check).toHaveBeenLastCalledWith("manual");
+    expect(onBackgroundCheckSettled).toHaveBeenCalledOnce();
     controller.dispose();
   });
 

@@ -16,6 +16,10 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: vi.fn() }));
 const mockedInvoke = vi.mocked(invoke);
 const defaultResizeObserver = globalThis.ResizeObserver;
 
+// Inline diff marks split a line across spans; match its complete source text.
+const sourceLine = (text: string) => (_content: string, element: Element | null): boolean =>
+  element?.textContent === text && [...element.children].every(child => child.textContent !== text);
+
 afterEach(() => {
   globalThis.ResizeObserver = defaultResizeObserver;
   // Vitest runs without `globals`, so Testing Library never registers its own
@@ -48,6 +52,7 @@ function ControlledChangesPanel(
     | "onGetChanges"
     | "onCheckRemote"
     | "onOpenHistory"
+    | "onOpenConflicts"
     | "tabs"
   > & {
     controller?: ChangesController;
@@ -63,6 +68,7 @@ function ControlledChangesPanel(
     onGetChanges?: () => void;
     onCheckRemote?: () => void;
     onOpenHistory?: () => void;
+    onOpenConflicts?: () => void;
   },
 ): React.JSX.Element {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
@@ -90,6 +96,7 @@ function ControlledChangesPanel(
       onGetChanges={props.onGetChanges ?? (() => {})}
       onCheckRemote={props.onCheckRemote ?? (() => {})}
       onOpenHistory={props.onOpenHistory ?? (() => {})}
+      onOpenConflicts={props.onOpenConflicts ?? (() => {})}
     />
     </ScreenLifecycleProvider>
   );
@@ -223,7 +230,7 @@ describe("ChangesPanel Markdown preview", () => {
     const tree = { ...workingTree, entries: [{ ...workingTree.entries[0], path: "DESIGN.md" }, { ...workingTree.entries[1], path: "README.md" }] };
     try {
       render(<LanguageProvider><ToastProvider><ControlledChangesPanel projectPath="/repo" workingTree={tree} workingTreeError={null} isCheckingChanges={false} onRefresh={vi.fn()} onPublishNow={vi.fn()} /></ToastProvider></LanguageProvider>);
-      expect(await screen.findByText(/Partial Markdown preview/)).toBeInTheDocument();
+      expect(await screen.findByText(/Partial preview/)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Previous change" })).toBeDisabled();
       await userEvent.click(screen.getByRole("button", { name: "Next change" }));
       expect(scroll).toHaveBeenCalledOnce();
@@ -236,7 +243,7 @@ describe("ChangesPanel Markdown preview", () => {
       expect(mockedInvoke.mock.calls.filter(([name]) => name === "read_file_markdown")).toHaveLength(1);
       expect(mockedInvoke.mock.calls.filter(([name]) => name === "read_file_lines")).toHaveLength(0);
       await userEvent.click(screen.getByRole("button", { name: /^README\.md/ }));
-      await screen.findByText(/Partial Markdown preview/);
+      await screen.findByText(/Partial preview/);
       expect(screen.getByRole("button", { name: "Previous change" })).toBeDisabled();
       expect(screen.getByRole("button", { name: "Next change" })).toBeEnabled();
       expect(document.querySelector("[data-current-markdown-change]")).toBeNull();
@@ -914,7 +921,7 @@ describe("ChangesPanel review controls", () => {
 
     expect(await screen.findByText("Couldn't read those lines.")).toBeInTheDocument();
     // The diff itself is untouched, and the marker is still a live retry.
-    expect(screen.getByText("before one")).toBeInTheDocument();
+    expect(screen.getByText(sourceLine("before one"))).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Show 47 unchanged lines" })).toBeEnabled();
   });
 
@@ -992,16 +999,22 @@ describe("ChangesPanel review controls", () => {
 
     expect(await screen.findByText("Change 1 of 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Previous change" })).toBeDisabled();
+    expect(document.querySelector(".diff-row--current")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Next change" }));
 
     expect(screen.getByText("Change 2 of 2")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Next change" })).toBeDisabled();
+    // This class exposes the change the arrows stand on; a file switch clears it.
+    expect(document.querySelector(".diff-row--current")).not.toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Next file" }));
+    await screen.findByText("brand new");
+    expect(document.querySelector(".diff-row--current")).toBeNull();
   });
 
   it("finds text in the open difference, and its one X closes the find", async () => {
     renderPanel();
-    await screen.findByText("after one");
+    await screen.findByText(sourceLine("after one"));
 
     // The find is an icon until asked for, so it spends no width at rest.
     expect(screen.queryByPlaceholderText("Search in diff")).not.toBeInTheDocument();
@@ -1037,7 +1050,7 @@ describe("ChangesPanel review controls", () => {
       </ToastProvider></LanguageProvider>,
     );
 
-    expect(await screen.findByText("before one")).toBeInTheDocument();
+    expect(await screen.findByText(sourceLine("before one"))).toBeInTheDocument();
     expect(container.querySelector(".diff-split-row")).toBeNull();
 
     await userEvent.click(screen.getByRole("button", { name: "Diff view (Unified)" }));
@@ -1096,7 +1109,7 @@ describe("ChangesPanel review controls", () => {
   it("offers the complete diff as accessible text and supports menu keyboard navigation", async () => {
     renderPanel();
 
-    await screen.findByText("before one");
+    await screen.findByText(sourceLine("before one"));
     await userEvent.click(screen.getByRole("button", { name: "Diff view (Unified)" }));
 
     const unified = screen.getByRole("menuitemradio", { name: "Unified" });

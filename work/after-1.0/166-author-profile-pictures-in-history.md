@@ -74,7 +74,7 @@ Constraints that shape the design:
 - A Rust resolver module (one owner) that, given the project's remote host and
   its bound account, resolves unique author emails to pictures per provider as
   listed above, with GitHub Enterprise and GitLab self-managed hosts
-  ([148-10](../done/148-10-enterprise-and-self-managed-hosts.md)) treated like
+  ([148-10](../done/0.4.0/148-10-enterprise-and-self-managed-hosts.md)) treated like
   their cloud counterparts.
 - A disk cache keyed by host + normalised email: positive entries with a TTL,
   negative ("no account") entries with a shorter TTL, bounded size, and
@@ -131,7 +131,7 @@ Constraints that shape the design:
 # Dependencies
 
 - The shared picture module and disk cache from
-  [148-14](../done/148-14-hosting-account-profile-pictures.md).
+  [148-14](../done/0.4.1/148-14-hosting-account-profile-pictures.md).
 - Bitbucket part: [148-11](148-11-bitbucket-token-connections.md).
   GitHub and GitLab can ship first.
 

@@ -3,7 +3,7 @@
 This roadmap defines the capability sequence and release gates for GitOdile.
 It is not a calendar promise. Approved implementation scope and acceptance
 criteria live in one folder per planned version under [`work/`](../work/README.md):
-[`0.5.0`](../work/0.5.0/README.md), [`0.6.0`](../work/0.6.0/README.md),
+[`0.5.0`](../work/0.5.0/README.md), [`0.5.1`](../work/0.5.1/README.md), [`0.6.0`](../work/0.6.0/README.md),
 [`0.7.0`](../work/0.7.0/README.md), [`1.0.0`](../work/1.0.0/README.md) and
 [`after-1.0`](../work/after-1.0/README.md).
 
@@ -54,7 +54,7 @@ Already delivered:
   mutation planning, invalidation, and architecture checks.
 
 The release-oriented audit of this baseline is complete. Task
-[`065-1`](../work/done/065-1-core-workflow-audit.md) owns the capability matrix,
+[`065-1`](../work/done/0.1.0/065-1-core-workflow-audit.md) owns the capability matrix,
 hermetic journeys, Windows desktop evidence, and remaining platform limits.
 
 ## GitHub Desktop reference cut
@@ -72,8 +72,8 @@ product specification.
 | Browse commit history and commit diffs | Delivered | Audit and harden |
 | Create, switch, publish, and delete branches | Mostly delivered | Audit; publish uses the existing remote flow |
 | Fetch, fast-forward pull, and push | Delivered | Audit and harden |
-| Merge a local branch or diverged upstream | Missing | Required: task 065-4 (`0.5.0`) |
-| Resolve merge conflicts | Missing | Required at GitHub Desktop level: epic 037 (`0.5.0`); three-pane editor after `1.0.0` (epic 206) |
+| Merge a local branch or diverged upstream | Implemented; Windows audited | Task 065-4 (`0.5.0`); non-Windows runtime/accessibility qualification remains open |
+| Resolve merge conflicts | Delivered on Windows; macOS and Linux unverified | GitHub Desktop level: epic 037 (`0.5.0`), open for the macOS/Linux and assistive-technology runs; three-pane editor after `1.0.0` (epic 206) |
 | Stash and restore unfinished work | Missing | Required: epic 064 (`0.6.0`) |
 | Undo/revert earlier work safely | Partial recovery plumbing only | Required: tasks 065-5 and 065-6 (`0.6.0`) |
 | Hosting-account sign-in | Delivered ahead of `1.0.0` | Not a gate; stays Free |
@@ -91,8 +91,8 @@ permanent references and do not change when work moves between versions.
 
 | Version | Theme | Tasks in queue order |
 | --- | --- | --- |
-| `0.4.1` | Close the current release | No open task; 148-14 shipped |
-| [`0.5.0`](../work/0.5.0/README.md) | Collaboration complete | 037-1, 037-3, 037-6, 037-5, 037-7, 065-4 |
+| [`0.5.0`](../work/0.5.0/README.md) | Collaboration complete | 037-3, 037-6, 037-5, 037-7, 065-4, 227 |
+| [`0.5.1`](../work/0.5.1/README.md) | Collaboration review | 213 |
 | [`0.6.0`](../work/0.6.0/README.md) | Safety visible and reusable | 065-5, 065-6, 064-1 … 064-5; 139 once unblocked |
 | [`0.7.0`](../work/0.7.0/README.md) | Release candidate | 065-7, 065-8, 065-9-13 |
 | [`1.0.0`](../work/1.0.0/README.md) | Ship | Epic 065 acceptance |
@@ -100,7 +100,7 @@ permanent references and do not change when work moves between versions.
 ### Public distribution — delivered
 
 - **065-9: Signed application updates** is closed
-  ([epic 065-9](../work/done/065-9-signed-application-updates.md), 2026-09-16):
+  ([epic 065-9](../work/done/0.3.0/065-9-signed-application-updates.md), 2026-09-16):
   contracts, install protection, the native updater and its interface, signed
   builds, merge-driven releases, public publishing and the release-notes
   automation are on `main` and proven by public releases, all on one update
@@ -141,7 +141,7 @@ save a change, and verify the result in History.
 
 ### Gate 2 — Complete collaboration and overlaps (`0.5.0`)
 
-- **037: Resolve overlapping changes.** At GitHub Desktop level: understand
+- **037 (implementation completed 2026-10-31): Resolve overlapping changes.** At GitHub Desktop level: understand
    each overlap, keep one side per file or edit it in the user's editor, mark
    it resolved or reset it, then finish or abort the merge with a plan, all on
    a durable snapshot. It first supports an externally started merge (a
@@ -150,13 +150,19 @@ save a change, and verify the result in History.
    itself become sessions. A paused rebase, cherry-pick, revert or stash apply
    left by another tool is detected and explained read-only, never resolved.
    The three-pane editor is epic 206 after `1.0.0` (decided 2026-10-27).
-- **065-4: Integrate branches and diverged project changes.** Add previewed
-   local-branch merge. Clean, non-fast-forward team integration shipped in
-   task 161 (ADR 0030); overlaps still enter task 037's established session
-   contract.
+- **065-4 (implementation completed 2026-10-31): Integrate branches and diverged project changes.** Add previewed
+   local/remote-branch merge and diverged upstream integration. All initiation,
+   clean and paused outcomes are implemented and Windows-audited in
+   [065-4-5](../work/done/0.5.0/065-4-5-integration-audit.md); overlaps use task 037's
+   existing resolver. Accepted [ADR 0042](adr/0042-propose-platform-qualification-carryover-for-050.md)
+   closes this implementation phase together with 037 and 037-6. The original
+   unchecked external qualification remains with 065-8 (Linux) and 065-10
+   (macOS), linked through the [carryover matrix](../work/assets/0.5.0-closure/closure-audit.md).
 
-Exit condition: both the clean and conflicting collaboration paths can finish
-without a terminal. Rebase and force push remain excluded.
+Implementation exit condition met: both the clean and conflicting collaboration
+paths can finish without a terminal. Rebase and force push remain excluded.
+The accepted qualification carryover does not authorize a release or start
+Gate 3.
 
 ### Gate 3 — Make safety visible and reusable (`0.6.0`)
 
@@ -194,9 +200,9 @@ see [Design seeds in `1.0.0`](#design-seeds-in-100).
    ([ADR 0017](adr/0017-console-git-commands-by-permission-tier.md)); changes
    are previewed and, unless the person turns that off, confirmed
    ([ADR 0028](adr/0028-console-runs-changes-without-a-read-only-mode.md),
-   [task 134](../work/done/134-project-git-console.md),
-   [epic 138](../work/done/138-console-git-commands.md),
-   [task 149](../work/done/149-single-console-mode.md)). History and
+   [task 134](../work/done/0.3.0/134-project-git-console.md),
+   [epic 138](../work/done/0.3.0/138-console-git-commands.md),
+   [task 149](../work/done/0.4.0/149-single-console-mode.md)). History and
    destructive commands are
    [task 139](../work/0.6.0/139-console-history-and-destructive-commands.md).
 - **065-8: Release hardening and distribution.** Run the complete workflow

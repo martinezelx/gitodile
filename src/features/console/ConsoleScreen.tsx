@@ -1,10 +1,11 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Check, CloudUpload, Copy, Diff, Folder, GitBranch, GitCommitHorizontal, Keyboard, Palette, RotateCcw, RotateCw, Search, Server, Settings, ShieldCheck, ShieldOff, SquareTerminal, X } from "lucide-react";
 import { useLanguage } from "../../i18n";
 import { useScreenLifecycle } from "../../runtime/screen/module";
 import { localizeAppError } from "../../shared/i18n";
 import { themeById, type ThemePreference } from "../../shared/theme";
-import { copyTextToClipboard, setAutoHideScrollbarActive } from "../../shared/ui";
+import { copyTextToClipboard, isReducedMotionRequested, setAutoHideScrollbarActive } from "../../shared/ui";
+import type { HistoryController, HistoryQuery, SavedVersionSummary } from "../history";
 import {
   completionsFor,
   DEFAULT_SHORTCUTS,
@@ -33,45 +34,13 @@ import {
 import { ConsoleMascot } from "./ConsoleMascot";
 import { highlightOutput, queryShape, type OutputSegment } from "./output";
 import { DEFAULT_CONSOLE_PREFERENCES, type ConsolePreferences } from "./preferences";
-import type { ConsoleHost, ConsolePlan, ConsoleRunResult, ConsoleTier, HostKind, OutputShape } from "./port";
+import type { ConsolePlan, ConsoleTier, HostKind, OutputShape } from "./port";
 import { consolePort } from "./tauriAdapter";
+import { createConsoleSessionStore, useConsoleSession, type ConsoleSessionStore, type ConsoleOutput, type Entry } from "./session";
 
-/** What any run returns: a catalogue query's result or a typed command's. */
-type ConsoleOutput = Omit<ConsoleRunResult, "shape" | "failure">;
 /** A shortcut's target in the editor: a catalogue query, or a command line. */
 type ShortcutTarget = ConsoleQueryId | "line";
 const SHORTCUT_TARGETS: readonly ShortcutTarget[] = [...OPERATION_IDS, ...HOSTING_OPERATION_IDS, "line"];
-
-type Entry = {
-  id: number;
-  kind: "query" | "help" | "help-git" | "message";
-  input: string;
-  operationId?: ConsoleQueryId;
-  /** The Git line a typed command or a line shortcut plans on every run. */
-  line?: string;
-  /** A line shortcut's saved tier, which no later run may exceed. */
-  ceiling?: ConsoleTier;
-  shape?: OutputShape;
-  command?: string;
-  result?: ConsoleOutput;
-  message?: string;
-  /** Why Rust would not run the line, in the person's language. */
-  refusal?: string;
-  /** A change plan, printed before it asks to go ahead. */
-  plan?: ConsolePlan;
-  /** Waiting for the answer to `[s/N]`. */
-  awaiting?: boolean;
-  /** What the person answered, echoed after the question as a terminal does. */
-  answer?: string;
-  cancelled?: boolean;
-  /** What Rust thinks a failed change ran into, in the person's language. */
-  failure?: string;
-  error?: string;
-  running?: boolean;
-  durationMs?: number;
-  /** The line the prompt showed when the entry ran, as a terminal keeps it. */
-  branch: string | null;
-};
 
 type BlockState = "running" | "success" | "failed" | "truncated" | "note";
 
@@ -81,6 +50,24 @@ const TRANSCRIPT_TONE_BUDGET = 400;
 const SCROLLBAR_IDLE_MS = 1200;
 /** The theme's own colours, as a terminal's welcome shows its eight ANSI ones. */
 const WELCOME_PALETTE = ["accent", "danger", "warning", "string", "type", "keyword", "number", "property"] as const;
+/** Saved versions whose short ids fall as the mascot's rain. */
+const RAIN_VERSIONS = 24;
+const NO_VERSIONS: readonly SavedVersionSummary[] = [];
+/** The mascot's move between the welcome and the watermark: a choreography timing, not a transition token. */
+const MASCOT_FLIGHT_MS = 460;
+
+/** The history the app already holds for this project; the console never reads it itself. */
+type ConsoleHistorySource = Pick<HistoryController, "subscribe" | "getSnapshot">;
+
+/** The project's recent short version ids, from the cached history only. */
+function useRainHashes(source: ConsoleHistorySource | undefined, query: HistoryQuery, active: boolean): string {
+  const subscribe = useCallback((listener: () => void) => source && active ? source.subscribe(query, listener) : () => {}, [source, query, active]);
+  const versions = useSyncExternalStore(subscribe, () => source?.getSnapshot(query).versions ?? NO_VERSIONS);
+  return useMemo(() => versions.slice(0, RAIN_VERSIONS).map((version) => version.shortCommit).join(""), [versions]);
+}
+
+/** Where the mascot took off from, measured before the drawing moves. */
+type MascotFlight = { from: DOMRect; opacity: number; to: "watermark" | "welcome" };
 
 type Translations = ReturnType<typeof useLanguage>["t"];
 
@@ -366,11 +353,14 @@ export type ConsoleCommandPalette = {
   onKeyDown: React.KeyboardEventHandler<HTMLInputElement>;
 };
 
-export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, gitVersion = null, projectStatus = null, preferences = DEFAULT_CONSOLE_PREFERENCES, theme = "system", confirmChanges = true, runHooks = true, onRepositoryChanged, onOpenSettings, commandPalette }: {
+export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, sessionStore, historySource, gitVersion = null, projectStatus = null, preferences = DEFAULT_CONSOLE_PREFERENCES, theme = "system", confirmChanges = true, runHooks = true, onRepositoryChanged, onOpenSettings, commandPalette }: {
   projectPath: string;
   projectName: string;
   branch: string | null;
   sessionEpoch: string;
+  sessionStore?: ConsoleSessionStore;
+  /** The app's cached history: its short ids become the mascot's rain. */
+  historySource?: ConsoleHistorySource;
   gitVersion?: string | null;
   /** The shell's project facts; the app status bar steps aside for this line. */
   projectStatus?: ConsoleProjectStatus | null;
@@ -391,54 +381,92 @@ export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, 
   const { t } = useLanguage();
   const lifecycle = useScreenLifecycle();
   const [shortcuts, setShortcuts] = useState(() => readShortcuts());
+  const [localSessionStore] = useState(createConsoleSessionStore);
+  const session = useConsoleSession(sessionStore ?? localSessionStore, projectPath, sessionEpoch, lifecycle === "active");
+  const { entries, history, input, host, running, pending } = session.snapshot;
+  const { setEntries, setHistory, setInput, setHost, setRunning, setPending, nextId, currentRequest, hostRequested } = session;
   /**
    * The project's provider, for the welcome and the hosting shortcuts. Read
-   * once per project session, after first paint: the screen is kept per
-   * session, so showing it again never reads it again. A hosting shortcut's
+   * once per project session, after first paint: the session outlives the
+   * screen, so showing it again never reads it again. A hosting shortcut's
    * answer brings a fresh one.
    */
-  const [host, setHost] = useState<ConsoleHost | null>(null);
   useEffect(() => {
-    setHost(null);
-    if (!sessionEpoch) return;
-    let current = true;
+    if (!sessionEpoch || hostRequested.current) return;
     const read = (): void => {
+      if (hostRequested.current) return;
+      hostRequested.current = true;
       consolePort.readHost({ projectId: projectPath, sessionEpoch })
-        .then((value) => { if (current) setHost(value); })
-        .catch(() => undefined);
+        .then(setHost)
+        .catch(() => { hostRequested.current = false; });
     };
     const idle = "requestIdleCallback" in window;
     const handle = idle ? window.requestIdleCallback(read, { timeout: 2000 }) : window.setTimeout(read, 500);
     return () => {
-      current = false;
       if (idle) window.cancelIdleCallback(handle);
       else window.clearTimeout(handle);
     };
-  }, [projectPath, sessionEpoch]);
+  }, [projectPath, sessionEpoch, setHost, hostRequested]);
   const [managerOpen, setManagerOpen] = useState(false);
-  const [input, setInput] = useState("");
   const [caret, setCaret] = useState<number | null>(0);
-  const [entries, setEntries] = useState<Entry[]>([]);
   // Clearing a nonempty transcript brings the drawing back up. The initial
   // welcome is already in place and must not animate merely on navigation.
   const [welcomeEntrance, setWelcomeEntrance] = useState(false);
-  const [history, setHistory] = useState<string[]>([]);
+  const historyQuery = useMemo(() => ({ projectId: projectPath, sessionEpoch }), [projectPath, sessionEpoch]);
+  const rainHashes = useRainHashes(historySource, historyQuery, lifecycle === "active");
+  // The first entry sends the welcome's drawing to the corner, and clearing
+  // brings it back: one drawing that moves, not one that vanishes and another
+  // that appears. The flight replaces both drawings' own entrance.
+  const [flight, setFlight] = useState<MascotFlight | null>(null);
+  const welcomeRef = useRef<HTMLDivElement>(null);
+  const watermarkRef = useRef<HTMLDivElement>(null);
+  const takeOff = (to: MascotFlight["to"]): void => {
+    if (!preferences.welcome || lifecycle !== "active" || isReducedMotionRequested()) return;
+    const host = (to === "watermark" ? welcomeRef : watermarkRef).current;
+    // Without the Web Animations API the drawings keep their own entrance.
+    if (typeof host?.animate !== "function") return;
+    const from = host.querySelector(".console-art")?.getBoundingClientRect();
+    if (from && from.width > 0) setFlight({ from, opacity: Number(getComputedStyle(host).opacity), to });
+  };
+  useLayoutEffect(() => {
+    if (!flight) return;
+    setFlight(null);
+    const host = (flight.to === "watermark" ? watermarkRef : welcomeRef).current;
+    const art = host?.querySelector<HTMLElement>(".console-art");
+    const end = art?.getBoundingClientRect();
+    if (!host || !art || !end?.width || typeof art.animate !== "function") return;
+    const { from } = flight;
+    // The arrival curve, read from its token so the flight never drifts from it.
+    const easing = getComputedStyle(document.documentElement).getPropertyValue("--ease-emphasized").trim() || "ease-out";
+    const timing = { duration: MASCOT_FLIGHT_MS, easing };
+    const start = `translate(${from.left - end.left}px, ${from.top - end.top}px) scale(${from.width / end.width})`;
+    if (flight.to === "watermark") {
+      art.animate([{ transformOrigin: "0 0", transform: start }, { transformOrigin: "0 0", transform: "none" }], timing);
+      host.animate([{ opacity: flight.opacity }, { opacity: getComputedStyle(host).opacity }], timing);
+      // The rain shows once the drawing has landed, not stretched in flight,
+      // and ends on its own resting opacity so nothing jumps afterwards.
+      const rain = art.querySelector<HTMLElement>(".console-art__rain");
+      rain?.animate([{ opacity: 0 }, { opacity: 0, offset: .6 }, { opacity: getComputedStyle(rain).opacity }], { duration: MASCOT_FLIGHT_MS * 1.6 });
+    } else {
+      art.animate([{ transformOrigin: "0 0", transform: start, opacity: flight.opacity }, { transformOrigin: "0 0", transform: "none", opacity: 1 }], timing);
+      for (const company of host.parentElement?.querySelectorAll(".console-welcome__info, .console-welcome__tip") ?? []) {
+        company.animate([{ opacity: 0 }, { opacity: 0, offset: .5 }, { opacity: 1 }], timing);
+      }
+    }
+  }, [flight]);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
   const [menuIndex, setMenuIndex] = useState(0);
   const [menuNavigated, setMenuNavigated] = useState(false);
   const [menuDismissed, setMenuDismissed] = useState(false);
   const [copiedId, setCopiedId] = useState<number | null>(null);
-  const [running, setRunning] = useState(false);
-  /** The change plan the prompt is answering, if any. */
-  const [pending, setPending] = useState<{ id: number; planId: string } | null>(null);
-  const nextId = useRef(0);
-  const currentRequest = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
   const promptRef = useRef<HTMLFormElement>(null);
   const managerButtonRef = useRef<HTMLButtonElement>(null);
   const copiedTimer = useRef<number | undefined>(undefined);
-  const refocusPrompt = useRef(false);
+  // A remounted screen may inherit a still-running command. Its original
+  // component's completion ref no longer belongs to the visible prompt.
+  const refocusPrompt = useRef(running);
   const menuId = useId();
   /* The shared auto-hiding scrollbar also shows while anything inside has
      focus-visible, and the prompt always does here. A terminal shows it while
@@ -462,7 +490,7 @@ export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, 
     };
   }, []);
 
-  useEffect(() => () => { currentRequest.current += 1; window.clearTimeout(copiedTimer.current); }, []);
+  useEffect(() => () => { window.clearTimeout(copiedTimer.current); }, []);
   // A terminal takes typing as soon as it is shown: no click to reach the prompt.
   useEffect(() => {
     if (lifecycle === "active") inputRef.current?.focus({ preventScroll: true });
@@ -533,7 +561,10 @@ export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, 
     setMenuNavigated(false);
     setMenuDismissed(false);
   };
-  const append = (entry: Omit<Entry, "branch">): void => setEntries((prior) => [...prior.slice(-(TRANSCRIPT_LIMIT - 1)), { ...entry, branch }]);
+  const append = (entry: Omit<Entry, "branch">): void => {
+    if (entries.length === 0) takeOff("watermark");
+    setEntries((prior) => [...prior.slice(-(TRANSCRIPT_LIMIT - 1)), { ...entry, branch }]);
+  };
   // Focus goes back to whatever opened the pane: the status line's icon, or the prompt that typed `shortcuts`.
   const managerOpener = useRef<"button" | "prompt">("button");
   const openManager = (opener: "button" | "prompt"): void => { managerOpener.current = opener; setManagerOpen(true); };
@@ -709,7 +740,7 @@ export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, 
 
   /** Clearing forgets an unanswered plan too; it can never run later. */
   const clearTranscript = (): void => {
-    if (entries.length > 0) setWelcomeEntrance(true);
+    if (entries.length > 0) { setWelcomeEntrance(true); takeOff("welcome"); }
     setEntries([]);
     setPending(null);
   };
@@ -768,8 +799,8 @@ export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, 
       }}>
         <h1 className="visually-hidden">{t.consoleTitle}</h1>
         <div className="console-panel__body">
-        {preferences.welcome && entries.length > 0 && <div className="console-watermark" data-scheme={theme === "system" ? undefined : themeById(theme).scheme}>
-          <ConsoleMascot active={lifecycle === "active"} watermark />
+        {preferences.welcome && entries.length > 0 && <div ref={watermarkRef} className="console-watermark" data-scheme={theme === "system" ? undefined : themeById(theme).scheme}>
+          <ConsoleMascot active={lifecycle === "active"} watermark entrance={flight === null} hashes={rainHashes} nudge={latest?.id} />
         </div>}
         <div ref={transcriptRef} className="console-panel__transcript auto-hide-scrollbar" {...scrollbarActivity} onMouseUp={(event) => {
           // A terminal takes typing wherever it is clicked, unless text is being selected.
@@ -779,8 +810,8 @@ export function ConsoleScreen({ projectPath, projectName, branch, sessionEpoch, 
           <div className="console-panel__log" role="log" aria-label={t.consoleTitle} aria-live="off">
             {entries.length === 0 && (
               <div className="console-welcome">
-                {preferences.welcome && <div className="console-welcome__fetch">
-                  <ConsoleMascot active={lifecycle === "active"} entrance={welcomeEntrance} />
+                {preferences.welcome && <div ref={welcomeRef} className="console-welcome__fetch">
+                  <ConsoleMascot active={lifecycle === "active"} entrance={welcomeEntrance && flight === null} hashes={rainHashes} />
                   <div className="console-welcome__info">
                     <WelcomeSection title={t.consoleWelcomeProjectSection} tone="project" rows={[
                       [<Folder key="i" />, t.consoleWelcomeProject, projectName],

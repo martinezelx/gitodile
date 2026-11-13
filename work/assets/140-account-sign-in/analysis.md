@@ -1,7 +1,7 @@
 # Task 140: visual account sign-in implementation analysis
 
 Date: 2026-10-25. Planning evidence for
-[task 140](../../done/140-account-sign-in-screens-and-mock.md), not a new
+[task 140](../../done/0.4.1/140-account-sign-in-screens-and-mock.md), not a new
 architecture contract or an implementation completion report.
 
 This is the planning snapshot from before implementation. Task 140 now records

@@ -24,7 +24,7 @@ function makePort(overrides: Partial<IssueReportPort> = {}): IssueReportPort {
 function ReportHarness({ port }: { port: IssueReportPort }) {
   const report = useIssueReport("2.50.0", port);
   return <>
-    <TitlebarMenu onOpenHome={vi.fn()} onOpenAbout={vi.fn()} onOpenChangelog={vi.fn()} onOpenProject={vi.fn()}
+    <TitlebarMenu onOpenHome={vi.fn()} onOpenAbout={vi.fn()} onOpenProject={vi.fn()}
       onCreateProject={vi.fn()} onCloneProject={vi.fn()} onCloseProject={vi.fn()}
       onOpenSettings={vi.fn()} onOpenShortcuts={vi.fn()} hasProject={false}
       isOpeningProject={false} canReloadWindow isReportingIssue={report.isOpening}
@@ -36,10 +36,10 @@ function ReportHarness({ port }: { port: IssueReportPort }) {
 async function openReview(user: ReturnType<typeof userEvent.setup>): Promise<void> {
   await user.click(screen.getByRole("button", { name: "More actions" }));
   await user.click(screen.getByRole("menuitem", { name: "Report an issue" }));
-  await screen.findByRole("dialog", { name: "Review the report before sending it" });
+  await screen.findByRole("dialog", { name: "Report an issue" });
 }
 
-it("reviews the exact report before copying, saving or opening GitHub", async () => {
+it("copies exactly the reviewed report, opens GitHub and guides the paste", async () => {
   const user = userEvent.setup();
   const port = makePort();
   render(<LanguageProvider><ReportHarness port={port} /></LanguageProvider>);
@@ -51,23 +51,63 @@ it("reviews the exact report before copying, saving or opening GitHub", async ()
   expect(contents.tagName).toBe("PRE");
   expect(contents.textContent).toBe(REPORT);
   expect(contents.querySelector("textarea")).toBeNull();
-  expect(screen.getByRole("button", { name: "Close" })).toBeVisible();
-
-  await user.click(screen.getByRole("button", { name: "Copy" }));
-  expect(port.copy).toHaveBeenCalledWith(REPORT);
-  expect(screen.getByRole("status")).toHaveTextContent("Report copied.");
 
   await user.click(screen.getByRole("button", { name: "Save report…" }));
   expect(port.save).toHaveBeenCalledWith(REPORT);
   expect(screen.getByRole("status")).toHaveTextContent("Report saved.");
 
-  await user.click(screen.getByRole("button", { name: "Open issue" }));
+  await user.type(screen.getByRole("textbox", { name: "Title (optional)" }), "Publish fails");
+  await user.click(screen.getByRole("button", { name: "Copy and open GitHub" }));
+  expect(port.copy).toHaveBeenCalledWith(REPORT);
+  expect(vi.mocked(port.copy).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(port.open).mock.invocationCallOrder[0]);
   const opened = new URL(vi.mocked(port.open).mock.calls[0][0]);
-  // The address seeds the required field with the versions; the activity the
-  // user just reviewed reaches the issue by paste or attachment.
+  expect(opened.searchParams.get("title")).toBe("[Bug]: Publish fails");
+  // The address seeds the required field with the versions and asks for the
+  // paste there; the activity itself travels on the clipboard.
   expect(opened.searchParams.get("diagnostics"))
-    .toBe("GitOdile test\nSystem: Windows 11 (x86_64)");
+    .toBe("GitOdile test\nSystem: Windows 11 (x86_64)\n\nSession activity: paste the report GitOdile copied below this line.");
+
+  const finish = await screen.findByRole("dialog", { name: "Finish on GitHub" });
+  expect(finish).toHaveTextContent("Report copied");
+  await user.click(screen.getByRole("button", { name: "Copy again" }));
+  expect(port.copy).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole("status")).toHaveTextContent("Report copied.");
+  await user.click(screen.getByRole("button", { name: "Done" }));
   expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("leaves the activity out of what is shown, saved and sent, and copies nothing", async () => {
+  const user = userEvent.setup();
+  const port = makePort();
+  render(<LanguageProvider><ReportHarness port={port} /></LanguageProvider>);
+  await openReview(user);
+
+  await user.click(screen.getByRole("checkbox", { name: "Include what GitOdile did this session" }));
+  const environmentOnly = "Environment\n-----------\nGitOdile test\nSystem: Windows 11 (x86_64)";
+  expect(screen.getByRole("region", { name: "Report contents" }).textContent).toBe(environmentOnly);
+  await user.click(screen.getByRole("button", { name: "Save report…" }));
+  expect(port.save).toHaveBeenCalledWith(environmentOnly);
+
+  await user.click(screen.getByRole("button", { name: "Open GitHub" }));
+  expect(port.copy).not.toHaveBeenCalled();
+  expect(new URL(vi.mocked(port.open).mock.calls[0][0]).searchParams.get("diagnostics"))
+    .toBe("GitOdile test\nSystem: Windows 11 (x86_64)");
+  // Nothing is left to paste, so nothing is left to guide.
+  expect(screen.queryByRole("dialog")).toBeNull();
+});
+
+it("still opens the form when the copy fails and says so in the finish step", async () => {
+  const user = userEvent.setup();
+  const port = makePort({ copy: vi.fn().mockRejectedValue(new Error("clipboard denied")) });
+  render(<LanguageProvider><ReportHarness port={port} /></LanguageProvider>);
+  await openReview(user);
+
+  await user.click(screen.getByRole("button", { name: "Copy and open GitHub" }));
+  expect(port.open).toHaveBeenCalledOnce();
+  const finish = await screen.findByRole("dialog", { name: "Finish on GitHub" });
+  expect(finish).toHaveTextContent("The report wasn't copied");
+  await user.click(screen.getByRole("button", { name: "Save report…" }));
+  expect(port.save).toHaveBeenCalledWith(REPORT);
 });
 
 it("leads the review header with the same mark as the menu's Report an issue", async () => {
@@ -75,7 +115,7 @@ it("leads the review header with the same mark as the menu's Report an issue", a
   render(<LanguageProvider><ReportHarness port={makePort()} /></LanguageProvider>);
 
   await openReview(user);
-  const dialog = screen.getByRole("dialog", { name: "Review the report before sending it" });
+  const dialog = screen.getByRole("dialog", { name: "Report an issue" });
   const glyph = dialog.querySelector(".app-dialog__glyph");
   expect(glyph).toHaveClass("app-dialog__glyph--app");
   expect(glyph?.querySelector("svg")).toBeInTheDocument();
@@ -89,12 +129,12 @@ it("keeps browser failure, retry and manual-link recovery in the same dialog", a
   render(<LanguageProvider><ReportHarness port={port} /></LanguageProvider>);
   const trigger = screen.getByRole("button", { name: "More actions" });
   await openReview(user);
-  await user.click(screen.getByRole("button", { name: "Open issue" }));
+  await user.click(screen.getByRole("button", { name: "Copy and open GitHub" }));
 
   expect(await screen.findByRole("alertdialog")).toHaveAccessibleName("The browser didn't open");
   const attemptedUrl = vi.mocked(port.open).mock.calls[0][0];
   await user.click(screen.getByRole("button", { name: "Copy link" }));
-  expect(port.copy).toHaveBeenCalledWith(attemptedUrl);
+  expect(port.copy).toHaveBeenLastCalledWith(attemptedUrl);
   expect(screen.getByRole("status")).toHaveTextContent("Link copied.");
   const input = screen.getByRole("textbox", { name: "Report link" }) as HTMLInputElement;
   await user.click(input);
@@ -102,6 +142,13 @@ it("keeps browser failure, retry and manual-link recovery in the same dialog", a
   await user.click(screen.getByRole("button", { name: "Try again" }));
   expect(port.open).toHaveBeenNthCalledWith(2, attemptedUrl);
   expect(screen.queryByRole("alertdialog")).toBeNull();
+  // Copy link replaced the report on the clipboard, so the retry puts the
+  // report back before the finish step says it is there.
+  expect(port.copy).toHaveBeenLastCalledWith(REPORT);
+  expect(await screen.findByRole("dialog", { name: "Finish on GitHub" })).toHaveTextContent("Report copied");
+  // The new step lands on its own primary rather than leaving focus behind.
+  await waitFor(() => expect(screen.getByRole("button", { name: "Done" })).toHaveFocus());
+  await user.click(screen.getByRole("button", { name: "Done" }));
   await waitFor(() => expect(trigger).toHaveFocus());
 });
 

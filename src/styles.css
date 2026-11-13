@@ -20,6 +20,7 @@
 @import "./features/console/console.css";
 @import "./features/history/history.css";
 @import "./features/workbench/workbench.css";
+@import "./features/conflicts/conflicts.css";
 @import "./features/settings/settings.css";
 @import "./features/accounts/hosting-connections.css";
 @import "./features/github/github.css";

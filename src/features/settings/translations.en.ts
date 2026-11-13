@@ -81,7 +81,7 @@ export const en: SettingsTranslations = {
   notificationsEventPublishedLabel: "You publish changes",
   notificationsEventPublishedDescription: "A receipt of what you sent.",
   notificationsEventAppUpdateLabel: "A newer version of the app is out",
-  notificationsEventAppUpdateDescription: "Found at startup, and nothing downloads on its own.",
+  notificationsEventAppUpdateDescription: "When one is found, and when its download is ready.",
   notificationsEventUpstreamGoneLabel: "A branch's remote branch is deleted",
   notificationsEventUpstreamGoneDescription: "Usually after its pull request is merged. Your work stays on your computer.",
   settingsGitToolTitle: "Git on your computer",

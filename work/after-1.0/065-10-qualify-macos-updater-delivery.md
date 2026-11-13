@@ -46,6 +46,12 @@ See ADR 0011.
   package-hash and independently observed running-version evidence.
 - Amend the release registry, manifests, runbooks and user-facing support copy
   only after both targets pass.
+- Own the macOS qualification carried from epics 037, 037-6 and 065-4 by
+  [ADR 0042](../../docs/adr/0042-propose-platform-qualification-carryover-for-050.md):
+  run the task-023 runtime/memory protocol and retained conflict/integration
+  matrices on representative WKWebView/filesystem/VoiceOver environments in
+  addition to this task's package and updater checks. Keep the original
+  criteria linked through the [carryover matrix](../assets/0.5.0-closure/closure-audit.md).
 
 # Out of scope
 
@@ -56,6 +62,15 @@ See ADR 0011.
   match another platform.
 
 # Acceptance criteria
+
+- [ ] macOS qualification carried from
+      [037](../done/0.5.0/037-guided-conflict-resolution.md),
+      [037-6](../done/0.5.0/037-6-resolve-files.md) and
+      [065-4](../done/0.5.0/065-4-integrate-branches.md) passes the task-023 and
+      conflict/integration protocols for both target architectures, with
+      exact artifact/commit, hardware, OS, Git, WKWebView, VoiceOver and
+      per-criterion results. The original deferred criteria are reconciled
+      against actual evidence before either target is enabled.
 
 - [ ] The current Tauri macOS replacement behavior has an independently
       reviewed mitigation for every relevant install location and failure mode.

@@ -15,6 +15,7 @@ type Integration = {
   /** Why it cannot run now, in a word, when the reason is the branch's state
    * rather than the flow still to come. */
   blocked?: string;
+  source?: string;
 };
 
 /** What the selected branch can do with another one: the quick switch's three
@@ -27,13 +28,14 @@ type Integration = {
  * into main, comparing with it. Nothing to say for the main branch itself, or
  * with no branch checked out.
  *
- * None of the flows exists yet, so every row is stated and marked `Soon`
- * rather than hidden; a row that could not run anyway says why instead. */
+ * Bringing another branch into the current one opens its preview. Rebase,
+ * compare and bringing this branch into another remain `Soon`. */
 export function BranchIntegrations({
   branch,
   activeName,
   mainName,
   route,
+  onBringIn,
 }: {
   branch: Branch;
   /** The branch the project is on, `null` when none is checked out. */
@@ -42,6 +44,7 @@ export function BranchIntegrations({
   /** The route read, `null` while it is out or when there is none: the
    * sentences fall back to what holds without its numbers. */
   route: BranchRoute | null;
+  onBringIn?: (name: string) => void;
 }): React.JSX.Element | null {
   const { t, formats } = useLanguage();
   const items: Integration[] = [];
@@ -56,6 +59,7 @@ export function BranchIntegrations({
     const upToDate = route !== null && newer === 0;
     items.push({
       key: "update",
+      source: base,
       icon: <GitMerge />,
       title: t.branchesMergeFrom(base),
       detail: route === null
@@ -97,6 +101,7 @@ export function BranchIntegrations({
     items.push(
       {
         key: "merge",
+        source: branch.name,
         icon: <GitMerge />,
         title: t.branchesMergeInto(activeName),
         detail: t.branchesActionBringIntoActive,
@@ -121,20 +126,22 @@ export function BranchIntegrations({
       <div className="branches-card__head">
         <h3>{t.branchesActionsTitle}</h3>
       </div>
-      {/* Rows rather than buttons while no flow is behind them: a disabled
-          button with nothing to become is a control pretending. The tile and
-          the `Soon` keep the shape they will have once they open a preview. */}
+      {/* Only an integration into the checked-out branch opens a preview. */}
       <ul className="branches-integrations">
-        {items.map((item) => (
-          <li key={item.key} aria-disabled="true">
+        {items.map((item) => {
+          const ready = Boolean(item.source && !item.blocked && onBringIn);
+          const content = <>
             <span className="branches-integrations__tile" aria-hidden="true">{item.icon}</span>
             <span className="branches-integrations__text">
               <span className="branches-integrations__title">{item.title}</span>
               <span className="branches-integrations__detail">{item.detail}</span>
             </span>
-            <span className="branches-quick-switch__soon">{item.blocked ?? t.branchesSoon}</span>
-          </li>
-        ))}
+            {!ready && <span className="branches-quick-switch__soon">{item.blocked ?? t.branchesSoon}</span>}
+          </>;
+          return <li key={item.key} aria-disabled={ready ? undefined : true}>
+            {ready ? <button type="button" className="branches-integrations__action" onClick={() => onBringIn?.(item.source!)}>{content}</button> : content}
+          </li>;
+        })}
       </ul>
     </section>
   );

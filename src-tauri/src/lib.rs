@@ -13,6 +13,7 @@ mod branches;
 mod changes;
 mod cli_auth;
 mod clone;
+mod conflicts;
 mod console;
 mod credentials;
 mod desktop;
@@ -180,6 +181,18 @@ pub fn run() {
             ipc::list_discard_recoveries,
             ipc::restore_discarded_changes,
             ipc::delete_discard_recovery,
+            ipc::read_conflict_session,
+            ipc::read_conflict_stage,
+            ipc::read_conflict_side_diff,
+            ipc::resolve_conflict_side,
+            ipc::mark_conflict_resolved,
+            ipc::reset_conflict_file,
+            ipc::open_conflict_file,
+            ipc::check_conflict_working_file,
+            ipc::plan_finish_merge,
+            ipc::finish_merge,
+            ipc::plan_abort_merge,
+            ipc::abort_merge,
             ipc::glab_diagnostics,
             ipc::install_glab,
             ipc::update_glab,
@@ -255,6 +268,11 @@ pub fn run() {
             ipc::stop_tracking_remote,
             ipc::plan_get_team_changes,
             ipc::get_team_changes,
+            ipc::list_integration_sources,
+            ipc::check_integration_source,
+            ipc::plan_bring_in_changes,
+            ipc::bring_in_changes,
+            ipc::start_overlapping_merge,
             ipc::list_unpublished_versions,
             ipc::list_incoming_versions,
             ipc::read_commit_file_changes,
@@ -262,6 +280,7 @@ pub fn run() {
             ipc::read_history_page,
             ipc::read_saved_version_detail,
             ipc::read_saved_version_file_diff,
+            ipc::read_saved_version_file_markdown,
             ipc::plan_publish,
             ipc::publish,
             ipc::get_branches,
@@ -290,6 +309,9 @@ mod changes_tests;
 #[cfg(test)]
 #[path = "tests/clone_tests.rs"]
 mod clone_tests;
+#[cfg(test)]
+#[path = "tests/conflict_tests.rs"]
+mod conflict_tests;
 #[cfg(test)]
 #[path = "tests/core_workflow_tests.rs"]
 mod core_workflow_tests;

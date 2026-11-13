@@ -134,9 +134,8 @@ pub(crate) fn classify_path(path: &Path, paths: &WatchPaths) -> Option<Repositor
         }
         return match first.as_str() {
             "head" => Some(RepositoryInvalidationKind::HeadOrRefs),
-            "index" | "merge_head" | "cherry_pick_head" | "revert_head" | "rebase_head" => {
-                Some(RepositoryInvalidationKind::Worktree)
-            }
+            "index" | "merge_head" | "cherry_pick_head" | "revert_head" | "rebase_head"
+            | "rebase-merge" | "rebase-apply" => Some(RepositoryInvalidationKind::Worktree),
             "refs" | "packed-refs" => Some(RepositoryInvalidationKind::HeadOrRefs),
             _ => None,
         };
@@ -153,7 +152,6 @@ struct RepositoryWatch {
     common_key: String,
     paths: WatchPaths,
     generation: u64,
-    sequence: u64,
     callback: Callback,
 }
 
@@ -167,6 +165,10 @@ struct RegistryState {
 pub struct WatcherRegistry {
     state: Arc<Mutex<RegistryState>>,
     next_generation: Arc<AtomicU64>,
+    // Registration lifetimes are shorter than renderer sessions (off/on and
+    // updater suspension). A registry-wide sequence never restarts underneath
+    // the renderer's per-session high-water mark.
+    next_sequence: Arc<AtomicU64>,
 }
 
 impl WatcherRegistry {
@@ -259,7 +261,6 @@ impl WatcherRegistry {
                     common_key: common_key.to_string(),
                     paths,
                     generation,
-                    sequence: 0,
                     callback,
                 },
             );
@@ -361,26 +362,24 @@ impl WatcherRegistry {
                 state.last_shared_report.insert(common_key.clone(), now);
                 for (project_id, watch) in state.watches.iter_mut() {
                     if watch.common_key == common_key {
-                        watch.sequence += 1;
                         deliveries.push((
                             Arc::clone(&watch.callback),
                             RepositoryInvalidation {
                                 project_id: project_id.clone(),
                                 session_epoch: watch.epoch.clone(),
-                                sequence: watch.sequence,
+                                sequence: self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1,
                                 kind: *kind,
                             },
                         ));
                     }
                 }
             } else if let Some(watch) = state.watches.get_mut(owner) {
-                watch.sequence += 1;
                 deliveries.push((
                     Arc::clone(&watch.callback),
                     RepositoryInvalidation {
                         project_id: owner.to_string(),
                         session_epoch: watch.epoch.clone(),
-                        sequence: watch.sequence,
+                        sequence: self.next_sequence.fetch_add(1, Ordering::Relaxed) + 1,
                         kind: *kind,
                     },
                 ));
@@ -541,6 +540,16 @@ mod tests {
             None
         );
         assert_eq!(classify_path(&root.join(".git/index.lock"), &paths), None);
+        // A rebase steps through its own folder; GitOdile's snapshots never
+        // invalidate the project they preserve.
+        assert_eq!(
+            classify_path(&root.join(".git/rebase-merge/msgnum"), &paths),
+            Some(RepositoryInvalidationKind::Worktree)
+        );
+        assert_eq!(
+            classify_path(&root.join(".git/gitodile/conflicts/v1/x"), &paths),
+            None
+        );
     }
 
     #[test]
@@ -648,6 +657,48 @@ mod tests {
         let after_churn = settled_count(&count, Duration::from_secs(10));
         assert_eq!(after_churn, after_write, "Git churn must stay filtered");
 
+        registry.unwatch("project", "epoch");
+        let _ = fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn event_sequences_survive_reregistration_and_suspension() {
+        let registry = WatcherRegistry::default();
+        let root = PathBuf::from(crate::test_support::unique_temp_dir(
+            "watch-sequence-lifetime",
+        ));
+        fs::create_dir_all(root.join(".git")).unwrap();
+        let (sender, receiver) = std::sync::mpsc::channel();
+        let register = || {
+            let sender = sender.clone();
+            assert!(registry.watch_with(
+                "project",
+                "epoch",
+                "common",
+                paths(&root),
+                move |event| {
+                    sender.send(event.sequence).unwrap();
+                }
+            ));
+        };
+        register();
+        let emit = || {
+            let generation = registry.state.lock().unwrap().watches["project"].generation;
+            registry.inject(
+                "project",
+                generation,
+                &[RepositoryInvalidationKind::Worktree],
+            );
+            receiver.recv_timeout(Duration::from_secs(1)).unwrap()
+        };
+        let first = emit();
+        // Off/on keeps the renderer's session epoch, as does updater resume.
+        registry.unwatch("project", "epoch");
+        register();
+        let second = emit();
+        assert!(second > first);
+        drop(registry.suspend_all());
+        assert!(emit() > second);
         registry.unwatch("project", "epoch");
         let _ = fs::remove_dir_all(&root);
     }

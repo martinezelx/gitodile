@@ -1,0 +1,282 @@
+/* Overlapping changes (task 037-3). The closest equivalent is the Changes tab
+   of Work: a file list panel and a reading panel run edge to edge on the
+   sheet, paired at `--panel-column` and `--strip-height`, with the same
+   one-column list/detail transition below 1024px. Above them sits one band
+   for the screen's header and its notice, as Overview's header band does. */
+.workspace--conflicts { overflow-y: hidden; }
+.conflicts-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+.conflicts-header {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.conflicts-header__back svg { width: var(--icon-control); height: var(--icon-control); }
+.conflicts-header__back { width: var(--control-height-sm); min-height: var(--control-height-sm); padding: 0; border-radius: var(--radius-round); }
+.conflicts-updates { margin: var(--space-3) var(--space-3) 0; }
+.conflicts-header__text { flex: 1 1 18rem; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+.conflicts-header__title { margin: 0; font-size: var(--text-title); font-weight: var(--weight-strong); }
+.conflicts-header__summary {
+  margin: 0; display: flex; flex-wrap: wrap; column-gap: var(--space-2);
+  color: var(--text-secondary-color); font-size: var(--text-label);
+  overflow-wrap: anywhere;
+}
+.conflicts-header__summary > span { min-width: 0; max-width: 100%; }
+.conflicts-header__summary > span + span::before { content: "·"; margin-inline-end: var(--space-2); }
+/* Finish and stop at the end of the band: the session's own actions, apart
+   from each file's bar. They wrap under the text rather than squeeze it. */
+.conflicts-header__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-inline-start: auto; }
+/* A plan still being read: its facts' lines, faint, in their final place. */
+.conflicts-plan-placeholder { display: grid; gap: var(--space-2); }
+
+/* An in-screen notice: a card inside the region, the recipe of the Changes
+   notices. The tone is the glyph's colour and, for a failure, the edge. */
+.conflicts-notice {
+  display: flex; align-items: flex-start; gap: var(--space-3); min-width: 0;
+  margin: var(--space-3) var(--space-3) 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-surface); border: 1px solid var(--border-subtle); background: var(--surface-card);
+}
+.conflicts-notice > svg { width: var(--icon-nav); height: var(--icon-nav); flex-shrink: 0; }
+.conflicts-notice--warning > svg { color: var(--status-warning); }
+.conflicts-notice--danger > svg { color: var(--status-danger); }
+.conflicts-notice--danger { outline: 1px solid var(--status-danger); outline-offset: -1px; }
+.conflicts-notice__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); overflow-wrap: anywhere; }
+.conflicts-notice__body > strong { font-size: var(--text-body); font-weight: var(--weight-strong); }
+.conflicts-notice__body > p {
+  margin: 0; color: var(--text-secondary-color); font-size: var(--text-body); line-height: var(--leading-normal);
+}
+.conflicts-notice .secondary-button { flex-shrink: 0; }
+.conflicts-notice__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); flex-shrink: 0; }
+.conflicts-side > .conflicts-notice { margin: var(--space-4); }
+
+/* Technical details: the dialogs' disclosure, set on the card it explains. */
+.conflicts-details { margin-top: var(--space-2); }
+.conflicts-details > summary {
+  width: fit-content; color: var(--text-secondary-color); font-size: var(--text-label);
+}
+.conflicts-details__facts {
+  display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 0; padding: var(--space-3); border-radius: var(--radius-item);
+  background: var(--surface-code); font-size: var(--text-label);
+}
+.conflicts-details__facts dt { color: var(--text-secondary-color); }
+.conflicts-details__facts dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.conflicts-details__facts code, .conflicts-command__text { font-family: var(--font-mono); font-size: var(--text-label); }
+.conflicts-details__commands { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.conflicts-details__note { margin: var(--space-2) 0 0; color: var(--text-secondary-color); font-size: var(--text-label); }
+.conflicts-command {
+  display: flex; align-items: center; gap: var(--space-3); min-width: 0;
+  padding: var(--space-2) var(--space-3); border-radius: var(--radius-item); background: var(--surface-code);
+}
+.conflicts-command__label { flex-shrink: 0; color: var(--text-secondary-color); font-size: var(--text-label); }
+.conflicts-command__text { flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: text; }
+
+.conflicts-partial {
+  margin: var(--space-2) var(--space-4) 0; color: var(--text-secondary-color); font-size: var(--text-label);
+}
+
+.conflicts-empty { flex: 1; min-height: 0; display: flex; }
+
+.conflicts-layout {
+  flex: 1; min-height: 0; display: grid; gap: 0;
+  grid-template-columns: var(--panel-column) minmax(0, 1fr);
+}
+/* The panes start right under the header's hairline; only a notice between
+   them needs its own room and a rule of its own under it. */
+.conflicts-view > .conflicts-notice ~ .conflicts-layout,
+.conflicts-view > .conflicts-updates ~ .conflicts-layout,
+.conflicts-view > .conflicts-partial ~ .conflicts-layout { margin-top: var(--space-3); border-top: 1px solid var(--border-subtle); }
+.conflicts-list {
+  min-height: 0; display: flex; flex-direction: column; border-inline-end: 1px solid var(--border-subtle);
+}
+.conflicts-list__toolbar {
+  position: relative;
+  display: flex; align-items: center; gap: var(--space-2);
+  flex: 0 0 auto; height: var(--strip-height);
+  padding: 0 var(--space-3);
+}
+.conflicts-list__toolbar > * { flex: 1; min-width: 0; }
+.conflicts-filter-types { overflow-y: auto; min-width: 0; }
+.conflicts-filter-types__rows { position: relative; }
+.conflicts-filter-types__row { position: absolute; top: 0; left: 0; width: 100%; display: flex; align-items: center; }
+.conflicts-filter-types__row > * { width: 100%; }
+.conflicts-list__placeholder { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); }
+.conflicts-list__scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; margin: 0 var(--space-2) var(--space-2); }
+.conflicts-list__rows { position: relative; list-style: none; margin: 0; padding: 0; }
+.conflicts-list__rows > li { position: absolute; top: 0; left: 0; width: 100%; }
+.conflicts-list__group {
+  display: flex; align-items: flex-end; height: 32px; padding: 0 var(--space-3) var(--space-1);
+  color: var(--text-secondary-color); font-size: var(--text-caption); font-weight: var(--weight-strong);
+}
+.conflicts-list__item { padding-bottom: 2px; }
+
+/* A row is the Changes file row: name, folder after it, a line under it. */
+.conflicts-file {
+  width: 100%; min-width: 0; display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-3);
+  border: 0; border-radius: var(--radius-item); background: transparent; color: var(--text-primary-color); text-align: left;
+  font: inherit;
+}
+.conflicts-file:hover { background: var(--surface-hover); }
+.conflicts-file--active { background: var(--surface-active); }
+.conflicts-file__icon { display: grid; place-items: center; flex-shrink: 0; }
+.conflicts-file__icon svg { width: var(--icon-row); height: var(--icon-row); }
+.conflicts-file__icon--open { color: var(--status-warning); }
+.conflicts-file__icon--resolved { color: var(--status-success); }
+.conflicts-file__details { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.conflicts-file__name {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--text-body);
+}
+.conflicts-file--active .conflicts-file__name { font-weight: var(--weight-strong); }
+.conflicts-file__dir {
+  margin-inline-start: var(--space-2); color: var(--text-secondary-color); font-size: var(--text-caption); font-weight: var(--weight-normal);
+}
+.conflicts-file__description {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--text-secondary-color); font-size: var(--text-caption);
+}
+
+.conflicts-detail { min-height: 0; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.conflicts-detail__back {
+  display: none; align-items: center; gap: var(--space-2); margin: var(--space-3) var(--space-3) 0; padding: var(--space-1) 0;
+  border: 0; background: transparent; color: var(--text-secondary-color); font: inherit; font-size: var(--text-body);
+  align-self: flex-start;
+}
+.conflicts-detail__back svg { width: var(--icon-control); height: var(--icon-control); }
+.conflicts-detail__header {
+  min-width: 0; display: flex; align-items: center; gap: var(--space-3);
+  padding: 0;
+}
+.conflicts-detail__title { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.conflicts-detail__path {
+  margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: var(--text-body); font-weight: var(--weight-strong);
+}
+.conflicts-detail__dir {
+  margin-inline-start: var(--space-2); color: var(--text-secondary-color); font-size: var(--text-caption); font-weight: var(--weight-normal);
+}
+.conflicts-detail__shape { margin: 0; color: var(--text-secondary-color); font-size: var(--text-caption); overflow-wrap: anywhere; }
+/* One file strip: identity and status on the left, choices on the right.
+   Status never participates in the button group's wrapping. Mark resolved,
+   the constructive action, stays last. */
+.conflicts-resolution { flex: 0 0 auto; min-width: 0; display: flex; flex-direction: column; }
+.conflicts-filebar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-4); min-width: 0;
+  min-height: var(--strip-height); padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+.conflicts-filebar__identity { flex: 1 1 12rem; min-width: 0; }
+.conflicts-resolution > .conflicts-notice { margin: var(--space-3) var(--space-4); }
+.conflicts-actions {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-3); min-width: 0;
+  flex: 0 1 auto; justify-content: flex-end; margin-inline-start: auto;
+}
+.conflicts-filebar__status {
+  min-width: 0; margin: var(--space-1) 0 0; overflow-wrap: anywhere;
+  color: var(--text-secondary-color); font-size: var(--text-label); line-height: var(--leading-normal);
+}
+/* Markers left after an edit outside GitOdile: said in words and a glyph,
+   not by colour alone. */
+.conflicts-filebar__status--warning { display: flex; align-items: flex-start; gap: var(--space-1); color: var(--text-primary-color); }
+.conflicts-filebar__status--warning > svg { width: var(--icon-meta); height: var(--icon-meta); flex-shrink: 0; color: var(--status-warning); }
+.conflicts-filebar__status > span { min-width: 0; }
+.conflicts-actions__buttons {
+  display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); min-width: 0;
+  margin-inline-start: auto;
+}
+.conflicts-actions__label { min-width: 0; max-width: 14rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conflicts-actions__buttons > button:not(.conflicts-icon-action) { min-width: 0; max-width: 100%; }
+.conflicts-actions__context { color: var(--text-secondary-color); font-size: var(--text-label); }
+.conflicts-actions .secondary-button[aria-pressed="true"] {
+  border-color: var(--text-secondary-color);
+  background: color-mix(in srgb, var(--text-primary-color) var(--tint-selected), var(--surface-control));
+}
+.conflicts-icon-action { width: var(--control-height-sm); min-width: var(--control-height-sm); padding-inline: 0; border-radius: var(--radius-round); }
+.conflicts-icon-action--danger { color: var(--status-danger); }
+
+/* A question asked in the bar's place, the forget row of Restore at the
+   width of the panel: the tone of what it risks, the answers on the right. */
+.conflicts-ask {
+  display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-4); min-width: 0;
+  flex: 1 0 100%; padding: var(--space-3); border-radius: var(--radius-item);
+}
+.conflicts-ask--danger { background: color-mix(in srgb, var(--status-danger) var(--tint-fill), transparent); }
+.conflicts-ask--warning { background: color-mix(in srgb, var(--status-warning) var(--tint-fill), transparent); }
+.conflicts-ask__question { flex: 1 1 20rem; min-width: 0; display: flex; align-items: flex-start; gap: var(--space-3); }
+.conflicts-ask__question > svg { width: var(--icon-nav); height: var(--icon-nav); flex-shrink: 0; color: var(--status-warning); }
+.conflicts-ask__text { min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); font-size: var(--text-body); line-height: var(--leading-normal); overflow-wrap: anywhere; }
+.conflicts-ask__text > strong { font-weight: var(--weight-strong); }
+.conflicts-ask__body { color: var(--text-secondary-color); }
+.conflicts-ask__answers { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); margin-inline-start: auto; min-width: 0; max-width: 100%; }
+.conflicts-ask__answers > button { min-width: 0; max-width: 100%; }
+.conflicts-ask .conflicts-details__commands code { display: block; }
+
+/* The side a pending choice would replace: dimmed, and said in words in its
+   heading, so neither colour nor opacity carries the meaning alone. */
+.conflicts-side--discarding .conflicts-side__diff,
+.conflicts-side--discarding > .conflicts-detail__note { opacity: var(--opacity-muted); }
+.conflicts-side__discarding {
+  flex-shrink: 0; margin-inline-start: auto;
+  color: var(--status-danger); font-size: var(--text-label); font-weight: var(--weight-normal);
+}
+
+/* Both sides side by side, the current branch on the left and the incoming
+   one on the right, each an equal column with a scroller of its own. A side
+   that is only a sentence (deleted, a link, unchanged) keeps its column, so
+   the two never trade places between files. */
+.conflicts-detail__sides { flex: 1; min-height: 0; display: flex; }
+.conflicts-side { flex: 1 1 0; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.conflicts-side + .conflicts-side { border-inline-start: 1px solid var(--border-subtle); }
+.conflicts-side__heading {
+  flex: 0 0 auto; display: flex; align-items: center; gap: var(--space-2); margin: 0;
+  min-height: var(--strip-height-inner); padding: var(--space-2) var(--space-4); border-bottom: 1px solid var(--border-subtle);
+  font-size: var(--text-body); font-weight: var(--weight-strong);
+}
+.conflicts-side__heading svg { width: var(--icon-row); height: var(--icon-row); flex-shrink: 0; color: var(--text-secondary-color); }
+.conflicts-side__heading > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.conflicts-side__role { flex-shrink: 0; margin-inline-start: auto; color: var(--text-secondary-color); font-size: var(--text-caption); font-weight: var(--weight-normal); }
+.conflicts-detail__note {
+  margin: var(--space-4); color: var(--text-secondary-color); font-size: var(--text-body); line-height: var(--leading-normal); overflow-wrap: anywhere;
+}
+.conflicts-detail__note--inline { margin-block: var(--space-2) 0; font-size: var(--text-label); }
+.conflicts-side__diff { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+
+@media (max-width: 1200px) {
+  .conflicts-layout { grid-template-columns: var(--panel-column-narrow) minmax(0, 1fr); }
+}
+
+@media (max-width: 1024px) {
+  .conflicts-layout { grid-template-columns: 1fr; }
+  .conflicts-list { border-inline-end: 0; }
+  .conflicts-layout .conflicts-detail { display: none; }
+  .conflicts-layout--detail .conflicts-list { display: none; }
+  .conflicts-layout--detail .conflicts-detail { display: flex; }
+  .conflicts-layout--detail .conflicts-detail__back { display: inline-flex; }
+}
+
+/* Too narrow for two columns of code: the sides stack, each taking the
+   height its content needs up to an equal share. */
+@media (max-width: 720px) {
+  .conflicts-detail__sides { flex-direction: column; }
+  .conflicts-side { flex: 0 0 auto; }
+  .conflicts-side--diff { flex: 1 1 0; }
+  .conflicts-side + .conflicts-side { border-inline-start: 0; border-top: 1px solid var(--border-subtle); }
+}
+
+/* At high zoom the compact navigation and wrapped header can fill the
+   viewport. Keep a bounded reading area and let the sheet scroll instead
+   of shrinking the virtualized list or the side diffs to zero. */
+@media (max-height: 620px) {
+  .workspace--conflicts { overflow-y: auto; }
+  .conflicts-view { flex: 1 0 auto; }
+  .conflicts-layout,
+  .conflicts-detail__sides { min-height: calc(var(--strip-height) * 4); }
+  /* min-height alone lets the virtual list's total size become its viewport. */
+  .conflicts-layout { height: calc(var(--strip-height) * 4); flex-basis: calc(var(--strip-height) * 4); }
+  .conflicts-detail { overflow-x: hidden; overflow-y: auto; }
+}
+
+@media (forced-colors: active) {
+  .conflicts-notice { outline: 1px solid CanvasText; outline-offset: -1px; }
+  .conflicts-file--active { outline: 2px solid Highlight; outline-offset: -2px; }
+}
